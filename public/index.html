@@ -7,19 +7,26 @@
   <link rel="icon" href="/icone-192.png">
   <link rel="apple-touch-icon" href="/icone-192.png">
   <title>Oasis Centre numérique d'apprentissage</title>
-  <link rel="stylesheet" href="/styles.css?v13">
+  <link rel="stylesheet" href="/styles.css?v14">
   <link rel="manifest" href="/manifest.json">
 </head>
 <body>
   <!-- Écran de connexion -->
   <div id="ecranConnexion" class="ecran-connexion" hidden>
-    <div class="boite-connexion">
+    <section class="presentation-connexion" aria-label="Découvrir OASIS">
+      <a class="identite-oasis" href="#connexion"><img src="/logo.png" alt=""><span>OASIS<small>CENTRE NUMÉRIQUE D’APPRENTISSAGE</small></span></a>
+      <div class="accroche-oasis"><span class="eyebrow">VOTRE ESPACE DE SAVOIR</span><h1>Un monde de ressources.<br><em>Un avenir à construire.</em></h1><p>Lire, explorer et progresser à votre rythme. Retrouvez vos livres, vos ressources pédagogiques et vos contenus multimédias dans un seul espace.</p></div>
+      <img class="visuel-connexion" src="/banniere-oasis.png" alt="La bibliothèque numérique OASIS et ses ressources pour apprenants et enseignants">
+      <div class="atouts-oasis"><article><span>01</span><h3>Explorer</h3><p>Livres numériques, guides et ressources organisés par domaine.</p></article><article><span>02</span><h3>Apprendre</h3><p>Vidéos et documents pour enrichir vos connaissances.</p></article><article><span>03</span><h3>Progresser</h3><p>Favoris, suivi de lecture et défis pour garder votre élan.</p></article></div>
+      <p class="signature-oasis">Apprendre aujourd’hui pour un meilleur demain.</p>
+    </section>
+    <div class="connexion-droite" id="connexion"><div class="boite-connexion">
       <div class="marque">
-        <img src="/logo.png" alt="Logo Oasis" style="width:120px;height:120px;object-fit:contain">
-        <h2>Oasis <span style="color:var(--bleu)">Centre numérique d'apprentissage</span></h2>
-        <p class="sous" id="sousConnexion">Apprendre aujourd'hui pour un meilleur demain</p>
+        <span class="eyebrow">BIENVENUE CHEZ OASIS</span>
+        <h2 id="titreConnexion">Votre prochaine découverte commence ici.</h2>
+        <p class="sous" id="sousConnexion">Connectez-vous pour retrouver votre bibliothèque et poursuivre votre parcours d’apprentissage.</p>
       </div>
-      <div id="msgAuth"></div>
+      <div id="msgAuth" role="status" aria-live="polite"></div>
       <form id="formConnexion">
         <div class="champ" id="champNom" hidden>
           <label for="inNom">Nom complet</label>
@@ -31,7 +38,7 @@
         </div>
         <div class="champ">
           <label for="inMdp">Mot de passe</label>
-          <input id="inMdp" type="password" autocomplete="current-password" required placeholder="••••••••">
+          <div class="mot-de-passe"><input id="inMdp" type="password" autocomplete="current-password" required placeholder="Votre mot de passe"><button type="button" id="voirMdp" aria-label="Afficher le mot de passe" aria-pressed="false">Afficher</button></div>
         </div>
         <button type="submit" class="btn btn-bleu btn-large" id="btnAuth">Se connecter</button>
       </form>
@@ -39,12 +46,8 @@
         <span id="txtBascule">Pas encore de compte ?</span>
         <a href="#" id="lienBascule">Créer un compte</a>
       </p>
-      <div class="demo-info">
-        <b>Comptes de démonstration</b><br>
-        Apprenant : emma@oasis.ht / demo123<br>
-        Bibliothécaire : admin@oasis.ht / admin123
-      </div>
-    </div>
+      <p class="connexion-note">Votre espace personnel pour lire, apprendre et partager.</p>
+    </div></div>
   </div>
 
   <!-- Application -->
@@ -113,6 +116,6 @@
   </div>
 
   <div id="zoneModale"></div>
-  <script src="/app.js?v13"></script>
+  <script src="/app.js?v14"></script>
 </body>
 </html>

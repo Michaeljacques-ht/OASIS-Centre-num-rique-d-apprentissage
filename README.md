@@ -96,3 +96,11 @@ Le projet s'appelle désormais **Oasis Centre numérique d'apprentissage**. Pour
 3. Lancez `node server.js` depuis le nouveau dossier.
 
 Au premier démarrage, la migration automatique remplace le nom, le slogan, le pied de page et le texte « À propos » **uniquement s'ils étaient restés aux valeurs EDUCA par défaut** (vos personnalisations sont conservées). Les comptes de démonstration deviennent `admin@oasis.ht` et `emma@oasis.ht` (mots de passe inchangés). Tous les livres, emprunts, réservations, groupes et fichiers sont conservés.
+
+
+## Interface OASIS — édition 14
+Connexion inspirée d’EDUCA : panneau bleu nuit, accents orange, formulaire blanc. Bannière fournie intégrée à la connexion et à l’accueil, cliquable vers le catalogue. Thème harmonisé pour le portail et l’administration, adaptations mobiles, affichage/masquage du mot de passe.
+
+Installation : remplacer les fichiers du projet, conserver le dossier `data` et les fichiers téléversés existants. Redémarrer avec `node server.js`, puis recharger la page. Les données personnelles ne sont pas incluses dans ce ZIP.
+
+Vérification : syntaxe JavaScript, connexion apprenant/bibliothécaire, routes catalogue et statistiques, fichiers statiques. La vérification visuelle automatisée n’a pas pu être exécutée dans cet environnement.

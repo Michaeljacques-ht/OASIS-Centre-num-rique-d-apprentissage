@@ -46,10 +46,20 @@
   // ---------- Authentification ----------
   let modeInscription = false;
   function initAuth() {
+    $('#voirMdp').addEventListener('click', () => {
+      const visible = $('#inMdp').type === 'password';
+      $('#inMdp').type = visible ? 'text' : 'password';
+      $('#voirMdp').textContent = visible ? 'Masquer' : 'Afficher';
+      $('#voirMdp').setAttribute('aria-label', visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
+      $('#voirMdp').setAttribute('aria-pressed', String(visible));
+    });
     $('#lienBascule').addEventListener('click', e => {
       e.preventDefault();
       modeInscription = !modeInscription;
       $('#champNom').hidden = !modeInscription;
+      $('#inNom').required = modeInscription;
+      $('#inMdp').autocomplete = modeInscription ? 'new-password' : 'current-password';
+      $('#titreConnexion').textContent = modeInscription ? 'Commencez votre parcours avec OASIS.' : 'Votre prochaine découverte commence ici.';
       $('#btnAuth').textContent = modeInscription ? 'Créer mon compte' : 'Se connecter';
       $('#txtBascule').textContent = modeInscription ? 'Déjà un compte ?' : 'Pas encore de compte ?';
       $('#lienBascule').textContent = modeInscription ? 'Se connecter' : 'Créer un compte';
@@ -109,7 +119,7 @@
       ]);
       return `
         <button class="banniere-accueil" data-vue="bibliotheque" aria-label="Accéder à la bibliothèque">
-          <img src="/banniere.jpg" alt="Oasis Centre numérique d'apprentissage — Apprendre aujourd'hui pour un meilleur demain">
+          <img src="/banniere-oasis.png" alt="Oasis Centre numérique d'apprentissage — Apprendre aujourd'hui pour un meilleur demain">
         </button>
         <div class="hero">
           <div>

@@ -1,5 +1,5 @@
 /* Oasis Centre numérique d'apprentissage — Service Worker (PWA) */
-const CACHE = 'oasis-v13';
+const CACHE = 'oasis-v14';
 self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(cles => Promise.all(cles.map(k => caches.delete(k)))).then(() => self.clients.claim()));
