@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123e8c">
+  <link rel="icon" href="/icone-192.png">
+  <link rel="apple-touch-icon" href="/icone-192.png">
+  <title>Oasis Centre numérique d'apprentissage</title>
+  <link rel="stylesheet" href="/styles.css?v13">
+  <link rel="manifest" href="/manifest.json">
+</head>
+<body>
+  <!-- Écran de connexion -->
+  <div id="ecranConnexion" class="ecran-connexion" hidden>
+    <div class="boite-connexion">
+      <div class="marque">
+        <img src="/logo.png" alt="Logo Oasis" style="width:120px;height:120px;object-fit:contain">
+        <h2>Oasis <span style="color:var(--bleu)">Centre numérique d'apprentissage</span></h2>
+        <p class="sous" id="sousConnexion">Apprendre aujourd'hui pour un meilleur demain</p>
+      </div>
+      <div id="msgAuth"></div>
+      <form id="formConnexion">
+        <div class="champ" id="champNom" hidden>
+          <label for="inNom">Nom complet</label>
+          <input id="inNom" type="text" autocomplete="name" placeholder="Ex. : Jean Baptiste">
+        </div>
+        <div class="champ">
+          <label for="inEmail">Email</label>
+          <input id="inEmail" type="email" autocomplete="email" required placeholder="vous@exemple.ht">
+        </div>
+        <div class="champ">
+          <label for="inMdp">Mot de passe</label>
+          <input id="inMdp" type="password" autocomplete="current-password" required placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn btn-bleu btn-large" id="btnAuth">Se connecter</button>
+      </form>
+      <p class="bascule-auth">
+        <span id="txtBascule">Pas encore de compte ?</span>
+        <a href="#" id="lienBascule">Créer un compte</a>
+      </p>
+      <div class="demo-info">
+        <b>Comptes de démonstration</b><br>
+        Apprenant : emma@oasis.ht / demo123<br>
+        Bibliothécaire : admin@oasis.ht / admin123
+      </div>
+    </div>
+  </div>
+
+  <!-- Application -->
+  <div id="appli" class="app" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="logo">
+        <img src="/logo.png" alt="Logo Oasis" class="logo-img">
+        <div><b id="logoNom">Oasis<br>Centre</b><small id="logoSous">NUMÉRIQUE D'APPRENTISSAGE</small></div>
+      </div>
+      <nav class="nav" aria-label="Navigation principale">
+        <button class="nav-item actif" data-vue="accueil"><span class="ic">🏠</span> Accueil</button>
+        <button class="nav-item" data-vue="bibliotheque"><span class="ic">📚</span> Bibliothèque</button>
+        <button class="nav-item" data-vue="favoris"><span class="ic">❤️</span> Mes Favoris</button>
+        <button class="nav-item" data-vue="emprunts"><span class="ic">🔖</span> Mes Emprunts</button>
+        <div class="sep"></div>
+        <button class="nav-item" data-vue="categories"><span class="ic">🗂️</span> Catégories</button>
+        <button class="nav-item" data-vue="nouveautes"><span class="ic">✨</span> Nouveautés</button>
+        <button class="nav-item" data-vue="recommandes"><span class="ic">⭐</span> Recommandés</button>
+        <div class="sep"></div>
+        <button class="nav-item" data-vue="ressources"><span class="ic">🔎</span> Ressources</button>
+        <button class="nav-item" data-vue="multimedia"><span class="ic">🎬</span> Multimédia</button>
+        <button class="nav-item" data-vue="collaboration"><span class="ic">👥</span> Collaboration</button>
+        <button class="nav-item" data-vue="defis"><span class="ic">🏆</span> Défis de lecture</button>
+        <button class="nav-item" data-vue="places"><span class="ic">🪑</span> Places de lecture</button>
+        <div class="sep"></div>
+        <a class="nav-item" href="/admin" id="lienAdmin" hidden><span class="ic">🛠️</span> Espace bibliothécaire</a>
+        <button class="nav-item" id="btnDeconnexion"><span class="ic">🚪</span> Se déconnecter</button>
+      </nav>
+      <div class="pied">Oasis © 2026<br>Haïti 🇭🇹</div>
+    </aside>
+
+    <div class="principal">
+      <header class="entete">
+        <button class="bouton-menu" id="btnMenu" aria-label="Ouvrir le menu">☰</button>
+        <h1 id="titreEntete">Bibliothèque <span>Numérique</span></h1>
+        <div class="droite">
+          <button class="lien-entete" id="btnNotifs" style="position:relative">🔔 <span class="txt">Notifications</span><span id="badgeNotifs" class="badge-notif" hidden></span></button>
+          <button class="lien-entete" data-vue="collaboration">👥 <span class="txt">Collaboration</span></button>
+          <button class="lien-entete" id="btnAPropos">ℹ️ <span class="txt">À propos</span></button>
+          <div class="profil"><span id="nomProfil"></span><div class="avatar" id="avatarProfil"></div></div>
+        </div>
+      </header>
+
+      <main class="contenu">
+        <div class="colonne-large">
+          <div class="barre-recherche">
+            <span aria-hidden="true">🔍</span>
+            <input id="inRecherche" type="search" placeholder="Rechercher un livre, un auteur..." aria-label="Rechercher un livre ou un auteur">
+          </div>
+          <div id="zonePrincipale"></div>
+        </div>
+
+        <aside class="colonne-droite" id="colonneDroite">
+          <div class="panneau">
+            <div class="p-titre"><h4>Lectures Populaires</h4><button data-vue="recommandes">Voir Plus</button></div>
+            <div id="zonePopulaires"></div>
+          </div>
+          <div class="panneau">
+            <div class="p-titre"><h4>Ma Liste de Lecture</h4><button data-vue="liste">Voir la Liste</button></div>
+            <div id="zoneListe"></div>
+          </div>
+        </aside>
+      </main>
+      <footer class="pied-page" id="piedPage"></footer>
+    </div>
+  </div>
+
+  <div id="zoneModale"></div>
+  <script src="/app.js?v13"></script>
+</body>
+</html>

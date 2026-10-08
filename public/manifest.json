@@ -1,0 +1,14 @@
+{
+  "name": "Oasis Centre numérique d'apprentissage",
+  "short_name": "Oasis",
+  "description": "Apprendre aujourd'hui pour un meilleur demain — bibliothèque numérique et physique, ressources et multimédia pour les apprenants haïtiens",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eef1f6",
+  "theme_color": "#123e8c",
+  "lang": "fr",
+  "icons": [
+    { "src": "/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

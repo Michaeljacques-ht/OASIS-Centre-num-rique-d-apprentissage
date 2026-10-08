@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123e8c">
+  <link rel="icon" href="/icone-192.png">
+  <title>Espace Bibliothécaire — Oasis Centre numérique d'apprentissage</title>
+  <link rel="stylesheet" href="/styles.css?v13">
+</head>
+<body>
+  <div id="appli" class="app" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="logo">
+        <img src="/logo.png" alt="Logo Oasis" class="logo-img">
+        <div><b>Oasis<br>Bibliothèque</b><small>ESPACE BIBLIOTHÉCAIRE</small></div>
+      </div>
+      <nav class="nav" aria-label="Navigation">
+        <button class="nav-item actif" data-onglet="tableau"><span class="ic">📊</span> Tableau de bord</button>
+        <button class="nav-item" data-onglet="emprunts"><span class="ic">🔄</span> Emprunts &amp; Retours</button>
+        <button class="nav-item" data-onglet="reservations"><span class="ic">📌</span> Réservations</button>
+        <button class="nav-item" data-onglet="places"><span class="ic">🪑</span> Places de lecture</button>
+        <button class="nav-item" data-onglet="catalogue"><span class="ic">📚</span> Catalogue</button>
+        <button class="nav-item" data-onglet="ressources"><span class="ic">🔎</span> Ressources</button>
+        <button class="nav-item" data-onglet="multimedia"><span class="ic">🎬</span> Multimédia</button>
+        <button class="nav-item" data-onglet="membres"><span class="ic">👥</span> Membres</button>
+        <button class="nav-item" data-onglet="journalActivites"><span class="ic">📜</span> Journal</button>
+        <button class="nav-item" data-onglet="parametres"><span class="ic">⚙️</span> Paramètres</button>
+        <div class="sep"></div>
+        <a class="nav-item" href="/"><span class="ic">📖</span> Portail apprenant</a>
+        <button class="nav-item" id="btnDeconnexion"><span class="ic">🚪</span> Se déconnecter</button>
+      </nav>
+      <div class="pied">Oasis © 2026<br>Haïti 🇭🇹</div>
+    </aside>
+
+    <div class="principal">
+      <header class="entete">
+        <button class="bouton-menu" id="btnMenu" aria-label="Ouvrir le menu">☰</button>
+        <h1>Gestion de la <span>Bibliothèque</span></h1>
+        <div class="droite">
+          <div class="profil"><span id="nomProfil"></span><div class="avatar" id="avatarProfil"></div></div>
+        </div>
+      </header>
+      <main class="contenu" style="grid-template-columns:1fr">
+        <div id="zoneAdmin" class="colonne-large"></div>
+      </main>
+      <footer class="pied-page" id="piedPage"></footer>
+    </div>
+  </div>
+  <div id="zoneModale"></div>
+  <script src="/admin.js?v13"></script>
+</body>
+</html>
