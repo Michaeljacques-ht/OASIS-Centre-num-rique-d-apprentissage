@@ -1,5 +1,5 @@
 /**
- * Oasis Centre numérique d'apprentissage — Serveur
+ * OASIS Bibliothèque Numérique — Serveur
  * Node.js pur, zéro dépendance npm. Base de données JSON.
  * (c) Oasis — Haïti
  */
@@ -9,6 +9,8 @@ const path = require('path');
 const crypto = require('crypto');
 const url = require('url');
 
+const abonnement = require('./modules/abonnement');
+const diffusion = require('./modules/diffusion');
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
 const PUBLIC = path.join(__dirname, 'public');
@@ -16,7 +18,7 @@ const PUBLIC = path.join(__dirname, 'public');
 // Les règles de fonctionnement sont des paramètres modifiables dans l'espace bibliothécaire
 function seedParametres() {
   return {
-    nom: 'Oasis Centre numérique d\'apprentissage',
+    nom: 'OASIS Bibliothèque Numérique',
     slogan: 'Apprendre aujourd\'hui pour un meilleur demain',
     messageAccueil: 'bienvenue dans votre bibliothèque !',
     dureeEmpruntPhysique: 14,   // jours
@@ -26,8 +28,8 @@ function seedParametres() {
     nbPlacesLecture: 12,        // places assises en salle de lecture
     creneaux: ['08:00–10:00', '10:00–12:00', '13:00–15:00', '15:00–17:00'],
     adresse: '', telephone: '', email: '', horaires: '',
-    piedDePage: 'Oasis Centre numérique d\'apprentissage © 2026 — Haïti 🇭🇹',
-    aPropos: "Oasis Centre numérique d'apprentissage est une plateforme d'apprentissage et de bibliothèque hybride (physique et numérique) au service des écoles, universités, bibliothèques et centres de formation d'Haïti. Elle offre aux apprenants l'accès aux livres, e-books, ressources documentaires et contenus multimédias, avec des outils de collaboration, de suivi de lecture et de motivation. Apprendre aujourd'hui pour un meilleur demain." 
+    piedDePage: 'OASIS Bibliothèque Numérique © 2026 — Haïti 🇭🇹',
+    aPropos: "OASIS Bibliothèque Numérique est une plateforme d'apprentissage et de bibliothèque hybride (physique et numérique) au service des écoles, universités, bibliothèques et centres de formation d'Haïti. Elle offre aux apprenants l'accès aux livres, e-books, ressources documentaires et contenus multimédias, avec des outils de collaboration, de suivi de lecture et de motivation. Apprendre aujourd'hui pour un meilleur demain." 
   };
 }
 
@@ -47,10 +49,10 @@ function chargerDB() {
     if (db.parametres && !db.parametres.marqueOasis) {
       // Passage à la marque Oasis : on ne remplace que les valeurs restées à l'ancien défaut
       const p = db.parametres;
-      if (!p.nom || /EDUCA/i.test(p.nom)) p.nom = 'Oasis Centre numérique d\'apprentissage';
+      if (!p.nom || /EDUCA/i.test(p.nom)) p.nom = 'OASIS Bibliothèque Numérique';
       if (!p.slogan || p.slogan === 'Découvrez un Monde de Savoirs !') p.slogan = 'Apprendre aujourd\'hui pour un meilleur demain';
-      if (!p.piedDePage || /EDUCA Technologie/i.test(p.piedDePage)) p.piedDePage = 'Oasis Centre numérique d\'apprentissage © 2026 — Haïti 🇭🇹';
-      if (!p.aPropos || /^EDUCA Biblioth/.test(p.aPropos)) p.aPropos = "Oasis Centre numérique d'apprentissage est une plateforme d'apprentissage et de bibliothèque hybride (physique et numérique) au service des écoles, universités, bibliothèques et centres de formation d'Haïti. Elle offre aux apprenants l'accès aux livres, e-books, ressources documentaires et contenus multimédias, avec des outils de collaboration, de suivi de lecture et de motivation. Apprendre aujourd'hui pour un meilleur demain.";
+      if (!p.piedDePage || /EDUCA Technologie/i.test(p.piedDePage)) p.piedDePage = 'OASIS Bibliothèque Numérique © 2026 — Haïti 🇭🇹';
+      if (!p.aPropos || /^EDUCA Biblioth/.test(p.aPropos)) p.aPropos = "OASIS Bibliothèque Numérique est une plateforme d'apprentissage et de bibliothèque hybride (physique et numérique) au service des écoles, universités, bibliothèques et centres de formation d'Haïti. Elle offre aux apprenants l'accès aux livres, e-books, ressources documentaires et contenus multimédias, avec des outils de collaboration, de suivi de lecture et de motivation. Apprendre aujourd'hui pour un meilleur demain.";
       const pris = e => db.utilisateurs.some(u => u.email === e);
       db.utilisateurs.forEach(u => {
         if (u.email === 'admin@educa.ht' && !pris('admin@oasis.ht')) { u.email = 'admin@oasis.ht'; if (u.nom === 'Bibliothécaire EDUCA') u.nom = 'Bibliothécaire Oasis'; }
@@ -62,6 +64,13 @@ function chargerDB() {
     ['progressions', 'notes', 'journal', 'medias', 'progressionsMedias', 'groupes', 'messagesGroupes', 'commentaires', 'invitations'].forEach(k => { if (!db[k]) db[k] = []; });
     db.livres.forEach(l => { if (l.editeur === undefined) l.editeur = ''; if (l.langue === undefined) l.langue = 'Français'; if (l.niveau === undefined) l.niveau = ''; if (l.motsCles === undefined) l.motsCles = ''; if (l.nbTelechargements === undefined) l.nbTelechargements = 0; });
     db.ressources.forEach(r => { if (r.lien === undefined) r.lien = ''; });
+    if (!db.parametres.identiteBibliothequeNumerique) {
+      db.parametres.nom = 'OASIS Bibliothèque Numérique';
+      db.parametres.piedDePage = 'OASIS Bibliothèque Numérique © 2026 — Haïti';
+      db.parametres.aPropos = (db.parametres.aPropos || '').replace(/Oasis Centre numérique d.apprentissage/gi, 'OASIS Bibliothèque Numérique');
+      db.parametres.identiteBibliothequeNumerique = true;
+      sauverDB();
+    }
   } else {
     db = seed();
     sauverDB();
@@ -187,6 +196,7 @@ function lireBinaire(req) {
   });
 }
 const DOSSIER_PDF = path.join(__dirname, 'data', 'pdfs');
+const cheminEpub = livreId => path.join(DOSSIER_PDF, livreId + '.epub');
 const cheminPdf = livreId => path.join(DOSSIER_PDF, livreId + '.pdf');
 const DOSSIER_COUV = path.join(__dirname, 'data', 'couvertures');
 const cheminCouv = livreId => path.join(DOSSIER_COUV, livreId + '.png');
@@ -227,7 +237,7 @@ function authentifier(req) {
 const moyenneNotes = l => l.notes.length ? Math.round((l.notes.reduce((a,b)=>a+b,0) / l.notes.length) * 10) / 10 : 0;
 function vueLivre(l, utilisateur) {
   const ex = db.exemplaires.filter(e => e.livreId === l.id);
-  const versionNumerique = !!(l.contenu || l.pdf);          // lisible en ligne
+  const versionNumerique = !!(l.contenu || l.pdf || l.epub);          // lisible en ligne
   const versionPhysique = ex.length > 0;                     // présent en rayon
   const nbDisponibles = ex.filter(e => e.statut === 'disponible').length;
   const resasActives = db.reservations
@@ -242,12 +252,12 @@ function vueLivre(l, utilisateur) {
     };
   }
   return {
-    id: l.id, titre: l.titre, auteur: l.auteur, categorie: l.categorie, type: l.type,
+    accesComplet: abonnement.actif(db, utilisateur), id: l.id, titre: l.titre, auteur: l.auteur, categorie: l.categorie, type: l.type,
     resume: l.resume, couleur: l.couleur, icone: l.icone, annee: l.annee, isbn: l.isbn,
     note: moyenneNotes(l), nbNotes: l.notes.length, nbLectures: l.nbLectures,
     editeur: l.editeur || '', langue: l.langue || 'Français', niveau: l.niveau || '', motsCles: l.motsCles || '',
     maProgression: utilisateur ? (db.progressions.find(p => p.utilisateurId === utilisateur.id && p.livreId === l.id) || null) : null,
-    pdf: !!l.pdf, couverture: !!l.couverture,
+    epub: !!l.epub, pdf: !!l.pdf, couverture: !!l.couverture,
     versionNumerique, versionPhysique,
     hybride: versionNumerique && versionPhysique,
     disponible: versionNumerique || nbDisponibles > 0,
@@ -309,7 +319,7 @@ function vueEmprunt(e) {
   const livre = db.livres.find(l => l.id === e.livreId);
   const membre = db.utilisateurs.find(u => u.id === e.utilisateurId);
   const ex = e.exemplaireId ? db.exemplaires.find(x => x.id === e.exemplaireId) : null;
-  return { ...e, livre: livre ? { titre: livre.titre, auteur: livre.auteur, icone: livre.icone, couleur: livre.couleur, type: livre.type, versionNumerique: !!(livre.contenu || livre.pdf) } : null,
+  return { ...e, livre: livre ? { titre: livre.titre, auteur: livre.auteur, icone: livre.icone, couleur: livre.couleur, type: livre.type, versionNumerique: !!(livre.contenu || livre.pdf || livre.epub) } : null,
     membre: membre ? { id: membre.id, nom: membre.nom, email: membre.email } : null,
     cote: ex ? ex.cote : null, joursRetard: joursRetard(e) };
 }
@@ -319,6 +329,11 @@ async function api(req, res, u) {
   const { pathname, query } = url.parse(req.url, true);
   const seg = pathname.split('/').filter(Boolean); // ['api', ...]
   const utilisateur = authentifier(req);
+  if (pathname === '/api/version' && req.method === 'GET') {
+    return json(res, 200, { version: '1.5.1', apercuGratuit: true, abonnements: true });
+  }
+  if (await abonnement.route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid})) return;
+  if (await diffusion(req, res, { db, utilisateur, json, lireCorps, sauverDB, uid })) return;
   const exigeAuth = () => { if (!utilisateur) { json(res, 401, { erreur: 'Connexion requise.' }); return false; } return true; };
   const exigeBiblio = () => { if (!utilisateur || utilisateur.role !== 'bibliothecaire') { json(res, 403, { erreur: 'Réservé au bibliothécaire.' }); return false; } return true; };
   const m = req.method;
@@ -824,7 +839,7 @@ async function api(req, res, u) {
       const cr = c.creneaux.map(x => String(x).trim()).filter(Boolean).slice(0, 8);
       if (cr.length) p.creneaux = cr;
     }
-    if (!p.nom) p.nom = 'Oasis Centre numérique d\'apprentissage';
+    if (!p.nom) p.nom = 'OASIS Bibliothèque Numérique';
     sauverDB();
     return json(res, 200, p);
   }
@@ -1025,6 +1040,24 @@ async function api(req, res, u) {
     return fs.createReadStream(cheminCouv(l.id)).pipe(res);
   }
 
+  // EPUB : téléchargement authentifié, validation ZIP sans extraction.
+  if (seg[1] === 'livres' && seg[2] && seg[3] === 'epub') {
+    if (m === 'GET' ? !exigeAuth() : !exigeBiblio()) return;
+    const l = db.livres.find(x => x.id === seg[2]);
+    if (!l) return json(res, 404, { erreur: 'Livre introuvable.' });
+    if (m === 'POST') {
+      let b; try { b = await lireBinaire(req); } catch(e) { return json(res, 413, {erreur:e.message}); }
+      if (!require('./modules/epub-valide')(b)) return json(res,400,{erreur:'Le fichier doit être un EPUB valide (mimetype et META-INF/container.xml).'});
+      fs.mkdirSync(DOSSIER_PDF,{recursive:true}); fs.writeFileSync(cheminEpub(l.id),b);l.epub=true;sauverDB();return json(res,201,{ok:true});
+    }
+    if (m === 'GET') {
+      if (!l.epub || !fs.existsSync(cheminEpub(l.id))) return json(res,404,{erreur:'Aucun EPUB associé.'});
+      res.writeHead(200,{'Content-Type':'application/epub+zip','Content-Disposition':`attachment; filename="${encodeURIComponent(l.titre)}.epub"`,'Cache-Control':'no-store'});
+      return fs.createReadStream(cheminEpub(l.id)).pipe(res);
+    }
+    if(m === 'DELETE'){if(fs.existsSync(cheminEpub(l.id)))fs.unlinkSync(cheminEpub(l.id));l.epub=false;sauverDB();return json(res,200,{ok:true});}
+    return json(res,405,{erreur:'Méthode non autorisée.'});
+  }
   // --- E-books PDF ---
   if (seg[1] === 'livres' && seg[2] && seg[3] === 'pdf' && m === 'POST') {
     if (!exigeBiblio()) return;
@@ -1069,7 +1102,7 @@ async function api(req, res, u) {
       liste = liste.filter(l => [l.titre, l.auteur, l.categorie, l.isbn, l.editeur, l.langue, l.niveau, l.motsCles, l.resume].some(x => (x || '').toLowerCase().includes(q)));
     }
     if (query.categorie) liste = liste.filter(l => l.categorie === query.categorie);
-    if (query.type === 'numerique') liste = liste.filter(l => l.contenu || l.pdf);
+    if (query.type === 'numerique') liste = liste.filter(l => l.contenu || l.pdf || l.epub);
     else if (query.type === 'physique') liste = liste.filter(l => db.exemplaires.some(e => e.livreId === l.id));
     if (query.tri === 'populaires') liste.sort((a,b) => (moyenneNotes(b)*10 + b.nbLectures/50) - (moyenneNotes(a)*10 + a.nbLectures/50));
     else if (query.tri === 'nouveautes') liste.sort((a,b) => new Date(b.creeLe) - new Date(a.creeLe));
@@ -1117,12 +1150,14 @@ async function api(req, res, u) {
       db.livres.splice(idx, 1);
       db.exemplaires = db.exemplaires.filter(e => e.livreId !== seg[2]);
       db.reservations.forEach(r => { if (r.livreId === seg[2] && (r.statut === 'en_attente' || r.statut === 'prete')) r.statut = 'annulee'; });
+      if (fs.existsSync(cheminEpub(seg[2]))) fs.unlinkSync(cheminEpub(seg[2]));
       if (fs.existsSync(cheminPdf(seg[2]))) fs.unlinkSync(cheminPdf(seg[2]));
       if (fs.existsSync(cheminCouv(seg[2]))) fs.unlinkSync(cheminCouv(seg[2]));
       sauverDB();
       return json(res, 200, { ok: true });
     }
     const c = await lireCorps(req);
+    if (['titre','auteur','categorie'].some(k => c[k] !== undefined && (typeof c[k] !== 'string' || !c[k].trim()))) return json(res,400,{erreur:'Titre, auteur et catégorie ne doivent pas être vides.'});
     ['titre','auteur','categorie','resume','couleur','icone','annee','isbn','contenu','type','editeur','langue','niveau','motsCles'].forEach(k => { if (c[k] !== undefined) db.livres[idx][k] = c[k]; });
     sauverDB();
     return json(res, 200, vueLivre(db.livres[idx], utilisateur));
@@ -1177,11 +1212,11 @@ async function api(req, res, u) {
     if (aExemplaires) {
       // Version physique : on réserve un exemplaire en rayon
       const dispo = db.exemplaires.find(e => e.livreId === l.id && e.statut === 'disponible');
-      if (!dispo) return json(res, 409, { erreur: 'Aucun exemplaire disponible pour le moment.' + (l.contenu || l.pdf ? ' La version numérique reste lisible en ligne.' : '') });
+      if (!dispo) return json(res, 409, { erreur: 'Aucun exemplaire disponible pour le moment.' + (l.contenu || l.pdf || l.epub ? ' La version numérique reste lisible en ligne.' : '') });
       dispo.statut = 'emprunte';
       exemplaireId = dispo.id;
       duree = db.parametres.dureeEmpruntPhysique;
-    } else if (l.contenu || l.pdf) {
+    } else if (l.contenu || l.pdf || l.epub) {
       duree = db.parametres.dureeEmpruntNumerique;
     } else {
       return json(res, 409, { erreur: 'Ce titre n\'a ni exemplaire en rayon ni version numérique.' });
@@ -1261,9 +1296,9 @@ async function api(req, res, u) {
     const enCours = db.emprunts.filter(e => e.statut === 'en_cours');
     return json(res, 200, {
       livres: db.livres.length,
-      numeriques: db.livres.filter(l => l.contenu || l.pdf).length,
+      numeriques: db.livres.filter(l => l.contenu || l.pdf || l.epub).length,
       physiques: db.livres.filter(l => db.exemplaires.some(e => e.livreId === l.id)).length,
-      hybrides: db.livres.filter(l => (l.contenu || l.pdf) && db.exemplaires.some(e => e.livreId === l.id)).length,
+      hybrides: db.livres.filter(l => (l.contenu || l.pdf || l.epub) && db.exemplaires.some(e => e.livreId === l.id)).length,
       exemplaires: db.exemplaires.length,
       exemplairesDisponibles: db.exemplaires.filter(e => e.statut === 'disponible').length,
       membres: db.utilisateurs.filter(x => x.role === 'apprenant').length,

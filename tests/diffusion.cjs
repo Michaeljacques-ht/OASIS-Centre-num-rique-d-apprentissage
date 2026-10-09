@@ -7,6 +7,7 @@ async function request(route,token,method='GET',body){const r=await fetch(base+'
  fs.cpSync(source,temp,{recursive:true,filter:p=>!['data','integrations','tests','node_modules'].includes(path.relative(source,p).split(path.sep)[0])});
  let code=fs.readFileSync(path.join(temp,'server.js'),'utf8');code=code.replace('http.createServer(async (req, res) => {','const testServer = http.createServer(async (req, res) => {').replace("}).listen(PORT, () => {","}).listen(PORT, () => { console.log('TEST_PORT:' + testServer.address().port);");fs.writeFileSync(path.join(temp,'server.js'),code);await start();
  assert.equal((await request('/diffusion/ressources')).code,401);
+ assert.equal((await request('/version')).data.apercuGratuit,true);
  const login=async(email,motDePasse)=>{const r=await request('/connexion',null,'POST',{email,motDePasse});assert.equal(r.code,200);return r.data.jeton};
  const learner=await login('emma@oasis.ht','demo123');const admin=await login('admin@oasis.ht','admin123');
  const seed=await request('/diffusion/ressources',learner);assert.equal(seed.data.length,36);assert(seed.data.every(r=>r.statut==='exemple'&&!r.contenu&&!r.lien));

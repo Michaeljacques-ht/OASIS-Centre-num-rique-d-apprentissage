@@ -504,7 +504,7 @@
     let blob;
     try {
       const rep = await fetch('/api/livres/' + livre.id + (livre.accesComplet ? '/pdf' : '/apercu'), { headers: { Authorization: 'Bearer ' + jeton } });
-      if (!rep.ok) { const d = await rep.json().catch(() => ({})); throw new Error(d.erreur || 'PDF indisponible.'); }
+      if (!rep.ok) { const d = await rep.json().catch(() => ({})); throw new Error(rep.status === 404 && !livre.accesComplet ? 'Le serveur doit être mis à jour pour ouvrir les aperçus gratuits. Veuillez réessayer après le déploiement.' : d.erreur || 'PDF indisponible.'); }
       blob = await rep.blob();
     } catch (err) { return toast(err.message); }
     fermerModale();
@@ -1194,6 +1194,7 @@
 
   // ---------- Démarrage ----------
   function demarrer() {
+    $('.contenu').classList.toggle('sans-colonne', !moi);
     $('#ecranConnexion').hidden = true;
     $('#appli').hidden = false;
     if(!moi){
