@@ -10,7 +10,7 @@ async function request(route,token,method='GET',body){const r=await fetch(base+'
  const learner=await login('emma@oasis.ht','demo123');const admin=await login('admin@oasis.ht','admin123');
  const book=(await request('/livres',admin,'POST',{titre:'Document test',auteur:'Auteur',categorie:'Sciences',type:'numerique'})).data;
  assert.equal((await request('/livres/'+book.id,admin,'PUT',{titre:'Titre modifié',niveau:'NS4',editeur:'OASIS'})).code,200);
- const epubPath=path.join(temp,'test.epub');require('child_process').execFileSync('python3',['-c',"import zipfile,sys; z=zipfile.ZipFile(sys.argv[1],'w'); z.writestr('mimetype','application/epub+zip'); z.writestr('META-INF/container.xml','<container/>'); z.writestr('content.opf','<package/>'); z.close()",epubPath]);
+ const epubPath=path.join(temp,'test.epub');require('child_process').execFileSync('python3',['-c',"import zipfile,sys; z=zipfile.ZipFile(sys.argv[1],'w'); z.writestr('mimetype','application/epub+zip'); z.writestr('META-INF/container.xml','<container><rootfiles><rootfile full-path=\"content.opf\"/></rootfiles></container>'); z.writestr('content.opf','<package><manifest><item id=\"cover\" href=\"cover.png\" media-type=\"image/png\" properties=\"cover-image\"/></manifest></package>'); z.writestr('cover.png',bytes([137,80,78,71,13,10,26,10])); z.close()",epubPath]);
  const upload=await fetch(base+'/api/livres/'+book.id+'/epub',{method:'POST',headers:{Authorization:'Bearer '+admin,'Content-Type':'application/epub+zip'},body:fs.readFileSync(epubPath)});assert.equal(upload.status,201);
  const download=await fetch(base+'/api/livres/'+book.id+'/epub',{headers:{Authorization:'Bearer '+admin}});assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),fs.readFileSync(epubPath));
  assert.equal((await fetch(base+'/api/livres/'+book.id+'/epub',{headers:{Authorization:'Bearer '+learner}})).status,402);
@@ -21,7 +21,7 @@ async function request(route,token,method='GET',body){const r=await fetch(base+'
  const preview=await fetch(base+'/api/livres/'+pdfBook.id+'/apercu');assert.equal(preview.status,200);assert.equal((await PDFDocument.load(await preview.arrayBuffer())).getPageCount(),5);
  assert.equal((await fetch(base+'/api/livres/'+pdfBook.id+'/pdf')).status,402);
  assert.equal((await fetch(base+'/api/livres/'+pdfBook.id+'/pdf',{headers:{Authorization:'Bearer '+learner}})).status,402);
- const updated=(await request('/livres/'+book.id,learner)).data;assert(updated.epub&&updated.versionNumerique);assert.equal(updated.titre,'Titre modifié');
+ const updated=(await request('/livres/'+book.id,learner)).data;assert(updated.epub&&updated.versionNumerique&&updated.couverture);assert.equal((await fetch(base+'/api/livres/'+book.id+'/couverture')).headers.get('content-type'),'image/png');assert.equal(updated.titre,'Titre modifié');
  assert.equal((await fetch(base+'/api/livres/'+book.id+'/epub',{method:'POST',headers:{Authorization:'Bearer '+admin},body:'not an epub'})).status,400);
 
  assert.equal((await request('/diffusion/ressources',admin)).code,404);

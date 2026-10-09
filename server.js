@@ -234,7 +234,14 @@ function authentifier(req) {
 
 // ---------- Logique métier ----------
 const moyenneNotes = l => l.notes.length ? Math.round((l.notes.reduce((a,b)=>a+b,0) / l.notes.length) * 10) / 10 : 0;
+const couverturesEpubVerifiees = new Set();
+function recupererCouvertureEpub(l, force=false) {
+  if(!l.epub || (!force && (l.couverture || couverturesEpubVerifiees.has(l.id))))return;
+  couverturesEpubVerifiees.add(l.id);
+  try {const c=require('./modules/epub-couverture')(fs.readFileSync(cheminEpub(l.id)));if(c){fs.mkdirSync(DOSSIER_COUV,{recursive:true});fs.writeFileSync(cheminCouv(l.id),c.data);l.couverture=true;l.couvertureMime=c.mime;sauverDB();}}catch{}
+}
 function vueLivre(l, utilisateur) {
+  recupererCouvertureEpub(l);
   const ex = db.exemplaires.filter(e => e.livreId === l.id);
   const versionNumerique = !!(l.contenu || l.pdf || l.epub);          // lisible en ligne
   const versionPhysique = ex.length > 0;                     // présent en rayon
@@ -1027,14 +1034,15 @@ async function api(req, res, u) {
     const jpg = donnees.length > 3 && donnees[0] === 0xFF && donnees[1] === 0xD8;
     if ((!png && !jpg) || donnees.length > 3e6) return json(res, 400, { erreur: 'Image PNG ou JPEG requise (3 Mo max).' });
     fs.mkdirSync(DOSSIER_COUV, { recursive: true });
-    fs.writeFileSync(cheminCouv(l.id), donnees);
+    fs.writeFileSync(cheminCouv(l.id), donnees);l.couvertureMime="image/png";
     l.couverture = true; sauverDB();
     return json(res, 201, { ok: true });
   }
   if (seg[1] === 'livres' && seg[2] && seg[3] === 'couverture' && m === 'GET') {
     const l = db.livres.find(x => x.id === seg[2]);
+    if(l)recupererCouvertureEpub(l);
     if (!l || !l.couverture || !fs.existsSync(cheminCouv(l.id))) return json(res, 404, { erreur: 'Pas de couverture.' });
-    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300' });
+    res.writeHead(200, { 'Content-Type': l.couvertureMime || 'image/png', 'Cache-Control': 'public, max-age=300' });
     return fs.createReadStream(cheminCouv(l.id)).pipe(res);
   }
 
@@ -1046,7 +1054,7 @@ async function api(req, res, u) {
     if (m === 'POST') {
       let b; try { b = await lireBinaire(req); } catch(e) { return json(res, 413, {erreur:e.message}); }
       if (!require('./modules/epub-valide')(b)) return json(res,400,{erreur:'Le fichier doit être un EPUB valide (mimetype et META-INF/container.xml).'});
-      fs.mkdirSync(DOSSIER_PDF,{recursive:true}); fs.writeFileSync(cheminEpub(l.id),b);l.epub=true;sauverDB();return json(res,201,{ok:true});
+      fs.mkdirSync(DOSSIER_PDF,{recursive:true}); fs.writeFileSync(cheminEpub(l.id),b);l.epub=true;recupererCouvertureEpub(l,true);sauverDB();return json(res,201,{ok:true,couverture:!!l.couverture});
     }
     if (m === 'GET') {
       if (!l.epub || !fs.existsSync(cheminEpub(l.id))) return json(res,404,{erreur:'Aucun EPUB associé.'});

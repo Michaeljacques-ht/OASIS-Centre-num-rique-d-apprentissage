@@ -156,3 +156,6 @@ Validation automatisée : catalogue anonyme, aperçu PDF de cinq pages à partir
 
 ## Retrait de Pédagogie & diffusion
 Les cinq rubriques, les raccourcis d’accueil et la gestion administrateur ont été retirés. Les anciennes routes Diffusion ne sont plus actives. Les données existantes dans le disque persistant ne sont pas supprimées.
+
+## Lecteur EPUB intégré
+Les abonnés et administrateurs peuvent ouvrir un EPUB directement dans le navigateur. Navigation par chapitre et taille de texte réglable. Les chapitres sont affichés dans une iframe isolée ; scripts et accès réseau externes sont bloqués. Les EPUB protégés par DRM ne sont pas pris en charge.

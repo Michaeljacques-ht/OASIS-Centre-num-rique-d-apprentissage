@@ -413,7 +413,7 @@
             ${l.resume ? `<p style="margin-bottom:14px">${echap(l.resume)}</p>` : ''}
             ${dispo}
             <div class="rangee-boutons">
-              ${l.versionNumerique ? `<button class="btn btn-bleu" data-lire="${l.id}">${!l.accesComplet ? '📖 Aperçu gratuit' : l.epub && !l.pdf ? '📥 Télécharger EPUB' : '📖 Lire en ligne'}</button>` : ''}
+              ${l.versionNumerique ? `<button class="btn btn-bleu" data-lire="${l.id}">${!l.accesComplet ? '📖 Aperçu gratuit' : l.epub && !l.pdf ? '📖 Lire EPUB' : '📖 Lire en ligne'}</button>` : ''}
               ${l.versionPhysique && l.nbDisponibles > 0 ? `<button class="btn ${l.versionNumerique ? '' : 'btn-bleu'}" data-emprunter="${l.id}">📕 Emprunter l'exemplaire (${parametres.dureeEmpruntPhysique || 14} jours)</button>` : ''}
               ${l.versionPhysique && l.nbDisponibles === 0 && !l.maReservation ? `<button class="btn ${l.versionNumerique ? '' : 'btn-bleu'}" data-reserver="${l.id}">📌 Réserver — rejoindre la file</button>` : ''}
               ${l.maReservation ? `<button class="btn btn-danger" data-annuler-resa="${l.maReservation.id}" data-livre-ctx="${l.id}">Annuler ma réservation</button>` : ''}
@@ -446,6 +446,7 @@
     $('#voile').addEventListener('click', e => { if (e.target.id === 'voile') fermerModale(); });
   }
   const fermerModale = () => {
+    window.OasisEpub?.close();
     if (nettoyerPdf) { nettoyerPdf(); nettoyerPdf = null; }
     $('#zoneModale').innerHTML = '';
     if (urlPdfActive) { URL.revokeObjectURL(urlPdfActive); urlPdfActive = null; }
@@ -550,10 +551,7 @@
       if(livre.epub){fermerModale();afficherVue('abonnement');return}
       try{const d=await api('/livres/'+id+'/apercu');$('#zoneModale').innerHTML=`<div class="voile"><div class="modale"><div class="corps"><button class="mini-btn" id="fermerApercu">Fermer</button><h3>${echap(d.titre)}</h3><p>Extrait : ${d.pages} pages de texte (2 500 caractères par page).</p><div style="white-space:pre-wrap">${echap(d.contenu)}</div><button class="btn btn-orange" data-abonner>Lire la suite — s’abonner</button></div></div></div>`;$('#fermerApercu').onclick=fermerModale;}catch(e){toast(e.message)}return;
     }
-    if (livre.epub && !livre.pdf) {
-      try { const rep=await fetch('/api/livres/'+id+'/epub',{headers:{Authorization:'Bearer '+jeton}});if(!rep.ok)throw new Error('Téléchargement EPUB impossible.');const u=URL.createObjectURL(await rep.blob());const a=document.createElement('a');a.href=u;a.download=livre.titre+'.epub';a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);toast('Ouvrez le fichier dans votre lecteur EPUB.'); } catch(e){toast(e.message)}
-      return;
-    }
+    if (livre.epub && !livre.pdf) {fermerModale();return OasisEpub.open(livre,jeton,$('#zoneModale'),fermerModale);}
     if (livre.pdf) return ouvrirLecteurPdf(livre);
     let d;
     try { d = await api('/livres/' + id + '/lire'); } catch (err) { return toast(err.message); }
