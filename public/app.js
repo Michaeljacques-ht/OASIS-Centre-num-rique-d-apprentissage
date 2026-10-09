@@ -1,4 +1,4 @@
-/* Oasis Centre numérique d'apprentissage — Portail apprenant */
+/* OASIS Bibliothèque Numérique — Portail apprenant */
 (() => {
   const $ = s => document.querySelector(s);
   let jeton = localStorage.getItem('oasis_jeton') || localStorage.getItem('educa_jeton') || '';
@@ -112,6 +112,13 @@
 
   // ---------- Vues ----------
   const vues = {
+    abonnement: () => OasisAbonnement.render(api, moi),
+    espace: async () => `<h2>Mon espace</h2><p>Bienvenue ${echap(moi?.nom || "")}. Retrouvez vos lectures dans la bibliothèque et gérez votre abonnement ci-dessous.</p><button class="btn btn-bleu" data-vue="bibliotheque">Explorer la bibliothèque</button>` + await OasisAbonnement.render(api, moi),
+    pedagogie: () => OasisDiffusion.render(api, false, 'pedagogie'),
+    methodes: () => OasisDiffusion.render(api, false, 'methodes'),
+    td: () => OasisDiffusion.render(api, false, 'td'),
+    parcours: () => OasisDiffusion.render(api, false, 'parcours'),
+    outils: () => OasisDiffusion.render(api, false, 'outils'),
     async accueil() {
       const [nouveautes, cats] = await Promise.all([
         api('/livres?tri=nouveautes'),
@@ -119,7 +126,7 @@
       ]);
       return `
         <button class="banniere-accueil" data-vue="bibliotheque" aria-label="Accéder à la bibliothèque">
-          <img src="/banniere-oasis.png" alt="Oasis Centre numérique d'apprentissage — Apprendre aujourd'hui pour un meilleur demain">
+          <img src="/banniere-oasis.png" alt="OASIS Bibliothèque Numérique — Apprendre aujourd'hui pour un meilleur demain">
         </button>
         <div class="hero">
           <div>
@@ -128,6 +135,7 @@
             <button class="btn-orange" data-vue="bibliotheque">Accéder</button>
           </div>
         </div>
+        <div class="diff-home-links"><button class="carte-categorie" data-vue="pedagogie">📑 Ressources pédagogiques<small>Supports pour élèves et enseignants</small></button><button class="carte-categorie" data-vue="methodes">🧭 Méthodes & guides<small>Apprendre et préparer ses cours</small></button><button class="carte-categorie" data-vue="td">✍️ Travaux dirigés<small>Pratiquer et approfondir</small></button></div>
         <div class="section-titre"><h3>Nouveautés</h3><button data-vue="nouveautes">Voir Plus ›</button></div>
         ${grille(nouveautes.slice(0, 4))}
         <div class="section-titre"><h3>Catégories Populaires</h3><button data-vue="categories">Voir Plus ›</button></div>
@@ -330,12 +338,14 @@
   };
 
   async function afficherVue(nom, param) {
+    if(!moi&&!['accueil','bibliotheque','categorie','categories','nouveautes','recommandes','abonnement'].includes(nom)){window.dispatchEvent(new Event('oasis-connexion'));return;}
     vueActive = nom;
     document.querySelectorAll('.nav-item[data-vue]').forEach(b => b.classList.toggle('actif', b.dataset.vue === nom));
     $('#sidebar').classList.remove('ouverte');
+    $('#btnMenu').setAttribute('aria-expanded', 'false');
     const zone = $('#zonePrincipale');
     zone.innerHTML = '<p class="vide">Chargement…</p>';
-    try { zone.innerHTML = await (vues[nom] || vues.accueil)(param); }
+    try { zone.innerHTML = await (vues[nom] || vues.accueil)(param); OasisDiffusion.mount(); }
     catch (err) { zone.innerHTML = `<div class="erreur">${echap(err.message)}</div>`; }
   }
 
@@ -406,7 +416,7 @@
             ${l.resume ? `<p style="margin-bottom:14px">${echap(l.resume)}</p>` : ''}
             ${dispo}
             <div class="rangee-boutons">
-              ${l.versionNumerique ? `<button class="btn btn-bleu" data-lire="${l.id}">📖 Lire en ligne</button>` : ''}
+              ${l.versionNumerique ? `<button class="btn btn-bleu" data-lire="${l.id}">${!l.accesComplet ? '📖 Aperçu gratuit' : l.epub && !l.pdf ? '📥 Télécharger EPUB' : '📖 Lire en ligne'}</button>` : ''}
               ${l.versionPhysique && l.nbDisponibles > 0 ? `<button class="btn ${l.versionNumerique ? '' : 'btn-bleu'}" data-emprunter="${l.id}">📕 Emprunter l'exemplaire (${parametres.dureeEmpruntPhysique || 14} jours)</button>` : ''}
               ${l.versionPhysique && l.nbDisponibles === 0 && !l.maReservation ? `<button class="btn ${l.versionNumerique ? '' : 'btn-bleu'}" data-reserver="${l.id}">📌 Réserver — rejoindre la file</button>` : ''}
               ${l.maReservation ? `<button class="btn btn-danger" data-annuler-resa="${l.maReservation.id}" data-livre-ctx="${l.id}">Annuler ma réservation</button>` : ''}
@@ -439,6 +449,7 @@
     $('#voile').addEventListener('click', e => { if (e.target.id === 'voile') fermerModale(); });
   }
   const fermerModale = () => {
+    if (nettoyerPdf) { nettoyerPdf(); nettoyerPdf = null; }
     $('#zoneModale').innerHTML = '';
     if (urlPdfActive) { URL.revokeObjectURL(urlPdfActive); urlPdfActive = null; }
     if ('speechSynthesis' in window && speechSynthesis.speaking) speechSynthesis.cancel();
@@ -461,19 +472,19 @@
     const salut = h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
     const prenom = moi ? echap(moi.nom.split(' ')[0]) : '';
     const message = echap(parametres.messageAccueil || 'bienvenue dans votre bibliothèque !');
-    el.innerHTML = `👋 ${salut}${prenom ? ' <span>' + prenom + '</span>' : ''} — ${message}`;
+    el.innerHTML = `<span class="salutation-ligne">👋 ${salut}${prenom ? ' <span>' + prenom + '</span>' : ''}</span><span class="salutation-separateur"> — </span><span class="salutation-message">${message}</span>`;
   }
   async function chargerParametres() {
     try { parametres = await api('/parametres'); } catch { parametres = {}; }
     appliquerParametres();
   }
   function appliquerParametres() {
-    const nom = parametres.nom || 'Oasis Centre numérique d\'apprentissage';
+    const nom = parametres.nom || 'OASIS Bibliothèque Numérique';
     document.title = nom;
     const mots = nom.split(' ');
     majSalutation();
-    if ($('#logoNom')) $('#logoNom').innerHTML = echap(mots.slice(0, 2).join(' ')).replace(' ', '<br>');
-    if ($('#logoSous')) $('#logoSous').textContent = mots.slice(2).join(' ').toUpperCase() || 'NUMÉRIQUE';
+    if ($('#logoNom')) $('#logoNom').innerHTML = 'OASIS';
+    if ($('#logoSous')) $('#logoSous').textContent = 'BIBLIOTHÈQUE NUMÉRIQUE';
     if ($('#sousConnexion') && parametres.slogan) $('#sousConnexion').textContent = parametres.slogan;
     const pied = $('#piedPage');
     if (pied) {
@@ -483,47 +494,69 @@
         blocs.push(`<div class="bloc"><b>Contact</b>${parametres.adresse ? echap(parametres.adresse) + '<br>' : ''}${parametres.telephone ? '📞 ' + echap(parametres.telephone) + '<br>' : ''}${parametres.email ? '✉️ ' + echap(parametres.email) : ''}</div>`);
       if (parametres.horaires)
         blocs.push(`<div class="bloc"><b>Horaires</b>${echap(parametres.horaires)}</div>`);
-      blocs.push(`<div class="copyright">${echap(parametres.piedDePage || 'Oasis Centre numérique d\'apprentissage © 2026 — Haïti 🇭🇹')}</div>`);
+      blocs.push(`<div class="copyright">${echap(parametres.piedDePage || 'OASIS Bibliothèque Numérique © 2026 — Haïti 🇭🇹')}</div>`);
       pied.innerHTML = blocs.join('');
     }
   }
+  let nettoyerPdf = null;
   async function ouvrirLecteurPdf(livre) {
     toast('Ouverture du PDF…');
     let blob;
     try {
-      const rep = await fetch('/api/livres/' + livre.id + '/pdf', { headers: { Authorization: 'Bearer ' + jeton } });
+      const rep = await fetch('/api/livres/' + livre.id + (livre.accesComplet ? '/pdf' : '/apercu'), { headers: { Authorization: 'Bearer ' + jeton } });
       if (!rep.ok) { const d = await rep.json().catch(() => ({})); throw new Error(d.erreur || 'PDF indisponible.'); }
       blob = await rep.blob();
     } catch (err) { return toast(err.message); }
+    fermerModale();
     urlPdfActive = URL.createObjectURL(blob);
-    $('#zoneModale').innerHTML = `
-      <div class="voile" id="voile">
-        <div class="modale lecteur" role="dialog" aria-modal="true" style="max-width:900px;height:92vh;display:flex;flex-direction:column">
-          <div class="modale-entete" style="padding-bottom:12px">
-            <div style="flex:1"><h3>${echap(livre.titre)}</h3><p style="color:var(--gris)">${echap(livre.auteur)}</p></div>
-            <a class="btn" href="${urlPdfActive}" download="${echap(livre.titre)}.pdf" style="align-self:center">⬇ Télécharger</a>
-            <button class="btn" id="btnPleinEcranPdf" style="align-self:center" title="Plein écran">⛶</button>
-            <button class="btn btn-bleu" id="btnTerminerPdf" style="align-self:center">✅ Terminer</button>
-            <button class="fermer" id="btnFermer" aria-label="Fermer">✕</button>
-          </div>
-          <iframe src="${urlPdfActive}" title="Lecture de ${echap(livre.titre)}" style="flex:1;border:none;border-top:1px solid var(--bord);border-radius:0 0 18px 18px;background:#525659"></iframe>
-        </div>
-      </div>`;
-    $('#btnFermer').addEventListener('click', fermerModale);
-    $('#voile').addEventListener('click', e => { if (e.target.id === 'voile') fermerModale(); });
-    $('#btnPleinEcranPdf').addEventListener('click', () => {
-      const ifr = document.querySelector('.modale.lecteur iframe');
-      if (document.fullscreenElement) document.exitFullscreen();
-      else ifr?.requestFullscreen?.().catch(() => toast('Plein écran non disponible sur ce navigateur.'));
-    });
-    $('#btnTerminerPdf').addEventListener('click', () => terminerLivre(livre.id));
-    // Trace l'ouverture dans l'historique de lecture
-    api('/livres/' + livre.id + '/progression', { method: 'POST', body: JSON.stringify({ pourcentage: livre.maProgression ? livre.maProgression.pourcentage : 1 }) }).catch(() => {});
+    $('#zoneModale').innerHTML = `<div class="voile" id="voile"><div class="modale lecteur lecteur-pdf-mobile" role="dialog" aria-modal="true" aria-label="Lecture PDF">
+      <div class="pdf-entete"><h3>${echap(livre.titre)}</h3><button class="mini-btn" id="btnFermer" aria-label="Fermer">✕</button></div>
+      <div class="pdf-outils"><button class="mini-btn" id="pdfAvant" aria-label="Page précédente">←</button><label>Page <input type="number" id="pdfPage" min="1" value="1" aria-label="Numéro de page"></label><span id="pdfTotal"></span><button class="mini-btn" id="pdfApres" aria-label="Page suivante">→</button><button class="mini-btn" id="pdfMoins" aria-label="Réduire le zoom">−</button><button class="mini-btn" id="pdfPlus" aria-label="Augmenter le zoom">+</button><a class="mini-btn" href="${urlPdfActive}" download="${echap(livre.titre)}.pdf">Télécharger</a><a class="mini-btn" href="${urlPdfActive}" target="_blank" rel="noopener">Ouvrir ↗</a><button class="mini-btn bleu" id="btnTerminerPdf" ${!livre.accesComplet ? 'hidden' : ''}>Terminer</button></div>
+      ${!livre.accesComplet ? '<div class="pdf-abonnement">Aperçu gratuit : cinq pages maximum. <button class="mini-btn bleu" data-abonner>Lire la suite — s’abonner</button></div>' : ''}<p id="pdfEtat" role="status" aria-live="polite">Chargement du document…</p><div class="pdf-pages" id="pdfPages"><canvas id="pdfCanvas" aria-label="Page du document PDF"></canvas></div></div></div>`;
+    let doc=null, renderTask=null, closed=false, page=1, zoom=1, sequence=0;
+    nettoyerPdf=()=>{closed=true;sequence++;renderTask?.cancel();doc?.destroy();};
+    $('#btnFermer').onclick=fermerModale;
+    $('#voile').onclick=e=>{if(e.target.id==='voile')fermerModale()};
+    $('#btnTerminerPdf').onclick=()=>terminerLivre(livre.id);
+    async function render(){
+      if(!doc||closed)return;const ticket=++sequence;
+      renderTask?.cancel();$('#pdfEtat').textContent='Chargement de la page…';
+      try{
+        const p=await doc.getPage(page);if(ticket!==sequence||closed)return;
+        const canvas=$('#pdfCanvas'), area=$('#pdfPages');if(!canvas)return;
+        const original=p.getViewport({scale:1});const width=Math.max(200,area.clientWidth-24);
+        const scale=width/original.width*zoom;const viewport=p.getViewport({scale});
+        const ratio=Math.min(window.devicePixelRatio||1,2,Math.sqrt(4000000/(viewport.width*viewport.height)));
+        canvas.width=Math.floor(viewport.width*ratio);canvas.height=Math.floor(viewport.height*ratio);canvas.style.width=viewport.width+'px';canvas.style.height=viewport.height+'px';
+        renderTask=p.render({canvasContext:canvas.getContext('2d'),viewport,transform:[ratio,0,0,ratio,0,0]});await renderTask.promise;
+        if(ticket!==sequence||closed)return;$('#pdfEtat').textContent='Page '+page+' sur '+doc.numPages;
+        $('#pdfPage').value=page;$('#pdfAvant').disabled=page===1;$('#pdfApres').disabled=page===doc.numPages;area.scrollTop=0;
+      }catch(e){if(e.name!=='RenderingCancelledException'&&!closed&&ticket===sequence)$('#pdfEtat').textContent='Lecture impossible : utilisez Télécharger ou Ouvrir.'}
+    }
+    try{
+      if(!window.pdfjsLib)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='/vendor/pdfjs/pdf.min.js';script.onload=resolve;script.onerror=()=>reject(new Error('Lecteur indisponible'));document.head.appendChild(script)});
+      if(closed)return;pdfjsLib.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/pdf.worker.min.js';
+      doc=await pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer()),isEvalSupported:false}).promise;
+      if(closed){doc.destroy();return}$('#pdfTotal').textContent='/ '+doc.numPages;$('#pdfPage').max=doc.numPages;
+      $('#pdfAvant').onclick=()=>{page=Math.max(1,page-1);render()};$('#pdfApres').onclick=()=>{page=Math.min(doc.numPages,page+1);render()};
+      $('#pdfPage').onchange=e=>{page=Math.max(1,Math.min(doc.numPages,Number(e.target.value)||1));render()};
+      $('#pdfMoins').onclick=()=>{zoom=Math.max(.5,zoom-.25);render()};$('#pdfPlus').onclick=()=>{zoom=Math.min(3,zoom+.25);render()};
+      await render();
+      api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:livre.maProgression?.pourcentage||1})}).catch(()=>{});
+    }catch(e){if(!closed)$('#pdfEtat').textContent='Ce PDF ne peut pas être affiché. Utilisez Télécharger pour le lire dans votre application PDF.'}
   }
 
   async function ouvrirLecteur(id) {
     let livre;
     try { livre = await api('/livres/' + id); } catch (err) { return toast(err.message); }
+    if (!livre.accesComplet && !livre.pdf) {
+      if(livre.epub){fermerModale();afficherVue('abonnement');return}
+      try{const d=await api('/livres/'+id+'/apercu');$('#zoneModale').innerHTML=`<div class="voile"><div class="modale"><div class="corps"><button class="mini-btn" id="fermerApercu">Fermer</button><h3>${echap(d.titre)}</h3><p>Extrait : ${d.pages} pages de texte (2 500 caractères par page).</p><div style="white-space:pre-wrap">${echap(d.contenu)}</div><button class="btn btn-orange" data-abonner>Lire la suite — s’abonner</button></div></div></div>`;$('#fermerApercu').onclick=fermerModale;}catch(e){toast(e.message)}return;
+    }
+    if (livre.epub && !livre.pdf) {
+      try { const rep=await fetch('/api/livres/'+id+'/epub',{headers:{Authorization:'Bearer '+jeton}});if(!rep.ok)throw new Error('Téléchargement EPUB impossible.');const u=URL.createObjectURL(await rep.blob());const a=document.createElement('a');a.href=u;a.download=livre.titre+'.epub';a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);toast('Ouvrez le fichier dans votre lecteur EPUB.'); } catch(e){toast(e.message)}
+      return;
+    }
     if (livre.pdf) return ouvrirLecteurPdf(livre);
     let d;
     try { d = await api('/livres/' + id + '/lire'); } catch (err) { return toast(err.message); }
@@ -778,7 +811,7 @@
         <div class="modale" role="dialog" aria-modal="true">
           <div class="corps" style="padding:28px;text-align:center">
             <img src="/logo.png" alt="Logo" style="width:110px;height:110px;object-fit:contain">
-            <h3 style="margin:8px 0 4px">${echap(p.nom || 'Oasis Centre numérique d\'apprentissage')}</h3>
+            <h3 style="margin:8px 0 4px">${echap(p.nom || 'OASIS Bibliothèque Numérique')}</h3>
             <p style="color:var(--bleu);font-weight:700;margin-bottom:14px">${echap(p.slogan || '')}</p>
             <p style="text-align:left;line-height:1.7">${echap(p.aPropos || '')}</p>
             <div style="text-align:left;margin-top:14px;font-size:13.5px;color:var(--gris)">
@@ -891,6 +924,7 @@
   document.addEventListener('click', async e => {
     const cible = t => e.target.closest(`[${t}]`);
     let el;
+    if(!moi&&e.target.closest('[data-favori],[data-liste],[data-emprunter],[data-reserver],[data-notes-livre],[data-noter],[data-commentaires]')){window.dispatchEvent(new Event('oasis-connexion'));return;}
     if ((el = cible('data-vue'))) return afficherVue(el.dataset.vue);
     if ((el = cible('data-categorie'))) return afficherVue('categorie', el.dataset.categorie);
     if ((el = cible('data-lire'))) return ouvrirLecteur(el.dataset.lire);
@@ -994,13 +1028,13 @@
     if ((el = cible('data-partager'))) {
       const lien = location.origin + '/?livre=' + el.dataset.partager;
       const titre = el.dataset.titreLivre;
-      if (navigator.share) navigator.share({ title: titre, text: `Découvre « ${titre} » sur ${parametres.nom || 'Oasis Centre numérique d\'apprentissage'} !`, url: lien }).catch(() => {});
+      if (navigator.share) navigator.share({ title: titre, text: `Découvre « ${titre} » sur ${parametres.nom || 'OASIS Bibliothèque Numérique'} !`, url: lien }).catch(() => {});
       else { try { await navigator.clipboard.writeText(lien); toast('Lien copié — partagez-le ! 🔗'); } catch { toast(lien); } }
       return;
     }
     if ((el = cible('data-vider-filtres'))) {
       filtresBiblio = { categorie: '', langue: '', niveau: '', type: '', tri: '' };
-      return afficherVue('bibliotheque', $('#inRecherche').value.trim());
+      return (OasisDiffusion.search($('#inRecherche').value.trim()) || afficherVue('bibliotheque', $('#inRecherche').value.trim()));
     }
     if ((el = cible('data-onglet-media'))) return afficherVue('multimedia', el.dataset.ongletMedia);
     if ((el = cible('data-media'))) return ouvrirMedia(el.dataset.media);
@@ -1031,7 +1065,7 @@
   document.addEventListener('change', e => {
     if (e.target.id === 'inDatePlace') afficherVue('places', e.target.value);
     const f = e.target.closest('[data-filtre]');
-    if (f) { filtresBiblio[f.dataset.filtre] = f.value; afficherVue('bibliotheque', $('#inRecherche').value.trim()); }
+    if (f) { filtresBiblio[f.dataset.filtre] = f.value; (OasisDiffusion.search($('#inRecherche').value.trim()) || afficherVue('bibliotheque', $('#inRecherche').value.trim())); }
   });
 
   // ---------- Notifications ----------
@@ -1144,10 +1178,14 @@
   let minuteur;
   $('#inRecherche').addEventListener('input', e => {
     clearTimeout(minuteur);
-    minuteur = setTimeout(() => afficherVue('bibliotheque', e.target.value.trim()), 300);
+    minuteur = setTimeout(() => { if (!OasisDiffusion.search(e.target.value.trim())) afficherVue('bibliotheque', e.target.value.trim()); }, 300);
   });
 
-  $('#btnMenu').addEventListener('click', () => $('#sidebar').classList.toggle('ouverte'));
+  $('#btnMenu').addEventListener('click', () => {
+    const ouvert = $('#sidebar').classList.toggle('ouverte');
+    $('#btnMenu').setAttribute('aria-expanded', String(ouvert));
+    $('#btnMenu').setAttribute('aria-label', ouvert ? 'Fermer le menu' : 'Ouvrir le menu');
+  });
   $('#btnDeconnexion').addEventListener('click', async () => {
     try { await api('/deconnexion', { method: 'POST' }); } catch {}
     jeton = ''; moi = null; localStorage.removeItem('oasis_jeton'); localStorage.removeItem('educa_jeton');
@@ -1158,6 +1196,12 @@
   function demarrer() {
     $('#ecranConnexion').hidden = true;
     $('#appli').hidden = false;
+    if(!moi){
+      $('#btnConnexionPublic').hidden=false;$('#nomProfil').textContent='Visiteur';$('#avatarProfil').textContent='';$('#avatarProfil').hidden=true;$('#lienAdmin').hidden=true;$('#btnDeconnexion').hidden=true;
+      document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=!['accueil','bibliotheque','categories','nouveautes','recommandes','abonnement'].includes(b.dataset.vue));
+      $('#colonneDroite').hidden=true;$('#btnNotifs').hidden=true;chargerParametres();chargerCategories().then(()=>afficherVue('accueil'));return;
+    }
+    $('#avatarProfil').hidden=false;$('#btnDeconnexion').hidden=false;$('#btnNotifs').hidden=false;$('#colonneDroite').hidden=false;document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=false);$('#btnConnexionPublic').hidden=true;
     $('#nomProfil').textContent = moi.nom.split(' ')[0] + ' ' + (moi.nom.split(' ')[1]?.[0] || '') + (moi.nom.split(' ')[1] ? '.' : '');
     $('#avatarProfil').textContent = moi.nom.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
     $('#lienAdmin').hidden = moi.role !== 'bibliothecaire';
@@ -1166,15 +1210,18 @@
     rafraichirNotifications();
     setInterval(rafraichirNotifications, 120000);
     const livrePartage = new URLSearchParams(location.search).get('livre');
-    chargerCategories().then(() => { afficherVue('accueil'); if (livrePartage) ouvrirLivre(livrePartage); });
+    chargerCategories().then(() => { afficherVue(localStorage.getItem('oasis_apres_auth')|| (new URLSearchParams(location.search).has('espace')?'espace':'accueil'));localStorage.removeItem('oasis_apres_auth'); if (livrePartage) ouvrirLivre(livrePartage); });
     rafraichirPanneaux();
   }
   (async () => {
     initAuth();
     if (await verifierSession()) demarrer();
-    else $('#ecranConnexion').hidden = false;
+    else demarrer();
   })();
 
+  window.addEventListener('oasis-connexion',()=>{fermerModale();$('#appli').hidden=true;$('#ecranConnexion').hidden=false;});
+  $('#btnConnexionPublic').onclick=()=>window.dispatchEvent(new Event('oasis-connexion'));
+  document.addEventListener('click',e=>{if(e.target.closest('[data-abonner]')){fermerModale();afficherVue('abonnement')}});
   // PWA
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 })();

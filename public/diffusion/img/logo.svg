@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="EDUCA Diffusion">
+  <!-- Deux feuilles : le savoir qui pousse — reprise du symbole des maquettes -->
+  <path d="M23 26C23 15.5 17.4 7.6 8.5 5.2 6.6 15.4 11.6 24.4 23 26z" fill="#f5871f"/>
+  <path d="M25 26c0-10.5 5.6-18.4 14.5-20.8C41.4 15.4 36.4 24.4 25 26z" fill="#1d4ed8"/>
+  <!-- Le livre ouvert -->
+  <path d="M4 29.5c6.5-2.2 13.3-2.2 20 0v12c-6.7-2.2-13.5-2.2-20 0z" fill="#1d4ed8"/>
+  <path d="M44 29.5c-6.5-2.2-13.3-2.2-20 0v12c6.7-2.2 13.5-2.2 20 0z" fill="#2e6bf0"/>
+</svg>

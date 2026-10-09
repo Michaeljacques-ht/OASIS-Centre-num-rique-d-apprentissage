@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eaf1fe"/><stop offset="1" stop-color="#dbe6fe"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#g)"/>
+  <path d="M60 132c34-14 66-14 100 0v-58c-34-14-66-14-100 0z" fill="#fff" stroke="#8fb0e8" stroke-width="2"/>
+  <path d="M260 132c-34-14-66-14-100 0v-58c34-14 66-14 100 0z" fill="#fff" stroke="#8fb0e8" stroke-width="2"/>
+  <path d="M160 74v58" stroke="#8fb0e8" stroke-width="2"/>
+  <circle cx="160" cy="52" r="18" fill="#f5c33b"/><path d="M154 66h12M156 72h8" stroke="#c99a12" stroke-width="2.4" stroke-linecap="round"/>
+  <g fill="none" stroke="#1d4ed8" stroke-width="2.6">
+    <circle cx="244" cy="48" r="13"/><circle cx="76" cy="56" r="10"/>
+    <path d="M244 29v-8M244 75v-6M263 48h8M217 48h-8"/>
+  </g>
+  <g fill="#1d4ed8"><rect x="196" y="150" width="34" height="8" rx="4"/><rect x="90" y="150" width="34" height="8" rx="4"/><rect x="143" y="150" width="34" height="8" rx="4"/></g>
+</svg>

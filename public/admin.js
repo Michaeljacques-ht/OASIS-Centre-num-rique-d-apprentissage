@@ -1,4 +1,4 @@
-/* Oasis Centre numérique d'apprentissage — Espace bibliothécaire */
+/* OASIS Bibliothèque Numérique — Espace bibliothécaire */
 (() => {
   const $ = s => document.querySelector(s);
   let jeton = localStorage.getItem('oasis_jeton') || localStorage.getItem('educa_jeton') || '';
@@ -32,6 +32,7 @@
 
   // ---------- Onglets ----------
   const onglets = {
+    diffusion: () => OasisDiffusion.render(api, true, 'pedagogie'),
     async tableau() {
       const [s, emprunts, tousLivres] = await Promise.all([api('/stats'), api('/emprunts?statut=en_cours'), api('/livres?tri=populaires')]);
       const s2 = { topLivres: tousLivres.slice(0, 5) };
@@ -80,9 +81,9 @@
             <button class="btn" id="btnCategories">🗂️ Catégories</button>
             <button class="btn" id="btnImporterPdf">📚 Importer des PDF</button>
             <button class="btn" id="btnImporter">📥 Importer (CSV / JSON)</button>
-            <button class="btn btn-bleu" id="btnNouveauLivre">+ Ajouter un livre</button>
+            <button class="btn btn-ajouter-livre" id="btnNouveauLivre">+ Ajouter un livre</button>
           </span></div>
-        <table><thead><tr><th>Titre</th><th>Auteur</th><th>Catégorie</th><th>Versions</th><th>Disponibilité</th><th>Actions</th></tr></thead><tbody>
+        <table class="table-catalogue"><thead><tr><th>Titre</th><th>Auteur</th><th>Catégorie</th><th>Versions</th><th>Disponibilité</th><th>Actions</th></tr></thead><tbody>
         ${livres.map(l => `<tr>
           <td>${l.icone} <b>${echap(l.titre)}</b></td>
           <td>${echap(l.auteur)}</td>
@@ -93,7 +94,9 @@
             ${l.versionPhysique ? `<span class="pastille ${l.nbDisponibles > 0 ? 'dispo' : 'indispo'}">📕 ${l.nbDisponibles}/${l.nbExemplaires} en rayon</span>` : ''}
             ${!l.versionNumerique && !l.versionPhysique ? '<span class="pastille indispo">Incomplet</span>' : ''}
           </td>
-          <td>
+          <td class="catalogue-actions">
+            <button class="mini-btn bleu" data-modifier-livre="${l.id}">Modifier</button>
+            <button class="mini-btn" data-epub="${l.id}">${l.epub ? "EPUB ✓" : "Joindre EPUB"}</button>
             <button class="mini-btn" data-exemplaires="${l.id}" data-titre="${echap(l.titre)}">📕 Exemplaires${l.nbExemplaires ? ` (${l.nbExemplaires})` : ''}</button>
             <button class="mini-btn" data-pdf="${l.id}" data-titre="${echap(l.titre)}" data-deja="${l.pdf ? '1' : ''}">${l.pdf ? '📄 PDF ✓' : '📄 Joindre PDF'}</button>
             <button class="mini-btn rouge" data-supprimer="${l.id}">Supprimer</button>
@@ -293,7 +296,7 @@
     $('#sidebar').classList.remove('ouverte');
     const zone = $('#zoneAdmin');
     zone.innerHTML = '<p class="vide">Chargement…</p>';
-    try { zone.innerHTML = await onglets[nom](); brancherBoutons(); }
+    try { zone.innerHTML = await onglets[nom](); brancherBoutons(); OasisDiffusion.mount(); }
     catch (err) { zone.innerHTML = `<div class="erreur">${echap(err.message)}</div>`; }
   }
 
@@ -333,14 +336,14 @@
         <div class="champ"><label for="fType">Type</label>
           <select id="fType">
             <option value="physique">📕 Physique (en rayon)</option>
-            <option value="numerique">💻 E-book (PDF ou texte)</option>
+            <option value="numerique">💻 E-book (PDF, EPUB ou texte)</option>
             <option value="hybride">📕+💻 Hybride (les deux)</option>
           </select></div>
       </div>
       <div class="champ" id="champExemplaires"><label for="fExemplaires">Nombre d'exemplaires physiques (cotes générées automatiquement)</label>
         <input id="fExemplaires" type="number" min="0" max="50" value="1"></div>
-      <div class="champ" id="champPdf" hidden><label for="fPdf">Version PDF de l'e-book (30 Mo max) — la 1ʳᵉ page deviendra la couverture</label>
-        <input id="fPdf" type="file" accept=".pdf,application/pdf"></div>
+      <div class="champ" id="champPdf" hidden><label for="fPdf">Document PDF ou EPUB (30 Mo max)</label>
+        <input id="fPdf" type="file" accept=".pdf,.epub,application/pdf,application/epub+zip"></div>
       <div class="champ" id="champContenu" hidden><label for="fContenu">…ou contenu texte (Markdown : # titre, ## chapitre)</label><textarea id="fContenu" rows="5"></textarea></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
         <div class="champ"><label for="fAnnee">Année</label><input id="fAnnee" type="number" value="${new Date().getFullYear()}"></div>
@@ -397,9 +400,9 @@
         const fichierPdf = $('#fPdf')?.files[0];
         if (fichierPdf && type !== 'physique') {
           btn.textContent = 'Envoi du PDF…';
-          await envoyerPdf(livre.id, fichierPdf);
+          await (/\.epub$/i.test(fichierPdf.name) ? envoyerEpub(livre.id, fichierPdf) : envoyerPdf(livre.id, fichierPdf));
           btn.textContent = 'Génération de la couverture…';
-          await genererCouverture(livre.id, fichierPdf);
+          if (!/\.epub$/i.test(fichierPdf.name)) await genererCouverture(livre.id, fichierPdf);
         }
         fermerModale(); toast('Livre ajouté au catalogue.'); afficherOnglet('catalogue');
       } catch (err) {
@@ -440,6 +443,21 @@
     }
   }
 
+  async function envoyerEpub(id, fichier) {
+    if(fichier.size > 30*1024*1024) throw new Error('EPUB trop volumineux (30 Mo max).');
+    const rep = await fetch('/api/livres/'+id+'/epub',{method:'POST',headers:{Authorization:'Bearer '+jeton,'Content-Type':'application/epub+zip'},body:fichier});
+    const d=await rep.json();if(!rep.ok)throw new Error(d.erreur);return d;
+  }
+  async function modifierLivre(id) {
+    const l=await api('/livres/'+id);
+    const champs=[['titre','Titre'],['auteur','Auteur'],['categorie','Catégorie'],['editeur','Éditeur'],['isbn','ISBN'],['langue','Langue'],['niveau','Niveau scolaire'],['motsCles','Mots-clés'],['annee','Année'],['icone','Icône'],['couleur','Couleur']];
+    modale(`<h3>Modifier le document</h3><div id="msgModification"></div><div class="form-document">${champs.map(([k,n])=>`<div class="champ"><label for="edit-${k}">${n}</label><input id="edit-${k}" value="${echap(l[k]||'')}" ${k==='annee'?'type="number"':k==='couleur'?'type="color"':''}></div>`).join('')}</div><div class="champ"><label for="edit-resume">Résumé</label><textarea id="edit-resume" rows="4">${echap(l.resume||'')}</textarea></div><button class="btn btn-bleu" id="saveDocument">Enregistrer</button>`);
+    $('#saveDocument').onclick=async()=>{try{const body={};champs.forEach(([k])=>body[k]=$('#edit-'+k).value.trim());body.annee=Number(body.annee)||null;body.resume=$('#edit-resume').value;await api('/livres/'+id,{method:'PUT',body:JSON.stringify(body)});fermerModale();toast('Document modifié.');afficherOnglet('catalogue');}catch(e){$('#msgModification').textContent=e.message}};
+  }
+  function joindreEpub(id) {
+    modale(`<h3>Ajouter ou remplacer le document EPUB</h3><p>30 Mo maximum. Le document sera téléchargeable pour lecture dans une application EPUB.</p><div class="champ"><label for="epubFile">Fichier EPUB</label><input id="epubFile" type="file" accept=".epub,application/epub+zip"></div><div id="epubMessage"></div><button class="btn btn-bleu" id="saveEpub">Enregistrer l’EPUB</button>`);
+    $('#saveEpub').onclick=async()=>{const f=$('#epubFile').files[0];if(!f){$('#epubMessage').textContent='Choisissez un fichier EPUB.';return}try{await envoyerEpub(id,f);fermerModale();toast('EPUB enregistré.');afficherOnglet('catalogue');}catch(e){$('#epubMessage').textContent=e.message}};
+  }
   async function envoyerPdf(livreId, fichier) {
     if (fichier.size > 30 * 1024 * 1024) throw new Error('PDF trop volumineux (30 Mo max).');
     const rep = await fetch('/api/livres/' + livreId + '/pdf', {
@@ -826,6 +844,8 @@
   const ongletsEtat = {};
   function brancherBoutons() {
     $('#btnNouvelEmprunt')?.addEventListener('click', formEmpruntGuichet);
+    document.querySelectorAll('[data-modifier-livre]').forEach(b=>b.addEventListener('click',()=>modifierLivre(b.dataset.modifierLivre).catch(e=>toast(e.message))));
+    document.querySelectorAll('[data-epub]').forEach(b=>b.addEventListener('click',()=>joindreEpub(b.dataset.epub)));
     $('#btnNouveauLivre')?.addEventListener('click', formNouveauLivre);
     $('#btnImporter')?.addEventListener('click', formImporter);
     $('#btnImporterPdf')?.addEventListener('click', formImporterPdf);

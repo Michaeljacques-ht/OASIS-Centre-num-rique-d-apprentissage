@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#123e8c">
   <link rel="icon" href="/icone-192.png">
-  <title>Espace Bibliothécaire — Oasis Centre numérique d'apprentissage</title>
-  <link rel="stylesheet" href="/styles.css?v14">
+  <title>Espace Bibliothécaire — OASIS Bibliothèque Numérique</title>
+  <link rel="stylesheet" href="/styles.css?v20">
 </head>
 <body>
   <div id="appli" class="app" hidden>
@@ -21,6 +21,7 @@
         <button class="nav-item" data-onglet="reservations"><span class="ic">📌</span> Réservations</button>
         <button class="nav-item" data-onglet="places"><span class="ic">🪑</span> Places de lecture</button>
         <button class="nav-item" data-onglet="catalogue"><span class="ic">📚</span> Catalogue</button>
+        <button class="nav-item" data-onglet="diffusion"><span class="ic">📑</span> Pédagogie & diffusion</button>
         <button class="nav-item" data-onglet="ressources"><span class="ic">🔎</span> Ressources</button>
         <button class="nav-item" data-onglet="multimedia"><span class="ic">🎬</span> Multimédia</button>
         <button class="nav-item" data-onglet="membres"><span class="ic">👥</span> Membres</button>
@@ -35,7 +36,8 @@
 
     <div class="principal">
       <header class="entete">
-        <button class="bouton-menu" id="btnMenu" aria-label="Ouvrir le menu">☰</button>
+        <button class="bouton-menu" id="btnMenu" aria-controls="sidebar" aria-expanded="false" aria-label="Ouvrir le menu">☰</button>
+        <span class="marque-mobile" aria-label="OASIS Bibliothèque Numérique">OASIS</span>
         <h1>Gestion de la <span>Bibliothèque</span></h1>
         <div class="droite">
           <div class="profil"><span id="nomProfil"></span><div class="avatar" id="avatarProfil"></div></div>
@@ -48,6 +50,7 @@
     </div>
   </div>
   <div id="zoneModale"></div>
-  <script src="/admin.js?v14"></script>
+  <script src="/diffusion.js?v20"></script>
+  <script src="/admin.js?v20"></script>
 </body>
 </html>

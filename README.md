@@ -1,3 +1,7 @@
+# Version intégrée OASIS + Diffusion
+
+Consultez `FUSION-OASIS-DIFFUSION.md` pour l’installation, la navigation et les fonctions de la version 1.5.0. Démarrage : `npm start` ou `node server.js`. Vérification : `npm test`. Conservez votre dossier `data` lors de la mise à jour.
+
 # 📖 Oasis Centre numérique d'apprentissage
 
 Plateforme de bibliothèque **numérique et physique** pour les apprenants haïtiens. Node.js pur — **zéro dépendance npm** — base de données JSON, PWA installable.
@@ -104,3 +108,7 @@ Connexion inspirée d’EDUCA : panneau bleu nuit, accents orange, formulaire bl
 Installation : remplacer les fichiers du projet, conserver le dossier `data` et les fichiers téléversés existants. Redémarrer avec `node server.js`, puis recharger la page. Les données personnelles ne sont pas incluses dans ce ZIP.
 
 Vérification : syntaxe JavaScript, connexion apprenant/bibliothécaire, routes catalogue et statistiques, fichiers statiques. La vérification visuelle automatisée n’a pas pu être exécutée dans cet environnement.
+
+
+## Catalogue — version 17
+Tableau compact, bouton Ajouter orange, modification des métadonnées. Import PDF ou EPUB depuis Ajouter un livre ; bouton Joindre EPUB sur les documents existants. EPUB stockés dans data/pdfs, téléchargement authentifié pour lecture dans une application EPUB. Conserver le dossier data lors de la mise à jour.

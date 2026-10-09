@@ -6,15 +6,15 @@
   <meta name="theme-color" content="#123e8c">
   <link rel="icon" href="/icone-192.png">
   <link rel="apple-touch-icon" href="/icone-192.png">
-  <title>Oasis Centre numérique d'apprentissage</title>
-  <link rel="stylesheet" href="/styles.css?v14">
+  <title>OASIS Bibliothèque Numérique</title>
+  <link rel="stylesheet" href="/styles.css?v20">
   <link rel="manifest" href="/manifest.json">
 </head>
 <body>
   <!-- Écran de connexion -->
   <div id="ecranConnexion" class="ecran-connexion" hidden>
     <section class="presentation-connexion" aria-label="Découvrir OASIS">
-      <a class="identite-oasis" href="#connexion"><img src="/logo.png" alt=""><span>OASIS<small>CENTRE NUMÉRIQUE D’APPRENTISSAGE</small></span></a>
+      <a class="identite-oasis" href="#connexion"><img src="/logo.png" alt=""><span>OASIS<small>BIBLIOTHÈQUE NUMÉRIQUE</small></span></a>
       <div class="accroche-oasis"><span class="eyebrow">VOTRE ESPACE DE SAVOIR</span><h1>Un monde de ressources.<br><em>Un avenir à construire.</em></h1><p>Lire, explorer et progresser à votre rythme. Retrouvez vos livres, vos ressources pédagogiques et vos contenus multimédias dans un seul espace.</p></div>
       <img class="visuel-connexion" src="/banniere-oasis.png" alt="La bibliothèque numérique OASIS et ses ressources pour apprenants et enseignants">
       <div class="atouts-oasis"><article><span>01</span><h3>Explorer</h3><p>Livres numériques, guides et ressources organisés par domaine.</p></article><article><span>02</span><h3>Apprendre</h3><p>Vidéos et documents pour enrichir vos connaissances.</p></article><article><span>03</span><h3>Progresser</h3><p>Favoris, suivi de lecture et défis pour garder votre élan.</p></article></div>
@@ -46,7 +46,7 @@
         <span id="txtBascule">Pas encore de compte ?</span>
         <a href="#" id="lienBascule">Créer un compte</a>
       </p>
-      <p class="connexion-note">Votre espace personnel pour lire, apprendre et partager.</p>
+      <button class="mini-btn" onclick="location.href='/'">← Catalogue public</button><p class="connexion-note">Votre espace personnel pour lire, apprendre et partager.</p>
     </div></div>
   </div>
 
@@ -55,18 +55,26 @@
     <aside class="sidebar" id="sidebar">
       <div class="logo">
         <img src="/logo.png" alt="Logo Oasis" class="logo-img">
-        <div><b id="logoNom">Oasis<br>Centre</b><small id="logoSous">NUMÉRIQUE D'APPRENTISSAGE</small></div>
+        <div><b id="logoNom">OASIS<br>Bibliothèque</b><small id="logoSous">BIBLIOTHÈQUE NUMÉRIQUE</small></div>
       </div>
       <nav class="nav" aria-label="Navigation principale">
+        <div class="nav-groupe">Bibliothèque</div>
         <button class="nav-item actif" data-vue="accueil"><span class="ic">🏠</span> Accueil</button>
         <button class="nav-item" data-vue="bibliotheque"><span class="ic">📚</span> Bibliothèque</button>
         <button class="nav-item" data-vue="favoris"><span class="ic">❤️</span> Mes Favoris</button>
         <button class="nav-item" data-vue="emprunts"><span class="ic">🔖</span> Mes Emprunts</button>
-        <div class="sep"></div>
+        <button class="nav-item" data-vue="abonnement"><span class="ic">💳</span> Abonnement</button><div class="sep"></div>
         <button class="nav-item" data-vue="categories"><span class="ic">🗂️</span> Catégories</button>
         <button class="nav-item" data-vue="nouveautes"><span class="ic">✨</span> Nouveautés</button>
         <button class="nav-item" data-vue="recommandes"><span class="ic">⭐</span> Recommandés</button>
         <div class="sep"></div>
+        <div class="nav-groupe">Pédagogie & diffusion</div>
+        <button class="nav-item" data-vue="pedagogie"><span class="ic">📑</span> Ressources pédagogiques</button>
+        <button class="nav-item" data-vue="methodes"><span class="ic">🧭</span> Méthodes & guides</button>
+        <button class="nav-item" data-vue="td"><span class="ic">✍️</span> Travaux dirigés</button>
+        <button class="nav-item" data-vue="parcours"><span class="ic">📈</span> Mon parcours</button>
+        <button class="nav-item" data-vue="outils"><span class="ic">🗓️</span> Outils d’étude</button>
+        <div class="nav-groupe">Médiathèque & communauté</div>
         <button class="nav-item" data-vue="ressources"><span class="ic">🔎</span> Ressources</button>
         <button class="nav-item" data-vue="multimedia"><span class="ic">🎬</span> Multimédia</button>
         <button class="nav-item" data-vue="collaboration"><span class="ic">👥</span> Collaboration</button>
@@ -81,9 +89,10 @@
 
     <div class="principal">
       <header class="entete">
-        <button class="bouton-menu" id="btnMenu" aria-label="Ouvrir le menu">☰</button>
+        <button class="bouton-menu" id="btnMenu" aria-controls="sidebar" aria-expanded="false" aria-label="Ouvrir le menu">☰</button>
+        <span class="marque-mobile" aria-label="OASIS Bibliothèque Numérique">OASIS</span>
         <h1 id="titreEntete">Bibliothèque <span>Numérique</span></h1>
-        <div class="droite">
+        <div class="droite"><button class="mini-btn bleu" id="btnConnexionPublic">Se connecter</button>
           <button class="lien-entete" id="btnNotifs" style="position:relative">🔔 <span class="txt">Notifications</span><span id="badgeNotifs" class="badge-notif" hidden></span></button>
           <button class="lien-entete" data-vue="collaboration">👥 <span class="txt">Collaboration</span></button>
           <button class="lien-entete" id="btnAPropos">ℹ️ <span class="txt">À propos</span></button>
@@ -116,6 +125,8 @@
   </div>
 
   <div id="zoneModale"></div>
-  <script src="/app.js?v14"></script>
+  <script src="/abonnement.js?v20"></script>
+  <script src="/diffusion.js?v20"></script>
+  <script src="/app.js?v20"></script>
 </body>
 </html>

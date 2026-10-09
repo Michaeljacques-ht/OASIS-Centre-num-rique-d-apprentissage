@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 520" role="img" aria-label="">
+  <defs>
+    <linearGradient id="ec" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c9dcfa"/><stop offset="1" stop-color="#9dbdf0"/>
+    </linearGradient>
+    <linearGradient id="ordi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dbe4f2"/><stop offset="1" stop-color="#b6c4da"/>
+    </linearGradient>
+  </defs>
+  <!-- personnage -->
+  <path d="M214 520c0-96 48-152 116-152s116 56 116 152z" fill="#2f6bd8"/>
+  <path d="M246 520c0-78 38-122 84-122s84 44 84 122z" fill="#4b86ea"/>
+  <circle cx="330" cy="266" r="86" fill="#c98a5e"/>
+  <path d="M244 254c0-62 38-102 86-102s86 40 86 102c0 14-6 24-14 24-10 0-8-18-22-26-22-12-58-6-84-22-16-10-18 24-30 34-12 10-22 4-22-10z" fill="#3b2418"/>
+  <!-- casque -->
+  <path d="M240 258a90 90 0 0 1 180 0" fill="none" stroke="#f2f5fa" stroke-width="18" stroke-linecap="round"/>
+  <rect x="222" y="248" width="34" height="58" rx="16" fill="#f2f5fa"/>
+  <rect x="404" y="248" width="34" height="58" rx="16" fill="#e4eaf4"/>
+  <!-- ordinateur -->
+  <rect x="176" y="384" width="268" height="16" rx="8" fill="#94a6c4"/>
+  <path d="M196 384l24-108h180l24 108z" fill="url(#ordi)"/>
+  <rect x="236" y="296" width="148" height="72" rx="6" fill="#7f93b4" opacity=".5"/>
+  <!-- tasse et plante -->
+  <rect x="470" y="424" width="66" height="56" rx="10" fill="#f4f7fc"/>
+  <path d="M536 440h16a14 14 0 0 1 0 28h-16z" fill="none" stroke="#f4f7fc" stroke-width="8"/>
+  <path d="M556 424c-14-2-24-12-24-26 14-2 24 8 24 26z" fill="#4bbf7a"/>
+  <path d="M560 420c12-6 18-18 16-32-14 2-20 14-16 32z" fill="#7cd79f"/>
+  <path d="M548 424h26l-5 56h-16z" fill="#e2edfb"/>
+</svg>

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-label="Élève consultant une ressource numérique">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#dbe6fe"/><stop offset="1" stop-color="#eaf1fe"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a1a3c"/><stop offset="1" stop-color="#12275c"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <circle cx="640" cy="140" r="150" fill="#1d4ed8" opacity=".07"/>
+  <!-- silhouette -->
+  <circle cx="530" cy="215" r="72" fill="#1d4ed8" opacity=".85"/>
+  <path d="M400 600c0-115 58-186 130-186s130 71 130 186z" fill="#1d4ed8" opacity=".85"/>
+  <!-- tablette -->
+  <g transform="rotate(-8 300 340)">
+    <rect x="120" y="230" width="330" height="235" rx="18" fill="#0f1b33"/>
+    <rect x="134" y="244" width="302" height="207" rx="10" fill="url(#screen)"/>
+    <circle cx="250" cy="330" r="26" fill="#f5871f"/>
+    <ellipse cx="250" cy="330" rx="86" ry="34" fill="none" stroke="#2e6bf0" stroke-width="2"/>
+    <ellipse cx="250" cy="330" rx="122" ry="50" fill="none" stroke="#2e6bf0" stroke-width="2" opacity=".6"/>
+    <circle cx="336" cy="330" r="8" fill="#dbe6fe"/>
+    <circle cx="128" cy="330" r="6" fill="#0e9f6e"/>
+    <rect x="350" y="380" width="66" height="58" rx="6" fill="#fff"/>
+    <g fill="#0f1b33">
+      <rect x="358" y="388" width="14" height="14"/><rect x="394" y="388" width="14" height="14"/>
+      <rect x="358" y="416" width="14" height="14"/><rect x="380" y="410" width="8" height="8"/>
+      <rect x="394" y="420" width="10" height="10"/>
+    </g>
+  </g>
+</svg>

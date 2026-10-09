@@ -141,3 +141,15 @@ Prochaines étapes possibles (voir `FEUILLE-DE-ROUTE.md`) : assistant IA Oasis (
 
 ---
 *Oasis Centre numérique d'apprentissage © 2026 — Documentation v3.1*
+
+## Catalogue public et abonnements PLOP PLOP
+
+Le catalogue est public. Sans abonnement actif, les PDF sont servis comme un nouveau fichier contenant au maximum les cinq premières pages ; le fichier complet reste protégé côté serveur. Le texte dispose d’un extrait limité à cinq segments de 2 500 caractères. Un EPUB n’a pas de pagination fixe : son téléchargement complet exige un abonnement, sans aperçu paginé. Les PDF chiffrés incompatibles avec l’extraction affichent un message explicite.
+
+Tarifs fixes côté serveur : **500 HTG pour un mois**, **5 000 HTG pour une année**. Ce sont des accès à durée déterminée, sans prélèvement automatique. Un renouvellement prolonge l’échéance existante. L’administrateur conserve l’accès complet.
+
+Dans les variables d’environnement Render, renseigner `PLOP_CLIENT_ID` et `PLOP_CLIENT_SECRET` avec les identifiants marchands PLOP PLOP, puis redémarrer le service. `PLOP_HOTE` est facultatif (par défaut `plopplop.solutionip.app`). Ne jamais mettre les secrets dans les fichiers publics. Documentation de la passerelle : https://plopplop.solutionip.app/paiement-doc.
+
+Le paiement s’ouvre dans un onglet/fenêtre distinct. Garder l’onglet OASIS ouvert : il interroge la confirmation serveur toutes les cinq secondes pendant dix minutes et redirige vers **Mon espace** après confirmation. En cas d’interruption, revenir à Abonnement et utiliser « Vérifier mon paiement ». L’URL de retour ou une déclaration du navigateur ne suffit jamais à activer l’abonnement : la vérification PLOP PLOP doit retourner une transaction payée. Les commandes et échéances sont enregistrées dans `data/db.json`, à conserver sur le disque persistant avec les documents existants.
+
+Validation automatisée : catalogue anonyme, aperçu PDF de cinq pages à partir d’un fichier de huit pages, refus d’accès complet sans abonnement, tarifs non modifiables par le client, isolation des commandes et activation idempotente. Les tests du paiement utilisent une passerelle simulée ; effectuer un paiement réel de validation après configuration des identifiants marchands.
