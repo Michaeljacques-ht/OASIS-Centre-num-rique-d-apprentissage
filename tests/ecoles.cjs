@@ -23,6 +23,21 @@ const t=(await call('travaux','POST',{titre:'Lire le premier chapitre',livreId:'
 db.progressions.push({utilisateurId:pupil.id,livreId:'book',pourcentage:75});assert.equal((await call('lectures','GET',{},u)).data.lectures,1);assert.equal((await call('lectures','GET',{},v)).data.lectures,0);
 assert.equal((await call('image/logo','POST',{},u)).code,400);
 assert.equal((await call('membres/'+pupil.id,'PUT',{actif:false},u)).code,200);assert(!A.actif(db,pupil));
+
+pupil.actif=true;
+const tarifs=await call('formules');assert.deepEqual(tarifs.data.formules.map(x=>[x.montant,x.limiteEleves]),[[50000,100],[100000,300],[150000,600]]);
+for(let i=1;i<100;i++)db.utilisateurs.push({id:'quota'+i,role:'apprenant',ecoleId:e.id,actif:true,email:'quota'+i+'@test.ht'});
+assert.equal((await call('membres','POST',{nom:'Élève en trop',email:'trop@test.ht',motDePasse:'secret123'},u)).code,409);
+db.utilisateurs.push({id:'inactive',role:'apprenant',ecoleId:e.id,actif:false});assert.equal((await call('membres/inactive','PUT',{actif:true},u)).code,409);
+assert.equal((await abo('payer',{plan:'etablissement',formule:'__proto__'},u)).code,400);
+const medium=await abo('payer',{plan:'etablissement',formule:'moyenne',montant:1},u);assert.equal(montant,100000);await abo('verifier/'+medium.data.id,{},u);assert.equal(e.limiteEleves,300);assert.equal(e.formule,'moyenne');
+assert.equal((await abo('payer',{plan:'etablissement',formule:'petite'},u)).code,409);
+const large=await abo('payer',{plan:'etablissement',formule:'grande'},u);assert.equal(montant,150000);await abo('verifier/'+large.data.id,{},u);assert.equal(e.limiteEleves,600);
+for(let i=100;i<600;i++)db.utilisateurs.push({id:'quota'+i,role:'apprenant',ecoleId:e.id,actif:true,email:'quota'+i+'@test.ht'});
+assert.equal((await call('membres','POST',{nom:'601',email:'601@test.ht',motDePasse:'secret123'},u)).code,409);
+assert.equal((await call('devis','POST',{eleves:1000,message:'Réseau scolaire'},u)).code,201);
+assert.equal((await call('devis-admin','GET',{},u)).code,403);assert.equal((await call('devis-admin','GET',{}, {role:'bibliothecaire'})).data.length,1);
+
 pupil.actif=true;e.abonnementFin='2000-01-01';assert(!A.actif(db,pupil));assert.equal((await call('lectures','GET',{},u)).code,402);
 console.log('Établissements : création, rôles, séparation des écoles, élèves, lectures, tarif 50 000 HTG, activation et expiration vérifiés.');
 })().catch(e=>{console.error(e);process.exitCode=1});

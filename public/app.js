@@ -140,7 +140,7 @@
             <button class="btn-orange" data-vue="bibliotheque">Accéder</button>
           </div>
         </div>
-        <section class="ecole-offre"><div><h3>Une bibliothèque pour votre école</h3><p>Personnalisez votre espace, inscrivez vos élèves et accompagnez leurs lectures.</p><strong>50 000 gourdes / an</strong></div><a class="btn btn-bleu" href="/ecole?inscription=1">Créer un espace établissement</a></section>
+        <section class="ecole-offre"><div><h3>Une bibliothèque pour votre école</h3><p>Personnalisez votre espace, inscrivez vos élèves et accompagnez leurs lectures.</p><strong>À partir de 50 000 gourdes / an · jusqu’à 100 élèves</strong></div><a class="btn btn-bleu" href="/ecole?inscription=1">Créer un espace établissement</a></section>
         <div class="section-titre"><h3>Nouveautés</h3><button data-vue="nouveautes">Voir Plus ›</button></div>
         ${grille(nouveautes.slice(0, 4))}
         <div class="section-titre"><h3>Catégories Populaires</h3><button data-vue="categories">Voir Plus ›</button></div>

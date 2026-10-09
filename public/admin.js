@@ -38,11 +38,12 @@
   // ---------- Onglets ----------
   const onglets = {
     async tableau() {
-      const [s, emprunts, tousLivres] = await Promise.all([api('/stats'), api('/emprunts?statut=en_cours'), api('/livres?tri=populaires')]);
+      const [s, emprunts, tousLivres, devis] = await Promise.all([api('/stats'), api('/emprunts?statut=en_cours'), api('/livres?tri=populaires'), api('/ecoles/devis-admin')]);
       const s2 = { topLivres: tousLivres.slice(0, 5) };
       const retards = emprunts.filter(e => e.joursRetard > 0);
       return `
         <div class="section-titre"><h3>📊 Tableau de bord</h3></div>
+        ${devis.length ? `<section class="panneau"><h3>Demandes de devis établissement</h3>${devis.map(d=>`<article style="padding:14px 0;border-bottom:1px solid var(--bord);overflow-wrap:anywhere"><b>${echap(d.ecole)}</b><p>${d.eleves} élèves · ${echap(d.contact)} · ${dateFr(d.creeLe)}</p><p>${echap(d.message)}</p></article>`).join('')}</section>` : ''}
         <div class="stats">
           <div class="stat"><div class="valeur">${s.livres}</div><div class="libelle">Titres au catalogue</div></div>
           <div class="stat"><div class="valeur">${s.numeriques}</div><div class="libelle">E-books</div></div>
