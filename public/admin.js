@@ -32,7 +32,6 @@
 
   // ---------- Onglets ----------
   const onglets = {
-    diffusion: () => OasisDiffusion.render(api, true, 'pedagogie'),
     async tableau() {
       const [s, emprunts, tousLivres] = await Promise.all([api('/stats'), api('/emprunts?statut=en_cours'), api('/livres?tri=populaires')]);
       const s2 = { topLivres: tousLivres.slice(0, 5) };
@@ -296,7 +295,7 @@
     $('#sidebar').classList.remove('ouverte');
     const zone = $('#zoneAdmin');
     zone.innerHTML = '<p class="vide">Chargement…</p>';
-    try { zone.innerHTML = await onglets[nom](); brancherBoutons(); OasisDiffusion.mount(); }
+    try { zone.innerHTML = await onglets[nom](); brancherBoutons(); }
     catch (err) { zone.innerHTML = `<div class="erreur">${echap(err.message)}</div>`; }
   }
 

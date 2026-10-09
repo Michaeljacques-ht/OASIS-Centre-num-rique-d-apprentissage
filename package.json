@@ -5,7 +5,7 @@
   "description": "OASIS — bibliothèque, pédagogie et diffusion",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/diffusion.cjs && node tests/abonnement.cjs"
+    "test": "node tests/bibliotheque.cjs && node tests/abonnement.cjs"
   },
   "engines": {
     "node": ">=18"

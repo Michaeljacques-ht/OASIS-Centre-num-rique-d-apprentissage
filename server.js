@@ -10,7 +10,6 @@ const crypto = require('crypto');
 const url = require('url');
 
 const abonnement = require('./modules/abonnement');
-const diffusion = require('./modules/diffusion');
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
 const PUBLIC = path.join(__dirname, 'public');
@@ -333,7 +332,6 @@ async function api(req, res, u) {
     return json(res, 200, { version: '1.5.1', apercuGratuit: true, abonnements: true });
   }
   if (await abonnement.route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid})) return;
-  if (await diffusion(req, res, { db, utilisateur, json, lireCorps, sauverDB, uid })) return;
   const exigeAuth = () => { if (!utilisateur) { json(res, 401, { erreur: 'Connexion requise.' }); return false; } return true; };
   const exigeBiblio = () => { if (!utilisateur || utilisateur.role !== 'bibliothecaire') { json(res, 403, { erreur: 'Réservé au bibliothécaire.' }); return false; } return true; };
   const m = req.method;

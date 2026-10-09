@@ -153,3 +153,6 @@ Dans les variables d’environnement Render, renseigner `PLOP_CLIENT_ID` et `PLO
 Le paiement s’ouvre dans un onglet/fenêtre distinct. Garder l’onglet OASIS ouvert : il interroge la confirmation serveur toutes les cinq secondes pendant dix minutes et redirige vers **Mon espace** après confirmation. En cas d’interruption, revenir à Abonnement et utiliser « Vérifier mon paiement ». L’URL de retour ou une déclaration du navigateur ne suffit jamais à activer l’abonnement : la vérification PLOP PLOP doit retourner une transaction payée. Les commandes et échéances sont enregistrées dans `data/db.json`, à conserver sur le disque persistant avec les documents existants.
 
 Validation automatisée : catalogue anonyme, aperçu PDF de cinq pages à partir d’un fichier de huit pages, refus d’accès complet sans abonnement, tarifs non modifiables par le client, isolation des commandes et activation idempotente. Les tests du paiement utilisent une passerelle simulée ; effectuer un paiement réel de validation après configuration des identifiants marchands.
+
+## Retrait de Pédagogie & diffusion
+Les cinq rubriques, les raccourcis d’accueil et la gestion administrateur ont été retirés. Les anciennes routes Diffusion ne sont plus actives. Les données existantes dans le disque persistant ne sont pas supprimées.

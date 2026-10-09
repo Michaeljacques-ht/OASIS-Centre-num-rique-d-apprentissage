@@ -114,11 +114,6 @@
   const vues = {
     abonnement: () => OasisAbonnement.render(api, moi),
     espace: async () => `<h2>Mon espace</h2><p>Bienvenue ${echap(moi?.nom || "")}. Retrouvez vos lectures dans la bibliothèque et gérez votre abonnement ci-dessous.</p><button class="btn btn-bleu" data-vue="bibliotheque">Explorer la bibliothèque</button>` + await OasisAbonnement.render(api, moi),
-    pedagogie: () => OasisDiffusion.render(api, false, 'pedagogie'),
-    methodes: () => OasisDiffusion.render(api, false, 'methodes'),
-    td: () => OasisDiffusion.render(api, false, 'td'),
-    parcours: () => OasisDiffusion.render(api, false, 'parcours'),
-    outils: () => OasisDiffusion.render(api, false, 'outils'),
     async accueil() {
       const [nouveautes, cats] = await Promise.all([
         api('/livres?tri=nouveautes'),
@@ -135,7 +130,6 @@
             <button class="btn-orange" data-vue="bibliotheque">Accéder</button>
           </div>
         </div>
-        <div class="diff-home-links"><button class="carte-categorie" data-vue="pedagogie">📑 Ressources pédagogiques<small>Supports pour élèves et enseignants</small></button><button class="carte-categorie" data-vue="methodes">🧭 Méthodes & guides<small>Apprendre et préparer ses cours</small></button><button class="carte-categorie" data-vue="td">✍️ Travaux dirigés<small>Pratiquer et approfondir</small></button></div>
         <div class="section-titre"><h3>Nouveautés</h3><button data-vue="nouveautes">Voir Plus ›</button></div>
         ${grille(nouveautes.slice(0, 4))}
         <div class="section-titre"><h3>Catégories Populaires</h3><button data-vue="categories">Voir Plus ›</button></div>
@@ -345,7 +339,7 @@
     $('#btnMenu').setAttribute('aria-expanded', 'false');
     const zone = $('#zonePrincipale');
     zone.innerHTML = '<p class="vide">Chargement…</p>';
-    try { zone.innerHTML = await (vues[nom] || vues.accueil)(param); OasisDiffusion.mount(); }
+    try { zone.innerHTML = await (vues[nom] || vues.accueil)(param); }
     catch (err) { zone.innerHTML = `<div class="erreur">${echap(err.message)}</div>`; }
   }
 
@@ -1034,7 +1028,7 @@
     }
     if ((el = cible('data-vider-filtres'))) {
       filtresBiblio = { categorie: '', langue: '', niveau: '', type: '', tri: '' };
-      return (OasisDiffusion.search($('#inRecherche').value.trim()) || afficherVue('bibliotheque', $('#inRecherche').value.trim()));
+      return (afficherVue('bibliotheque', $('#inRecherche').value.trim()));
     }
     if ((el = cible('data-onglet-media'))) return afficherVue('multimedia', el.dataset.ongletMedia);
     if ((el = cible('data-media'))) return ouvrirMedia(el.dataset.media);
@@ -1065,7 +1059,7 @@
   document.addEventListener('change', e => {
     if (e.target.id === 'inDatePlace') afficherVue('places', e.target.value);
     const f = e.target.closest('[data-filtre]');
-    if (f) { filtresBiblio[f.dataset.filtre] = f.value; (OasisDiffusion.search($('#inRecherche').value.trim()) || afficherVue('bibliotheque', $('#inRecherche').value.trim())); }
+    if (f) { filtresBiblio[f.dataset.filtre] = f.value; (afficherVue('bibliotheque', $('#inRecherche').value.trim())); }
   });
 
   // ---------- Notifications ----------
@@ -1178,7 +1172,7 @@
   let minuteur;
   $('#inRecherche').addEventListener('input', e => {
     clearTimeout(minuteur);
-    minuteur = setTimeout(() => { if (!OasisDiffusion.search(e.target.value.trim())) afficherVue('bibliotheque', e.target.value.trim()); }, 300);
+    minuteur = setTimeout(() => { afficherVue('bibliotheque', e.target.value.trim()); }, 300);
   });
 
   $('#btnMenu').addEventListener('click', () => {
