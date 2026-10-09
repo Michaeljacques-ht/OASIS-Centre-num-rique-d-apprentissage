@@ -6,7 +6,16 @@ async function request(route,token,method='GET',body){const r=await fetch(base+'
 (async()=>{try{
  fs.cpSync(source,temp,{recursive:true,filter:p=>!['data','integrations','tests','node_modules'].includes(path.relative(source,p).split(path.sep)[0])});
  let code=fs.readFileSync(path.join(temp,'server.js'),'utf8');code=code.replace('http.createServer(async (req, res) => {','const testServer = http.createServer(async (req, res) => {').replace("}).listen(PORT, () => {","}).listen(PORT, () => { console.log('TEST_PORT:' + testServer.address().port);");fs.writeFileSync(path.join(temp,'server.js'),code);await start();
+ const stats=await request('/statistiques-publiques');assert.equal(stats.code,200);assert.equal(typeof stats.data.livres,'number');assert.equal(stats.data.visiteurs,1);
+ const tracked=await fetch(base+'/api/statistiques-publiques',{headers:{Cookie:'oasis_visite=1'}});assert.equal((await tracked.json()).visiteurs,1);
  const login=async(email,motDePasse)=>{const r=await request('/connexion',null,'POST',{email,motDePasse});assert.equal(r.code,200);return r.data.jeton};
+ const signup=await request('/ecoles/inscription',null,'POST',{nom:'Responsable HTTP',nomEcole:'École HTTP',email:'school-http@example.ht',motDePasse:'secret123',role:'bibliothecaire'});assert.equal(signup.code,201);assert.equal(signup.data.utilisateur.role,'admin_etablissement');
+ const schoolToken=signup.data.jeton;assert.equal((await request('/moi',schoolToken)).data.ecoleId,signup.data.utilisateur.ecoleId);
+ assert.equal((await request('/ecoles/mon-espace',schoolToken)).code,200);
+ assert.equal((await request('/ecoles/membres',schoolToken)).code,402);
+ assert.equal((await request('/stats',schoolToken)).code,403);
+ assert.equal((await request('/livres',schoolToken,'POST',{titre:'Interdit',auteur:'Test',categorie:'Sciences'})).code,403);
+ assert.equal((await fetch(base+'/ecole')).status,200);
  const learner=await login('emma@oasis.ht','demo123');const admin=await login('admin@oasis.ht','admin123');
  const book=(await request('/livres',admin,'POST',{titre:'Document test',auteur:'Auteur',categorie:'Sciences',type:'numerique'})).data;
  assert.equal((await request('/livres/'+book.id,admin,'PUT',{titre:'Titre modifié',niveau:'NS4',editeur:'OASIS'})).code,200);

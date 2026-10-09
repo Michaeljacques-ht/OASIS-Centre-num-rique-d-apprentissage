@@ -115,14 +115,24 @@
     abonnement: () => OasisAbonnement.render(api, moi),
     espace: async () => `<h2>Mon espace</h2><p>Bienvenue ${echap(moi?.nom || "")}. Retrouvez vos lectures dans la bibliothèque et gérez votre abonnement ci-dessous.</p><button class="btn btn-bleu" data-vue="bibliotheque">Explorer la bibliothèque</button>` + await OasisAbonnement.render(api, moi),
     async accueil() {
-      const [nouveautes, cats] = await Promise.all([
+      const [nouveautes, cats, compteurs] = await Promise.all([
         api('/livres?tri=nouveautes'),
-        chargerCategories()
+        chargerCategories(),
+        api('/statistiques-publiques').catch(() => null)
       ]);
       return `
         <button class="banniere-accueil" data-vue="bibliotheque" aria-label="Accéder à la bibliothèque">
           <img src="/banniere-oasis.png" alt="OASIS Bibliothèque Numérique — Apprendre aujourd'hui pour un meilleur demain">
         </button>
+        ${compteurs ? `<section class="stats-accueil" aria-label="La bibliothèque en chiffres">
+          <div class="stats-accueil-titre"><strong>La bibliothèque en chiffres</strong><small>Une collection à découvrir</small></div>
+          <div class="stats-accueil-grille">${[
+            ['livres','Livres','📚'],['videos','Vidéos','🎬'],['audios','Audios','🎧'],['cartes','Cartes','🗺️'],
+            ['officiels','Documents officiels','🏛️'],['administratifs','Documents administratifs','📋'],
+            ['ressources','Ressources documentaires','🔎'],['visiteurs','Visiteurs','👥'],['lectures','Lectures','📖']
+          ].map(([cle,label,icone]) => `<div class="stats-accueil-item"><span aria-hidden="true">${icone}</span><b>${Number(compteurs[cle] || 0).toLocaleString('fr-FR')}</b><small>${label}</small></div>`).join('')}</div>
+          <p>Visiteurs comptés par navigateur depuis le ${echap(new Date(compteurs.visiteursDepuis).toLocaleDateString('fr-FR'))}. Les ressources documentaires incluent les documents officiels et administratifs.</p>
+        </section>` : ''}
         <div class="hero">
           <div>
             <h2>${echap(parametres.slogan || 'Apprendre aujourd\'hui pour un meilleur demain')}</h2>
@@ -130,6 +140,7 @@
             <button class="btn-orange" data-vue="bibliotheque">Accéder</button>
           </div>
         </div>
+        <section class="ecole-offre"><div><h3>Une bibliothèque pour votre école</h3><p>Personnalisez votre espace, inscrivez vos élèves et accompagnez leurs lectures.</p><strong>50 000 gourdes / an</strong></div><a class="btn btn-bleu" href="/ecole?inscription=1">Créer un espace établissement</a></section>
         <div class="section-titre"><h3>Nouveautés</h3><button data-vue="nouveautes">Voir Plus ›</button></div>
         ${grille(nouveautes.slice(0, 4))}
         <div class="section-titre"><h3>Catégories Populaires</h3><button data-vue="categories">Voir Plus ›</button></div>
@@ -529,6 +540,7 @@
         renderTask=p.render({canvasContext:canvas.getContext('2d'),viewport,transform:[ratio,0,0,ratio,0,0]});await renderTask.promise;
         if(ticket!==sequence||closed)return;$('#pdfEtat').textContent='Page '+page+' sur '+doc.numPages;
         $('#pdfPage').value=page;$('#pdfAvant').disabled=page===1;$('#pdfApres').disabled=page===doc.numPages;area.scrollTop=0;
+        if(moi && livre.accesComplet) api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:Math.round(page/doc.numPages*100)})}).catch(()=>{});
       }catch(e){if(e.name!=='RenderingCancelledException'&&!closed&&ticket===sequence)$('#pdfEtat').textContent='Lecture impossible : utilisez Télécharger ou Ouvrir.'}
     }
     try{
@@ -1189,6 +1201,7 @@
 
   // ---------- Démarrage ----------
   function demarrer() {
+    if (moi && ['admin_etablissement','bibliothecaire_ecole'].includes(moi.role)) { location.href='/ecole'; return; }
     $('.contenu').classList.toggle('sans-colonne', !moi);
     $('#ecranConnexion').hidden = true;
     $('#appli').hidden = false;
@@ -1202,6 +1215,7 @@
     $('#avatarProfil').textContent = moi.nom.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
     $('#lienAdmin').hidden = moi.role !== 'bibliothecaire';
     chargerParametres();
+    if(moi.ecoleId)api('/ecoles/mon-espace').then(s=>{const lien=$('#lienEcole');lien.textContent='🏫 '+s.ecole.nom}).catch(()=>{});
     majSalutation();
     rafraichirNotifications();
     setInterval(rafraichirNotifications, 120000);

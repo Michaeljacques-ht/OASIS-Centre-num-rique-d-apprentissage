@@ -15,6 +15,11 @@
     });
     const data = await rep.json().catch(() => ({}));
     if (!rep.ok) throw new Error(data.erreur || 'Erreur serveur');
+    if (chemin.split('?')[0] === '/livres' && (!options.method || options.method === 'GET')) {
+      if (Array.isArray(data)) return data;
+      for (const key of ['livres', 'items', 'data', 'results']) if (Array.isArray(data[key])) return data[key];
+      throw new Error(data.erreur || 'Le catalogue reçu est invalide. Vérifiez que le serveur et les fichiers du site sont à jour.');
+    }
     return data;
   }
   function toast(msg) {
@@ -145,33 +150,33 @@
     },
     async ressources() {
       const liste = await api('/ressources');
-      const NOMS = { dictionnaire: '📖 Dictionnaire', encyclopedie: '🌍 Encyclopédie', base: '🗄️ Base de données', administratif: '📋 Doc. administratif', historique: '📜 Doc. historique' };
+      const NOMS = { dictionnaire: '📖 Dictionnaire', encyclopedie: '🌍 Encyclopédie', base: '🗄️ Base de données', administratif: '📋 Doc. administratif', officiel: '🏛️ Doc. officiel', historique: '📜 Doc. historique' };
       return `
         <div class="section-titre"><h3>🔎 Ressources documentaires (${liste.length})</h3></div>
-        <div class="panneau" style="margin-bottom:18px">
+        <div class="panneau ressources-formulaire" style="margin-bottom:18px">
           <h4 style="margin-bottom:10px;color:var(--encre)">Ajouter une entrée</h4>
           <div id="msgRessource"></div>
-          <div style="display:grid;grid-template-columns:180px 1fr;gap:12px">
+          <div class="admin-form-grid">
             <div class="champ"><label for="rGenre">Section</label>
-              <select id="rGenre"><option value="dictionnaire">📖 Dictionnaire</option><option value="encyclopedie">🌍 Encyclopédie</option><option value="base">🗄️ Base de données</option><option value="administratif">📋 Document administratif</option><option value="historique">📜 Document historique</option></select></div>
+              <select id="rGenre"><option value="dictionnaire">📖 Dictionnaire</option><option value="encyclopedie">🌍 Encyclopédie</option><option value="base">🗄️ Base de données</option><option value="officiel">🏛️ Document officiel</option><option value="administratif">📋 Document administratif</option><option value="historique">📜 Document historique</option></select></div>
             <div class="champ"><label for="rTitre">Titre / mot / nom *</label><input id="rTitre" placeholder="Ex. : Konbit, Jacques Roumain, Catalogue Éduca…"></div>
           </div>
           <div class="champ"><label for="rContenu">Définition / article / description *</label><textarea id="rContenu" rows="4"></textarea></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="admin-form-grid">
             <div class="champ"><label for="rSource">Source (optionnel)</label><input id="rSource" placeholder="Ex. : Collection Oasis, MENFP…"></div>
             <div class="champ"><label for="rLien">Lien de la ressource (optionnel)</label><input id="rLien" type="url" placeholder="https://exemple.ht/ressource"></div>
           </div>
-          <div style="display:grid;grid-template-columns:140px 1fr;gap:12px">
+          <div class="admin-form-grid">
             <div class="champ"><label for="rIcone">Icône (emoji)</label><input id="rIcone" maxlength="8" placeholder="Ex. : 🇭🇹 📖 🧪"></div>
             <div class="champ"><label for="rImage">…ou image (PNG/JPEG, 3 Mo max)</label><input id="rImage" type="file" accept="image/png,image/jpeg"></div>
           </div>
           <button class="btn btn-bleu" id="btnAjouterRessource">Ajouter la ressource</button>
         </div>
-        <table><thead><tr><th>Section</th><th>Titre</th><th>Contenu</th><th></th></tr></thead><tbody>
+        <table class="table-ressources"><thead><tr><th>Section</th><th>Titre</th><th>Contenu</th><th></th></tr></thead><tbody>
         ${liste.map(r => `<tr>
-          <td>${NOMS[r.genre]}</td><td>${r.image ? `<img src="/api/ressources/${r.id}/image" alt="" style="width:28px;height:28px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:6px">` : r.icone ? r.icone + ' ' : ''}<b>${echap(r.titre)}</b>${r.lien ? ` <a href="${echap(r.lien)}" target="_blank" rel="noopener" title="${echap(r.lien)}">🔗</a>` : ''}</td>
-          <td style="max-width:420px">${echap(r.contenu.slice(0, 120))}${r.contenu.length > 120 ? '…' : ''}</td>
-          <td><button class="mini-btn rouge" data-suppr-ressource="${r.id}">Supprimer</button></td>
+          <td data-label="Section">${NOMS[r.genre] || echap(r.genre)}</td><td data-label="Titre">${r.image ? `<img src="/api/ressources/${r.id}/image" alt="" style="width:28px;height:28px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:6px">` : r.icone ? r.icone + ' ' : ''}<b>${echap(r.titre)}</b>${r.lien ? ` <a href="${echap(r.lien)}" target="_blank" rel="noopener" title="${echap(r.lien)}">🔗</a>` : ''}</td>
+          <td data-label="Description">${echap(r.contenu.slice(0, 120))}${r.contenu.length > 120 ? '…' : ''}</td>
+          <td class="ressource-actions"><button class="mini-btn rouge" data-suppr-ressource="${r.id}">Supprimer</button></td>
         </tr>`).join('')}
         </tbody></table>`;
     },
@@ -199,7 +204,7 @@
         <div class="panneau" style="margin-bottom:16px">
           <h4 style="margin-bottom:12px;color:var(--encre)">Coordonnées (pied de page)</h4>
           <div class="champ"><label for="pAdresse">Adresse</label><input id="pAdresse" value="${echap(p.adresse)}" placeholder="Ex. : 12, rue Capois, Port-au-Prince"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="admin-form-grid">
             <div class="champ"><label for="pTel">Téléphone</label><input id="pTel" value="${echap(p.telephone)}" placeholder="Ex. : +509 …"></div>
             <div class="champ"><label for="pEmail">Email</label><input id="pEmail" value="${echap(p.email)}" placeholder="contact@oasis.ht"></div>
           </div>
@@ -330,7 +335,7 @@
       <div id="msgForm"></div>
       <div class="champ"><label for="fTitre">Titre *</label><input id="fTitre" placeholder="Ex. : Compère Général Soleil"></div>
       <div class="champ"><label for="fAuteur">Auteur *</label><input id="fAuteur" placeholder="Ex. : Jacques Stephen Alexis"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="admin-form-grid">
         <div class="champ"><label for="fCategorie">Catégorie *</label>
           <select id="fCategorie">${optionsCategories()}</select></div>
         <div class="champ"><label for="fType">Type</label>
@@ -342,19 +347,19 @@
       </div>
       <div class="champ" id="champExemplaires"><label for="fExemplaires">Nombre d'exemplaires physiques (cotes générées automatiquement)</label>
         <input id="fExemplaires" type="number" min="0" max="50" value="1"></div>
-      <div class="champ" id="champPdf" hidden><label for="fPdf">Document PDF ou EPUB (30 Mo max)</label>
+      <div class="champ" id="champPdf" hidden><label for="fPdf">Document PDF ou EPUB (50 Mo max)</label>
         <input id="fPdf" type="file" accept=".pdf,.epub,application/pdf,application/epub+zip"></div>
       <div class="champ" id="champContenu" hidden><label for="fContenu">…ou contenu texte (Markdown : # titre, ## chapitre)</label><textarea id="fContenu" rows="5"></textarea></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+      <div class="admin-form-grid trois">
         <div class="champ"><label for="fAnnee">Année</label><input id="fAnnee" type="number" value="${new Date().getFullYear()}"></div>
         <div class="champ"><label for="fIcone">Icône (emoji)</label><input id="fIcone" value="📘" maxlength="4"></div>
         <div class="champ"><label for="fCouleur">Couleur</label><input id="fCouleur" type="color" value="#1e4fa3" style="height:42px;padding:4px"></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="admin-form-grid">
         <div class="champ"><label for="fEditeur">Éditeur</label><input id="fEditeur" placeholder="Ex. : Éduca Diffusion"></div>
         <div class="champ"><label for="fIsbn">ISBN</label><input id="fIsbn" placeholder="Ex. : 978-…"></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="admin-form-grid">
         <div class="champ"><label for="fLangue">Langue</label>
           <select id="fLangue"><option>Français</option><option>Créole haïtien</option><option>Anglais</option><option>Espagnol</option></select></div>
         <div class="champ"><label for="fNiveau">Niveau scolaire</label><input id="fNiveau" placeholder="Ex. : NS4, 9e AF, Universitaire…"></div>
@@ -374,13 +379,14 @@
     $('#fType').addEventListener('change', majChamps);
     if(modeEpub){$('#fType').value="numerique";$('#fPdf').accept=".epub,application/epub+zip";$('#fPdf').onchange=()=>{const f=$('#fPdf').files[0];if(f&&!$('#fTitre').value)$('#fTitre').value=f.name.replace(/\.epub$/i,'');};}
     majChamps();
+    let livreCree = null;
     $('#btnValiderLivre').addEventListener('click', async () => {
       const btn = $('#btnValiderLivre');
       try {
         btn.disabled = true;
-        if(modeEpub){const f=$('#fPdf').files[0];if(!f||!/\.epub$/i.test(f.name))throw new Error("Choisissez un fichier EPUB.");if(f.size>30*1024*1024)throw new Error("EPUB trop volumineux (30 Mo maximum).");}
+        if(modeEpub){const f=$('#fPdf').files[0];if(!f||!/\.epub$/i.test(f.name))throw new Error("Choisissez un fichier EPUB.");if(f.size>50*1024*1024)throw new Error("EPUB trop volumineux (50 Mo maximum).");}
         const type = modeEpub ? "numerique" : $('#fType').value;
-        const livre = await api('/livres', { method: 'POST', body: JSON.stringify({
+        const livre = livreCree || await api('/livres', { method: 'POST', body: JSON.stringify({
           titre: $('#fTitre').value.trim(), auteur: $('#fAuteur').value.trim(),
           categorie: $('#fCategorie').value, type,
           annee: parseInt($('#fAnnee').value, 10), icone: $('#fIcone').value || '📘',
@@ -389,6 +395,7 @@
           niveau: $('#fNiveau').value.trim(), motsCles: $('#fMotsCles').value.trim(),
           contenu: type !== 'physique' ? ($('#fContenu').value || null) : null
         }) });
+        livreCree = livre;
         // Exemplaires physiques avec cotes automatiques
         const nb = type === 'numerique' ? 0 : Math.min(50, parseInt($('#fExemplaires').value, 10) || 0);
         if (nb > 0) {
@@ -401,7 +408,7 @@
         // Version PDF + couverture générée depuis la première page
         const fichierPdf = $('#fPdf')?.files[0];
         if (fichierPdf && type !== 'physique') {
-          btn.textContent = 'Envoi du PDF…';
+          btn.textContent = /\.epub$/i.test(fichierPdf.name) ? 'Envoi de l’EPUB…' : 'Envoi du PDF…';
           await (/\.epub$/i.test(fichierPdf.name) ? envoyerEpub(livre.id, fichierPdf) : envoyerPdf(livre.id, fichierPdf));
           btn.textContent = 'Génération de la couverture…';
           if (!/\.epub$/i.test(fichierPdf.name)) await genererCouverture(livre.id, fichierPdf);
@@ -446,7 +453,7 @@
   }
 
   async function envoyerEpub(id, fichier) {
-    if(fichier.size > 30*1024*1024) throw new Error('EPUB trop volumineux (30 Mo max).');
+    if(fichier.size > 50*1024*1024) throw new Error('EPUB trop volumineux (50 Mo max).');
     const rep = await fetch('/api/livres/'+id+'/epub',{method:'POST',headers:{Authorization:'Bearer '+jeton,'Content-Type':'application/epub+zip'},body:fichier});
     const d=await rep.json();if(!rep.ok)throw new Error(d.erreur);return d;
   }
@@ -458,11 +465,11 @@
     $('#saveDocument').onclick=async()=>{try{const body={};champs.forEach(([k])=>body[k]=$('#edit-'+k).value.trim());body.annee=Number(body.annee)||null;body.resume=$('#edit-resume').value;await api('/livres/'+id,{method:'PUT',body:JSON.stringify(body)});fermerModale();toast('Document modifié.');afficherOnglet('catalogue');}catch(e){$('#msgModification').textContent=e.message}};
   }
   function joindreEpub(id) {
-    modale(`<h3>Ajouter ou remplacer le document EPUB</h3><p>30 Mo maximum. Le document sera téléchargeable pour lecture dans une application EPUB.</p><div class="champ"><label for="epubFile">Fichier EPUB</label><input id="epubFile" type="file" accept=".epub,application/epub+zip"></div><div id="epubMessage"></div><button class="btn btn-bleu" id="saveEpub">Enregistrer l’EPUB</button>`);
+    modale(`<h3>Ajouter ou remplacer le document EPUB</h3><p>50 Mo maximum. Le document sera téléchargeable pour lecture dans une application EPUB.</p><div class="champ"><label for="epubFile">Fichier EPUB</label><input id="epubFile" type="file" accept=".epub,application/epub+zip"></div><div id="epubMessage"></div><button class="btn btn-bleu" id="saveEpub">Enregistrer l’EPUB</button>`);
     $('#saveEpub').onclick=async()=>{const f=$('#epubFile').files[0];if(!f){$('#epubMessage').textContent='Choisissez un fichier EPUB.';return}try{await envoyerEpub(id,f);fermerModale();toast('EPUB enregistré.');afficherOnglet('catalogue');}catch(e){$('#epubMessage').textContent=e.message}};
   }
   async function envoyerPdf(livreId, fichier) {
-    if (fichier.size > 30 * 1024 * 1024) throw new Error('PDF trop volumineux (30 Mo max).');
+    if (fichier.size > 50 * 1024 * 1024) throw new Error('PDF trop volumineux (50 Mo max).');
     const rep = await fetch('/api/livres/' + livreId + '/pdf', {
       method: 'POST',
       headers: { 'Content-Type': 'application/pdf', Authorization: 'Bearer ' + jeton },
@@ -478,7 +485,7 @@
       <h3 style="margin-bottom:6px">📄 E-book PDF — ${echap(titre)}</h3>
       <p style="color:var(--gris);font-size:13px;margin-bottom:12px">${dejaPdf ? 'Un PDF est déjà attaché. Envoyer un nouveau fichier le remplacera.' : 'Attachez un fichier PDF : le livre deviendra lisible en ligne par les apprenants.'}</p>
       <div id="msgForm"></div>
-      <div class="champ"><label for="fPdfSeul">Fichier PDF (30 Mo max)</label><input id="fPdfSeul" type="file" accept=".pdf,application/pdf"></div>
+      <div class="champ"><label for="fPdfSeul">Fichier PDF (50 Mo max)</label><input id="fPdfSeul" type="file" accept=".pdf,application/pdf"></div>
       <div class="rangee-boutons">
         <button class="btn btn-bleu" id="btnEnvoyerPdf">Envoyer le PDF</button>
         ${dejaPdf ? '<button class="btn btn-danger" id="btnRetirerPdf">Retirer le PDF</button>' : ''}
@@ -515,7 +522,7 @@
           <td>${x.statut === 'disponible' ? '<span class="pastille dispo">Disponible</span>' : '<span class="pastille indispo">Emprunté</span>'}</td>
           <td>${x.statut === 'disponible' ? `<button class="mini-btn rouge" data-suppr-ex="${x.id}">Retirer</button>` : ''}</td></tr>`).join('')}
         </tbody></table>` : '<p class="vide">Aucun exemplaire enregistré.</p>'}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="admin-form-grid">
         <div class="champ"><label for="fCote">Nouvelle cote</label><input id="fCote" placeholder="Ex. : ROM-05-3"></div>
         <div class="champ"><label for="fEtat">État</label>
           <select id="fEtat"><option value="neuf">Neuf</option><option value="bon" selected>Bon</option><option value="use">Usé</option></select></div>
@@ -757,6 +764,53 @@
     });
   }
 
+
+  async function formImporterEpub() {
+    await chargerCategories();
+    modale(`<h3>Ajouter des fichiers EPUB</h3>
+      <p>Sélectionnez un ou plusieurs EPUB. Ajustez les informations de chaque livre avant l’import. La couverture est récupérée du document lorsqu’elle est disponible.</p>
+      <div class="champ"><label for="epubMultiples">Fichiers EPUB — 50 Mo maximum chacun</label><input id="epubMultiples" type="file" accept=".epub,application/epub+zip" multiple></div>
+      <div id="epubLotListe"></div><p id="epubLotMessage" role="status"></p>
+      <div class="rangee-boutons"><button class="btn btn-bleu" id="epubLotImporter" disabled>Importer les documents</button><button class="btn" id="epubLotFermer">Fermer</button></div>`);
+    const input=$('#epubMultiples'),liste=$('#epubLotListe'),message=$('#epubLotMessage'),btn=$('#epubLotImporter'),fermer=$('#epubLotFermer');
+    let lignes=[],enCours=false;
+    fermer.onclick=()=>{if(!enCours)fermerModale()};
+    input.onchange=()=>{
+      lignes=[...input.files].map(f=>({f,id:null,ok:false}));
+      liste.innerHTML=lignes.map(({f},i)=>{
+        const nom=analyserNomFichier(f.name.replace(/\.epub$/i,'.pdf'));
+        const valide=/\.epub$/i.test(f.name)&&f.size>0&&f.size<=50*1024*1024;
+        return `<section class="epub-import-fiche"><b>${echap(f.name)}</b><p>${(f.size/1048576).toFixed(1)} Mo</p>
+        <div class="admin-form-grid"><div class="champ"><label>Titre<input data-epub-titre="${i}" value="${echap(nom.titre)}"></label></div><div class="champ"><label>Auteur<input data-epub-auteur="${i}" value="${echap(nom.auteur||'Auteur à préciser')}"></label></div></div>
+        <div class="champ"><label>Catégorie<select data-epub-cat="${i}">${optionsCategories(classerParTitre(nom.titre))}</select></label></div>
+        <p data-epub-statut="${i}" role="status">${valide?'Prêt à importer':'Fichier vide, format incorrect ou taille supérieure à 50 Mo.'}</p></section>`;
+      }).join('');
+      message.textContent='';btn.disabled=!lignes.some(({f})=>/\.epub$/i.test(f.name)&&f.size>0&&f.size<=50*1024*1024);
+    };
+    btn.onclick=async()=>{
+      enCours=true;btn.disabled=true;input.disabled=true;fermer.disabled=true;
+      const voile=$('#voile');voile.onclick=e=>{if(enCours&&e.target===voile)e.stopImmediatePropagation()};
+      let echecs=0;
+      for(let i=0;i<lignes.length;i++){
+        const ligne=lignes[i],f=ligne.f,statut=liste.querySelector(`[data-epub-statut="${i}"]`);
+        if(ligne.ok)continue;
+        if(!/\.epub$/i.test(f.name)||!f.size||f.size>50*1024*1024){echecs++;continue;}
+        btn.textContent=`Import ${i+1}/${lignes.length}…`;statut.textContent='Envoi en cours…';
+        try{
+          const titre=liste.querySelector(`[data-epub-titre="${i}"]`).value.trim(),auteur=liste.querySelector(`[data-epub-auteur="${i}"]`).value.trim()||'Auteur à préciser',categorie=liste.querySelector(`[data-epub-cat="${i}"]`).value;
+          if(!titre)throw Error('Renseignez le titre.');
+          if(!ligne.id){const livre=await api('/livres',{method:'POST',body:JSON.stringify({titre,auteur,categorie,type:'numerique'})});ligne.id=livre.id;}
+          else await api('/livres/'+ligne.id,{method:'PUT',body:JSON.stringify({titre,auteur,categorie})});
+          await envoyerEpub(ligne.id,f);ligne.ok=true;statut.textContent='✓ Importé';
+          liste.querySelectorAll(`[data-epub-titre="${i}"],[data-epub-auteur="${i}"],[data-epub-cat="${i}"]`).forEach(el=>el.disabled=true);
+        }catch(err){echecs++;statut.textContent='Échec : '+err.message;}
+      }
+      enCours=false;input.disabled=false;fermer.disabled=false;btn.disabled=!echecs;btn.textContent=echecs?'Réessayer les fichiers en échec':'Import terminé';
+      message.textContent=`${lignes.filter(l=>l.ok).length} document(s) importé(s), ${echecs} fichier(s) non importé(s).`;
+      afficherOnglet('catalogue');
+    };
+  }
+
   function formImporterPdf() {
     chargerCategories();
     modale(`
@@ -767,7 +821,7 @@
         <b>catégorie</b> d'après le titre, et génère la couverture depuis la 1ʳᵉ page.
         Vous pouvez tout ajuster dans l'aperçu avant de lancer l'import.</p>
       <div id="msgForm"></div>
-      <div class="champ"><label for="fPdfMultiples">Fichiers PDF (30 Mo max chacun)</label>
+      <div class="champ"><label for="fPdfMultiples">Fichiers PDF (50 Mo max chacun)</label>
         <input id="fPdfMultiples" type="file" accept=".pdf,application/pdf" multiple></div>
       <div id="apercuPdf" style="max-height:340px;overflow-y:auto"></div>
       <div class="rangee-boutons">
@@ -783,7 +837,7 @@
         ${filesPdf.map((f, i) => {
           const { titre, auteur } = analyserNomFichier(f.name);
           const cat = classerParTitre(titre);
-          const tropGros = f.size > 30 * 1024 * 1024;
+          const tropGros = f.size > 50 * 1024 * 1024;
           return `<tr ${tropGros ? 'style="opacity:.5"' : ''}>
             <td><input data-imp-titre="${i}" value="${echap(titre)}" style="width:100%;border:1px solid var(--bord);border-radius:6px;padding:5px 8px"></td>
             <td><input data-imp-auteur="${i}" value="${echap(auteur)}" placeholder="À préciser" style="width:100%;border:1px solid var(--bord);border-radius:6px;padding:5px 8px"></td>
@@ -794,7 +848,7 @@
         }).join('')}
         </tbody></table>
         <p style="font-size:12.5px;color:var(--gris)">💡 Le titre est modifiable, et la catégorie proposée peut être corrigée avant l'import.</p>`;
-      $('#btnLancerImportPdf').disabled = !filesPdf.some(f => f.size <= 30 * 1024 * 1024);
+      $('#btnLancerImportPdf').disabled = !filesPdf.some(f => f.size <= 50 * 1024 * 1024);
     });
     $('#btnLancerImportPdf').addEventListener('click', async () => {
       const btn = $('#btnLancerImportPdf');
@@ -803,7 +857,7 @@
       const erreurs = [];
       for (let i = 0; i < filesPdf.length; i++) {
         const f = filesPdf[i];
-        if (f.size > 30 * 1024 * 1024) { echoue++; erreurs.push(`${f.name} : trop volumineux`); continue; }
+        if (f.size > 50 * 1024 * 1024) { echoue++; erreurs.push(`${f.name} : trop volumineux`); continue; }
         btn.textContent = `Import ${i + 1}/${filesPdf.length}…`;
         try {
           const titre = document.querySelector(`[data-imp-titre="${i}"]`).value.trim() || analyserNomFichier(f.name).titre;
@@ -827,7 +881,7 @@
       <div id="msgForm"></div>
       <div class="champ"><label for="fNom">Nom complet *</label><input id="fNom" placeholder="Ex. : Marie-Lourdes Jean"></div>
       <div class="champ"><label for="fEmail">Email *</label><input id="fEmail" type="email" placeholder="membre@exemple.ht"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="admin-form-grid">
         <div class="champ"><label for="fClasse">Classe</label><input id="fClasse" placeholder="Ex. : NS4"></div>
         <div class="champ"><label for="fMdp">Mot de passe initial</label><input id="fMdp" value="oasis123"></div>
       </div>
@@ -850,7 +904,7 @@
     document.querySelectorAll('[data-modifier-livre]').forEach(b=>b.addEventListener('click',()=>modifierLivre(b.dataset.modifierLivre).catch(e=>toast(e.message))));
     document.querySelectorAll('[data-epub]').forEach(b=>b.addEventListener('click',()=>joindreEpub(b.dataset.epub)));
     $('#btnNouveauLivre')?.addEventListener('click', () => formNouveauLivre());
-    $('#btnNouveauEpub')?.addEventListener('click', () => formNouveauLivre(true));
+    $('#btnNouveauEpub')?.addEventListener('click', () => formImporterEpub());
     $('#btnImporter')?.addEventListener('click', formImporter);
     $('#btnImporterPdf')?.addEventListener('click', formImporterPdf);
     $('#btnCategories')?.addEventListener('click', formCategories);

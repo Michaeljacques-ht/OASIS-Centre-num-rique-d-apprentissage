@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const url = require('url');
 
 const abonnement = require('./modules/abonnement');
+const ecoles = require('./modules/ecoles');
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
 const PUBLIC = path.join(__dirname, 'public');
@@ -180,14 +181,14 @@ function lireCorps(req) {
     req.on('end', () => { try { resolve(brut ? JSON.parse(brut) : {}); } catch { reject(new Error('JSON invalide')); } });
   });
 }
-const TAILLE_MAX_PDF = 30 * 1024 * 1024; // 30 Mo
+const TAILLE_MAX_PDF = 50 * 1024 * 1024; // 50 Mo
 function lireBinaire(req) {
   return new Promise((resolve, reject) => {
     const morceaux = [];
     let taille = 0;
     req.on('data', c => {
       taille += c.length;
-      if (taille > TAILLE_MAX_PDF) { req.destroy(); reject(new Error('Fichier trop volumineux (30 Mo max).')); return; }
+      if (taille > TAILLE_MAX_PDF) { req.destroy(); reject(new Error('Fichier trop volumineux (50 Mo max).')); return; }
       morceaux.push(c);
     });
     req.on('end', () => resolve(Buffer.concat(morceaux)));
@@ -229,7 +230,7 @@ function authentifier(req) {
   const jeton = (req.headers.authorization || '').replace('Bearer ', '');
   const uidSession = db.sessions[jeton];
   if (!uidSession) return null;
-  return db.utilisateurs.find(u => u.id === uidSession) || null;
+  return db.utilisateurs.find(u => u.id === uidSession && u.actif !== false) || null;
 }
 
 // ---------- Logique métier ----------
@@ -335,9 +336,31 @@ async function api(req, res, u) {
   const { pathname, query } = url.parse(req.url, true);
   const seg = pathname.split('/').filter(Boolean); // ['api', ...]
   const utilisateur = authentifier(req);
-  if (pathname === '/api/version' && req.method === 'GET') {
-    return json(res, 200, { version: '1.5.1', apercuGratuit: true, abonnements: true });
+  if (pathname === '/api/statistiques-publiques' && req.method === 'GET') {
+    db.statistiquesPubliques ||= { visiteurs: 0, depuis: new Date().toISOString() };
+    if (!/(?:^|;\s*)oasis_visite=1(?:;|$)/.test(req.headers.cookie || '')) {
+      db.statistiquesPubliques.visiteurs++;
+      res.setHeader('Set-Cookie', 'oasis_visite=1; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax');
+      sauverDB();
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    return json(res, 200, {
+      livres: db.livres.length,
+      videos: (db.medias || []).filter(x => x.type === 'video').length,
+      audios: (db.medias || []).filter(x => x.type === 'audio').length,
+      cartes: (db.medias || []).filter(x => x.type === 'carte').length,
+      officiels: (db.ressources || []).filter(x => x.genre === 'officiel').length,
+      administratifs: (db.ressources || []).filter(x => x.genre === 'administratif').length,
+      ressources: (db.ressources || []).length,
+      visiteurs: db.statistiquesPubliques.visiteurs,
+      lectures: db.livres.reduce((n, x) => n + (Number(x.nbLectures) || 0), 0),
+      visiteursDepuis: db.statistiquesPubliques.depuis
+    });
   }
+  if (pathname === '/api/version' && req.method === 'GET') {
+    return json(res, 200, { version: '1.6.0', etablissements: true, apercuGratuit: true, abonnements: true });
+  }
+  if (await ecoles.route(req, res, {db, utilisateur, json, lireCorps, lireBinaire, sauverDB, uid, hashMdp})) return;
   if (await abonnement.route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid})) return;
   const exigeAuth = () => { if (!utilisateur) { json(res, 401, { erreur: 'Connexion requise.' }); return false; } return true; };
   const exigeBiblio = () => { if (!utilisateur || utilisateur.role !== 'bibliothecaire') { json(res, 403, { erreur: 'Réservé au bibliothécaire.' }); return false; } return true; };
@@ -357,14 +380,14 @@ async function api(req, res, u) {
   if (pathname === '/api/connexion' && m === 'POST') {
     const { email, motDePasse } = await lireCorps(req);
     const cu = db.utilisateurs.find(x => x.email.toLowerCase() === (email||'').trim().toLowerCase());
-    if (!cu || !verifMdp(motDePasse || '', cu)) return json(res, 401, { erreur: 'Email ou mot de passe incorrect.' });
+    if (!cu || cu.actif === false || !verifMdp(motDePasse || '', cu)) return json(res, 401, { erreur: 'Email ou mot de passe incorrect.' });
     const jeton = uid() + uid();
     db.sessions[jeton] = cu.id; sauverDB();
-    return json(res, 200, { jeton, utilisateur: { id: cu.id, nom: cu.nom, email: cu.email, role: cu.role, classe: cu.classe } });
+    return json(res, 200, { jeton, utilisateur: ecoles.publicUser(cu) });
   }
   if (pathname === '/api/moi' && m === 'GET') {
     if (!exigeAuth()) return;
-    return json(res, 200, { id: utilisateur.id, nom: utilisateur.nom, email: utilisateur.email, role: utilisateur.role, classe: utilisateur.classe });
+    return json(res, 200, ecoles.publicUser(utilisateur));
   }
   if (pathname === '/api/deconnexion' && m === 'POST') {
     const jeton = (req.headers.authorization || '').replace('Bearer ', '');
@@ -487,7 +510,7 @@ async function api(req, res, u) {
   // --- Classement et badges ---
   if (pathname === '/api/classement' && m === 'GET') {
     if (!exigeAuth()) return;
-    const lecteurs = db.utilisateurs.filter(u => u.role === 'apprenant').map(u => {
+    const lecteurs = db.utilisateurs.filter(u => u.role === 'apprenant' && (u.ecoleId || null) === (utilisateur.ecoleId || null)).map(u => {
       const termines = db.progressions.filter(p => p.utilisateurId === u.id && p.termine).length;
       const enCours = db.progressions.filter(p => p.utilisateurId === u.id && !p.termine).length;
       return { nom: u.nom, termines, enCours, moi: utilisateur.id === u.id };
@@ -1007,7 +1030,7 @@ async function api(req, res, u) {
   if (pathname === '/api/ressources' && m === 'POST') {
     if (!exigeBiblio()) return;
     const { genre, titre, contenu, source, lien, icone } = await lireCorps(req);
-    if (!['dictionnaire', 'encyclopedie', 'base', 'administratif', 'historique'].includes(genre)) return json(res, 400, { erreur: 'Genre invalide.' });
+    if (!['dictionnaire', 'encyclopedie', 'base', 'administratif', 'historique', 'officiel'].includes(genre)) return json(res, 400, { erreur: 'Genre invalide.' });
     if (!titre || !contenu) return json(res, 400, { erreur: 'Titre et contenu requis.' });
     if (lien && !/^https?:\/\/.+/.test(lien)) return json(res, 400, { erreur: 'Le lien doit commencer par http:// ou https://' });
     const r = { id: uid(), genre, titre, contenu, source: source || '', lien: lien || '', icone: (icone || '').slice(0, 8), image: false, creeLe: maintenant() };
@@ -1329,6 +1352,7 @@ const MIMES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 function statique(req, res) {
   let p = url.parse(req.url).pathname;
   if (p === '/') p = '/index.html';
+  if (p === '/ecole') p = '/ecole.html';
   if (p === '/admin') p = '/admin.html';
   const fichier = path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[\/\\])+/, ''));
   if (!fichier.startsWith(PUBLIC)) { res.writeHead(403); return res.end(); }

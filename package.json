@@ -1,11 +1,11 @@
 {
   "name": "oasis-centre-numerique",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "private": true,
-  "description": "OASIS — bibliothèque, pédagogie et diffusion",
+  "description": "OASIS Bibliothèque Numérique — espaces individuels et établissements",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/bibliotheque.cjs && node tests/abonnement.cjs"
+    "test": "node tests/bibliotheque.cjs && node tests/abonnement.cjs && node tests/ecoles.cjs"
   },
   "engines": {
     "node": ">=18"
