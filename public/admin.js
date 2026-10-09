@@ -24,7 +24,7 @@
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 2800);
   }
-  const fermerModale = () => { $('#zoneModale').innerHTML = ''; };
+  const fermerModale = () => { window.OasisApercuDocument?.close(); $('#zoneModale').innerHTML = ''; };
   function modale(html) {
     $('#zoneModale').innerHTML = `<div class="voile" id="voile"><div class="modale" role="dialog" aria-modal="true"><div class="corps" style="padding:24px">${html}</div></div></div>`;
     $('#voile').addEventListener('click', e => { if (e.target.id === 'voile') fermerModale(); });
@@ -453,7 +453,8 @@
   async function modifierLivre(id) {
     const l=await api('/livres/'+id);
     const champs=[['titre','Titre'],['auteur','Auteur'],['categorie','Catégorie'],['editeur','Éditeur'],['isbn','ISBN'],['langue','Langue'],['niveau','Niveau scolaire'],['motsCles','Mots-clés'],['annee','Année'],['icone','Icône'],['couleur','Couleur']];
-    modale(`<h3>Modifier le document</h3><div id="msgModification"></div><div class="form-document">${champs.map(([k,n])=>`<div class="champ"><label for="edit-${k}">${n}</label><input id="edit-${k}" value="${echap(l[k]||'')}" ${k==='annee'?'type="number"':k==='couleur'?'type="color"':''}></div>`).join('')}</div><div class="champ"><label for="edit-resume">Résumé</label><textarea id="edit-resume" rows="4">${echap(l.resume||'')}</textarea></div><button class="btn btn-bleu" id="saveDocument">Enregistrer</button><section class="document-apercu"><h4>Couverture du document</h4>${l.couverture ? `<a href="/api/livres/${l.id}/couverture" target="_blank" rel="noopener"><img src="/api/livres/${l.id}/couverture" alt="Couverture de ${echap(l.titre)}"></a>` : `<p>Aucune couverture disponible pour ce document.</p>`}<p><b>${echap(l.titre)}</b><br>${echap(l.auteur)} · ${echap(l.annee || "Année non renseignée")}</p><p>Formats disponibles : ${[l.pdf ? "PDF" : "", l.epub ? "EPUB" : ""].filter(Boolean).join(" / ") || "Aucun fichier joint"}</p></section>`);
+    modale(`<h3>Modifier le document</h3><div id="msgModification"></div><div class="form-document">${champs.map(([k,n])=>`<div class="champ"><label for="edit-${k}">${n}</label><input id="edit-${k}" value="${echap(l[k]||'')}" ${k==='annee'?'type="number"':k==='couleur'?'type="color"':''}></div>`).join('')}</div><div class="champ"><label for="edit-resume">Résumé</label><textarea id="edit-resume" rows="4">${echap(l.resume||'')}</textarea></div><button class="btn btn-bleu" id="saveDocument">Enregistrer</button><section class="document-apercu"><h4>Couverture du document</h4>${l.couverture ? `<a href="/api/livres/${l.id}/couverture" target="_blank" rel="noopener"><img src="/api/livres/${l.id}/couverture" alt="Couverture de ${echap(l.titre)}"></a>` : `<p>Aucune couverture disponible pour ce document.</p>`}<p><b>${echap(l.titre)}</b><br>${echap(l.auteur)} · ${echap(l.annee || "Année non renseignée")}</p><p>Formats disponibles : ${[l.pdf ? "PDF" : "", l.epub ? "EPUB" : ""].filter(Boolean).join(" / ") || "Aucun fichier joint"}</p>${l.pdf || l.epub ? '<h4>Consulter le document</h4><p>Feuilletez les pages pour retrouver l’auteur, l’éditeur, l’année et les autres informations.</p><div id="apercuEdition"></div>' : ''}</section>`);
+    if(l.pdf||l.epub)OasisApercuDocument.open(l,jeton,$('#apercuEdition'));
     $('#saveDocument').onclick=async()=>{try{const body={};champs.forEach(([k])=>body[k]=$('#edit-'+k).value.trim());body.annee=Number(body.annee)||null;body.resume=$('#edit-resume').value;await api('/livres/'+id,{method:'PUT',body:JSON.stringify(body)});fermerModale();toast('Document modifié.');afficherOnglet('catalogue');}catch(e){$('#msgModification').textContent=e.message}};
   }
   function joindreEpub(id) {
