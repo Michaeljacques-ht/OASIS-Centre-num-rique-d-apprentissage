@@ -75,33 +75,33 @@
     async catalogue() {
       const [livres] = await Promise.all([api('/livres'), chargerCategories()]);
       return `
-        <div class="section-titre"><h3>📚 Catalogue (${livres.length} titres)</h3>
+        <div class="section-titre catalogue-entete"><h3>📚 Catalogue (${livres.length} titres)</h3>
           <span style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn" id="btnCategories">🗂️ Catégories</button>
             <button class="btn" id="btnImporterPdf">📚 Importer des PDF</button>
             <button class="btn" id="btnImporter">📥 Importer (CSV / JSON)</button>
             <button class="btn btn-ajouter-livre" id="btnNouveauLivre">+ Ajouter un livre</button>
+            <button class="btn btn-bleu" id="btnNouveauEpub">+ Ajouter EPUB</button>
           </span></div>
-        <table class="table-catalogue"><thead><tr><th>Titre</th><th>Auteur</th><th>Catégorie</th><th>Versions</th><th>Disponibilité</th><th>Actions</th></tr></thead><tbody>
+        <div class="catalogue-table-scroll" role="region" aria-label="Catalogue des livres" tabindex="0"><table class="table-catalogue"><thead><tr><th>Titre</th><th>Auteur</th><th>Catégorie</th><th>Versions</th><th>Disponibilité</th><th>Actions</th></tr></thead><tbody>
         ${livres.map(l => `<tr>
           <td>${l.icone} <b>${echap(l.titre)}</b></td>
           <td>${echap(l.auteur)}</td>
           <td>${echap(l.categorie)}</td>
           <td>${l.hybride ? '<b style="color:var(--bleu)">📕+💻 Hybride</b>' : l.versionNumerique ? '💻 E-book' : l.versionPhysique ? '📕 Physique' : '<span style="color:var(--gris)">— aucune</span>'}</td>
-          <td style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">
+          <td><div class="catalogue-disponibilite">
             ${l.versionNumerique ? '<span class="pastille num">💻 En ligne</span>' : ''}
             ${l.versionPhysique ? `<span class="pastille ${l.nbDisponibles > 0 ? 'dispo' : 'indispo'}">📕 ${l.nbDisponibles}/${l.nbExemplaires} en rayon</span>` : ''}
             ${!l.versionNumerique && !l.versionPhysique ? '<span class="pastille indispo">Incomplet</span>' : ''}
-          </td>
-          <td class="catalogue-actions">
+          </div></td>
+          <td><div class="catalogue-actions">
             <button class="mini-btn bleu" data-modifier-livre="${l.id}">Modifier</button>
-            <button class="mini-btn" data-epub="${l.id}">${l.epub ? "EPUB ✓" : "Joindre EPUB"}</button>
             <button class="mini-btn" data-exemplaires="${l.id}" data-titre="${echap(l.titre)}">📕 Exemplaires${l.nbExemplaires ? ` (${l.nbExemplaires})` : ''}</button>
             <button class="mini-btn" data-pdf="${l.id}" data-titre="${echap(l.titre)}" data-deja="${l.pdf ? '1' : ''}">${l.pdf ? '📄 PDF ✓' : '📄 Joindre PDF'}</button>
             <button class="mini-btn rouge" data-supprimer="${l.id}">Supprimer</button>
-          </td>
+          </div></td>
         </tr>`).join('')}
-        </tbody></table>`;
+        </tbody></table></div>`;
     },
     async reservations() {
       const toutes = await api('/reservations');
@@ -322,10 +322,11 @@
     });
   }
 
-  function formNouveauLivre() {
+  function formNouveauLivre(modeEpub = false) {
+    modeEpub = modeEpub === true;
     chargerCategories();
     modale(`
-      <h3 style="margin-bottom:14px">Ajouter un livre au catalogue</h3>
+      <h3 style="margin-bottom:14px">${modeEpub ? "Ajouter un fichier EPUB" : "Ajouter un livre au catalogue"}</h3>
       <div id="msgForm"></div>
       <div class="champ"><label for="fTitre">Titre *</label><input id="fTitre" placeholder="Ex. : Compère Général Soleil"></div>
       <div class="champ"><label for="fAuteur">Auteur *</label><input id="fAuteur" placeholder="Ex. : Jacques Stephen Alexis"></div>
@@ -371,12 +372,14 @@
       $('#champContenu').hidden = t === 'physique';
     };
     $('#fType').addEventListener('change', majChamps);
+    if(modeEpub){$('#fType').value="numerique";$('#fPdf').accept=".epub,application/epub+zip";$('#fPdf').onchange=()=>{const f=$('#fPdf').files[0];if(f&&!$('#fTitre').value)$('#fTitre').value=f.name.replace(/\.epub$/i,'');};}
     majChamps();
     $('#btnValiderLivre').addEventListener('click', async () => {
       const btn = $('#btnValiderLivre');
       try {
         btn.disabled = true;
-        const type = $('#fType').value;
+        if(modeEpub){const f=$('#fPdf').files[0];if(!f||!/\.epub$/i.test(f.name))throw new Error("Choisissez un fichier EPUB.");if(f.size>30*1024*1024)throw new Error("EPUB trop volumineux (30 Mo maximum).");}
+        const type = modeEpub ? "numerique" : $('#fType').value;
         const livre = await api('/livres', { method: 'POST', body: JSON.stringify({
           titre: $('#fTitre').value.trim(), auteur: $('#fAuteur').value.trim(),
           categorie: $('#fCategorie').value, type,
@@ -450,7 +453,7 @@
   async function modifierLivre(id) {
     const l=await api('/livres/'+id);
     const champs=[['titre','Titre'],['auteur','Auteur'],['categorie','Catégorie'],['editeur','Éditeur'],['isbn','ISBN'],['langue','Langue'],['niveau','Niveau scolaire'],['motsCles','Mots-clés'],['annee','Année'],['icone','Icône'],['couleur','Couleur']];
-    modale(`<h3>Modifier le document</h3><div id="msgModification"></div><div class="form-document">${champs.map(([k,n])=>`<div class="champ"><label for="edit-${k}">${n}</label><input id="edit-${k}" value="${echap(l[k]||'')}" ${k==='annee'?'type="number"':k==='couleur'?'type="color"':''}></div>`).join('')}</div><div class="champ"><label for="edit-resume">Résumé</label><textarea id="edit-resume" rows="4">${echap(l.resume||'')}</textarea></div><button class="btn btn-bleu" id="saveDocument">Enregistrer</button>`);
+    modale(`<h3>Modifier le document</h3><div id="msgModification"></div><div class="form-document">${champs.map(([k,n])=>`<div class="champ"><label for="edit-${k}">${n}</label><input id="edit-${k}" value="${echap(l[k]||'')}" ${k==='annee'?'type="number"':k==='couleur'?'type="color"':''}></div>`).join('')}</div><div class="champ"><label for="edit-resume">Résumé</label><textarea id="edit-resume" rows="4">${echap(l.resume||'')}</textarea></div><button class="btn btn-bleu" id="saveDocument">Enregistrer</button><section class="document-apercu"><h4>Couverture du document</h4>${l.couverture ? `<a href="/api/livres/${l.id}/couverture" target="_blank" rel="noopener"><img src="/api/livres/${l.id}/couverture" alt="Couverture de ${echap(l.titre)}"></a>` : `<p>Aucune couverture disponible pour ce document.</p>`}<p><b>${echap(l.titre)}</b><br>${echap(l.auteur)} · ${echap(l.annee || "Année non renseignée")}</p><p>Formats disponibles : ${[l.pdf ? "PDF" : "", l.epub ? "EPUB" : ""].filter(Boolean).join(" / ") || "Aucun fichier joint"}</p></section>`);
     $('#saveDocument').onclick=async()=>{try{const body={};champs.forEach(([k])=>body[k]=$('#edit-'+k).value.trim());body.annee=Number(body.annee)||null;body.resume=$('#edit-resume').value;await api('/livres/'+id,{method:'PUT',body:JSON.stringify(body)});fermerModale();toast('Document modifié.');afficherOnglet('catalogue');}catch(e){$('#msgModification').textContent=e.message}};
   }
   function joindreEpub(id) {
@@ -845,7 +848,8 @@
     $('#btnNouvelEmprunt')?.addEventListener('click', formEmpruntGuichet);
     document.querySelectorAll('[data-modifier-livre]').forEach(b=>b.addEventListener('click',()=>modifierLivre(b.dataset.modifierLivre).catch(e=>toast(e.message))));
     document.querySelectorAll('[data-epub]').forEach(b=>b.addEventListener('click',()=>joindreEpub(b.dataset.epub)));
-    $('#btnNouveauLivre')?.addEventListener('click', formNouveauLivre);
+    $('#btnNouveauLivre')?.addEventListener('click', () => formNouveauLivre());
+    $('#btnNouveauEpub')?.addEventListener('click', () => formNouveauLivre(true));
     $('#btnImporter')?.addEventListener('click', formImporter);
     $('#btnImporterPdf')?.addEventListener('click', formImporterPdf);
     $('#btnCategories')?.addEventListener('click', formCategories);

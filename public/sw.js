@@ -1,5 +1,5 @@
 /* OASIS Bibliothèque Numérique — Service Worker (PWA) */
-const CACHE = 'oasis-v24';
+const CACHE = 'oasis-v27';
 self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(cles => Promise.all(cles.map(k => caches.delete(k)))).then(() => self.clients.claim()));

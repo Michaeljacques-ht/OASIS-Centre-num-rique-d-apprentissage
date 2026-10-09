@@ -344,6 +344,9 @@
   }
 
   // ---------- Panneaux latéraux ----------
+  const miniatureLivre = l => l.couverture
+    ? `<div class="mini-couv couverture-img"><img src="/api/livres/${encodeURIComponent(l.id)}/couverture" alt="Couverture de ${echap(l.titre)}" loading="lazy"></div>`
+    : `<div class="mini-couv" style="background:linear-gradient(150deg, ${l.couleur}, #10243e)">${l.icone || '📘'}</div>`;
   async function rafraichirPanneaux() {
     try {
       const [pop, liste, histo] = await Promise.all([api('/livres?tri=populaires'), api('/liste'), api('/historique')]);
@@ -358,18 +361,18 @@
       }
       if (zoneReprise) zoneReprise.innerHTML = enCours.map(h => `
         <button class="ligne-populaire" data-lire="${h.livre.id}">
-          <div class="mini-couv" style="background:linear-gradient(150deg, ${h.livre.couleur}, #10243e)">${h.livre.icone}</div>
+          ${miniatureLivre(h.livre)}
           <div style="flex:1"><b>${echap(h.livre.titre)}</b>
             <div class="barre-progression" style="margin:5px 0 2px"><div style="width:${h.pourcentage}%"></div></div>
             <small style="color:var(--gris)">${h.pourcentage} % lu — continuer</small></div>
         </button>`).join('') || '<p class="vide">Aucune lecture en cours.</p>';
       $('#zonePopulaires').innerHTML = pop.slice(0, 4).map(l => `
         <button class="ligne-populaire" data-livre="${l.id}">
-          <div class="mini-couv" style="background:linear-gradient(150deg, ${l.couleur}, #10243e)">${l.icone}</div>
+          ${miniatureLivre(l)}
           <div><b>${echap(l.titre)}</b><span class="auteur">${echap(l.auteur)}</span><br>${etoiles(l.note)}</div>
         </button>`).join('') || '<p class="vide">Bientôt disponible.</p>';
       $('#zoneListe').innerHTML = liste.slice(0, 5).map((l, i) => `
-        <button class="ligne-liste" data-livre="${l.id}"><span class="num">${i + 1}</span><b>${echap(l.titre)}</b></button>`).join('')
+        <button class="ligne-liste" data-livre="${l.id}">${miniatureLivre(l)}<b>${echap(l.titre)}</b></button>`).join('')
         || '<p class="vide">Ajoutez des livres avec 📋 pour planifier vos lectures.</p>';
     } catch { /* silencieux */ }
   }
