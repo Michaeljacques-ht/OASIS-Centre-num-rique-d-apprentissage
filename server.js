@@ -336,6 +336,7 @@ async function api(req, res, u) {
   const { pathname, query } = url.parse(req.url, true);
   const seg = pathname.split('/').filter(Boolean); // ['api', ...]
   const utilisateur = authentifier(req);
+  if (pathname === '/api/ecoles/formules' && req.method === 'GET') return json(res, 200, {formules:Object.values(require('./modules/formules-ecoles')),devisAuDela:600});
   if (pathname === '/api/statistiques-publiques' && req.method === 'GET') {
     db.statistiquesPubliques ||= { visiteurs: 0, depuis: new Date().toISOString() };
     if (!/(?:^|;\s*)oasis_visite=1(?:;|$)/.test(req.headers.cookie || '')) {
@@ -358,7 +359,7 @@ async function api(req, res, u) {
     });
   }
   if (pathname === '/api/version' && req.method === 'GET') {
-    return json(res, 200, { version: '1.6.0', etablissements: true, apercuGratuit: true, abonnements: true });
+    return json(res, 200, { version: '1.6.1', formulesEtablissements: true, etablissements: true, apercuGratuit: true, abonnements: true });
   }
   if (await ecoles.route(req, res, {db, utilisateur, json, lireCorps, lireBinaire, sauverDB, uid, hashMdp})) return;
   if (await abonnement.route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid})) return;
@@ -1358,7 +1359,7 @@ function statique(req, res) {
   if (!fichier.startsWith(PUBLIC)) { res.writeHead(403); return res.end(); }
   fs.readFile(fichier, (err, contenu) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Page introuvable'); }
-    res.writeHead(200, { 'Content-Type': MIMES[path.extname(fichier)] || 'application/octet-stream' });
+    res.writeHead(200, { 'Content-Type': MIMES[path.extname(fichier)] || 'application/octet-stream', ...(['.html','.js','.css'].includes(path.extname(fichier)) ? {'Cache-Control':'no-store'} : {}) });
     res.end(contenu);
   });
 }

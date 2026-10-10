@@ -1,5 +1,5 @@
 const fs=require('fs');const path=require('path');const PP=require('../lib/plopplop');const {PDFDocument,PDFName}=require('./pdf-lib');const locks=new Set();
-const E=require('./ecoles');
+const E=require('./ecoles');const formules=require('./formules-ecoles');
 const actif=(db,u)=>!!u&&u.actif!==false&&(u.role==='bibliothecaire'||new Date(u.abonnementFin||0)>new Date()||E.active((db.ecoles||[]).find(e=>e.id===u.ecoleId)));
 module.exports.actif=actif;
 module.exports.route=async(req,res,c)=>{
@@ -10,12 +10,17 @@ module.exports.route=async(req,res,c)=>{
  if(s[1]==='abonnement'){
   if(!u)return send(401,{erreur:'Créez un compte ou connectez-vous pour vous abonner.'});
   db.commandesAbonnement ||= [];
-  if(s[2]==='statut'&&m==='GET')return send(200,{actif:actif(db,u),fin:(owner?school.abonnementFin:(u.abonnementFin||school?.abonnementFin))||null,etablissement:!!owner,configure:PP.passerelleActive(),commandes:db.commandesAbonnement.filter(x=>x.utilisateurId===u.id).slice(-10).map(x=>({id:x.id,statut:x.statut,plan:x.plan,montant:x.montant}))});
+  if(s[2]==='statut'&&m==='GET')return send(200,{actif:actif(db,u),fin:(owner?school.abonnementFin:(u.abonnementFin||school?.abonnementFin))||null,etablissement:!!owner,configure:PP.passerelleActive(),commandes:db.commandesAbonnement.filter(x=>x.utilisateurId===u.id).slice(-10).map(x=>({id:x.id,statut:x.statut,plan:x.plan,formule:x.formule,montant:x.montant}))});
   if(s[2]==='payer'&&m==='POST'){
    const b=await lireCorps(req);if(!['mensuel','annuel','etablissement'].includes(b.plan))return send(400,{erreur:'Choisissez un abonnement mensuel ou annuel.'});
    if(b.plan==='etablissement'&&!owner)return send(403,{erreur:'Seul l’administrateur de l’établissement peut régler son abonnement.'});
+   const formule=b.plan==='etablissement'?(b.formule||school.formule||'petite'):null;
+   const offre=Object.hasOwn(formules,formule)?formules[formule]:null;
+   if(b.plan==='etablissement'&&!offre)return send(400,{erreur:'Choisissez une formule établissement valide.'});
+   if(offre&&E.effectif(db,school)>offre.limiteEleves)return send(409,{erreur:'Cette formule ne couvre pas tous vos élèves actifs.'});
+   if(offre&&E.active(school)&&offre.limiteEleves<E.quota(school))return send(409,{erreur:'Une baisse de formule est possible après expiration, avec un effectif compatible.'});
    if(!PP.passerelleActive())return send(503,{erreur:'Les paiements ne sont pas encore configurés par l’administration.'});
-   const commande={id:'ABO-'+uid(),utilisateurId:u.id,plan:b.plan,ecoleId:b.plan==='etablissement'?school.id:null,montant:b.plan==='etablissement'?50000:b.plan==='mensuel'?500:5000,statut:'en_attente',creeLe:new Date().toISOString()};db.commandesAbonnement.push(commande);sauverDB();
+   const commande={id:'ABO-'+uid(),utilisateurId:u.id,plan:b.plan,ecoleId:b.plan==='etablissement'?school.id:null,formule,limiteEleves:offre?.limiteEleves,montant:b.plan==='etablissement'?offre.montant:b.plan==='mensuel'?500:5000,statut:'en_attente',creeLe:new Date().toISOString()};db.commandesAbonnement.push(commande);sauverDB();
    const r=await PP.initierPaiement({reference:commande.id,montant:commande.montant,methode:'all'});
    if(!r.ok){commande.statut='erreur';sauverDB();return send(502,{erreur:r.error})}
    try{if(new URL(r.urlPaiement).protocol!=='https:')throw Error()}catch{commande.statut='erreur';sauverDB();return send(502,{erreur:'Adresse de paiement invalide.'})}
@@ -27,9 +32,13 @@ module.exports.route=async(req,res,c)=>{
    if(!target)return send(404,{erreur:'Établissement introuvable.'});
    const suite=cmd.plan==='etablissement'?'/ecole':'/?espace=1';
    if(cmd.statut==='paye')return send(200,{paye:true,fin:target.abonnementFin,suite});
+   const offreConfirmee=cmd.plan==='etablissement'?formules[cmd.formule||'petite']:null;
+   if(offreConfirmee&&E.active(target)&&offreConfirmee.limiteEleves<E.quota(target))return send(409,{erreur:'Une formule plus élevée est déjà active. Contactez OASIS pour régulariser ce paiement.'});
+   if(offreConfirmee&&E.effectif(db,target)>offreConfirmee.limiteEleves)return send(409,{erreur:'Effectif supérieur à la formule payée. Contactez OASIS pour régulariser ce paiement.'});
    if(locks.has(cmd.id))return send(200,{paye:false});locks.add(cmd.id);
    try{const r=await PP.verifierPaiement(cmd.id);if(!r.ok)return send(502,{erreur:r.error});if(!r.paye)return send(200,{paye:false});
     const start=new Date(Math.max(Date.now(),new Date(target.abonnementFin||0).getTime()||0));const day=start.getUTCDate();start.setUTCDate(1);start.setUTCMonth(start.getUTCMonth()+(cmd.plan==='mensuel'?1:12));const last=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+1,0)).getUTCDate();start.setUTCDate(Math.min(day,last));
+    if(offreConfirmee){target.formule=offreConfirmee.id;target.limiteEleves=offreConfirmee.limiteEleves;}
     target.abonnementFin=start.toISOString();cmd.statut='paye';cmd.payeLe=new Date().toISOString();cmd.transactionConfirmee=r.infos?.transactionId||null;sauverDB();return send(200,{paye:true,fin:target.abonnementFin,suite});
    }finally{locks.delete(cmd.id)}
   }

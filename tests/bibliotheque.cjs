@@ -9,6 +9,7 @@ async function request(route,token,method='GET',body){const r=await fetch(base+'
  const stats=await request('/statistiques-publiques');assert.equal(stats.code,200);assert.equal(typeof stats.data.livres,'number');assert.equal(stats.data.visiteurs,1);
  const tracked=await fetch(base+'/api/statistiques-publiques',{headers:{Cookie:'oasis_visite=1'}});assert.equal((await tracked.json()).visiteurs,1);
  const login=async(email,motDePasse)=>{const r=await request('/connexion',null,'POST',{email,motDePasse});assert.equal(r.code,200);return r.data.jeton};
+ const schoolPlans=await request('/ecoles/formules');assert.equal(schoolPlans.code,200);assert.deepEqual(schoolPlans.data.formules.map(x=>x.montant),[50000,100000,150000]);
  const signup=await request('/ecoles/inscription',null,'POST',{nom:'Responsable HTTP',nomEcole:'École HTTP',email:'school-http@example.ht',motDePasse:'secret123',role:'bibliothecaire'});assert.equal(signup.code,201);assert.equal(signup.data.utilisateur.role,'admin_etablissement');
  const schoolToken=signup.data.jeton;assert.equal((await request('/moi',schoolToken)).data.ecoleId,signup.data.utilisateur.ecoleId);
  assert.equal((await request('/ecoles/mon-espace',schoolToken)).code,200);

@@ -1,19 +1,25 @@
 const fs=require('node:fs'),path=require('node:path');
+const formules=require('./formules-ecoles');
+const quota=e=>Number(e?.limiteEleves)||formules[e?.formule||'petite']?.limiteEleves||100;
+const effectif=(db,e)=>db.utilisateurs.filter(x=>x.ecoleId===e.id&&x.role==='apprenant'&&x.actif!==false).length;
 const roles=['admin_etablissement','bibliothecaire_ecole'];
 const active=e=>!!e&&new Date(e.abonnementFin||0)>new Date();
 const publicUser=u=>({id:u.id,nom:u.nom,email:u.email,role:u.role,classe:u.classe||'',ecoleId:u.ecoleId||null,actif:u.actif!==false});
-module.exports={active,roles,publicUser,async route(req,res,c){
+module.exports={active,roles,publicUser,quota,effectif,async route(req,res,c){
  const {db,utilisateur:u,json,lireCorps,lireBinaire,sauverDB,uid,hashMdp}=c;
  const url=new URL(req.url,'http://localhost'),s=url.pathname.split('/').filter(Boolean),m=req.method;
  if(s[1]!=='ecoles')return false;
  db.ecoles ||= [];db.travauxEcoles ||= [];
+ for(const school of db.ecoles)if(!school.formule){school.formule='petite';school.limiteEleves=active(school)?Math.max(100,effectif(db,school)):100;sauverDB();}
  const send=(code,data)=>{json(res,code,data);return true};
  const texte=(v,max=160)=>typeof v==='string'?v.trim().slice(0,max):'';
+ if(s[2]==='devis-admin'&&m==='GET'){if(u?.role!=='bibliothecaire')return send(403,{erreur:'Réservé à l’administration OASIS.'});return send(200,(db.devisEcoles||[]).map(d=>({...d,ecole:db.ecoles.find(e=>e.id===d.ecoleId)?.nom||'Établissement'})));}
+ if(s[2]==='formules'&&m==='GET')return send(200,{formules:Object.values(formules),devisAuDela:600});
  if(s[2]==='inscription'&&m==='POST'){
   const b=await lireCorps(req),nom=texte(b.nom),nomEcole=texte(b.nomEcole),email=texte(b.email).toLowerCase();
   if(!nom||!nomEcole||!/^\S+@\S+\.\S+$/.test(email)||typeof b.motDePasse!=='string'||b.motDePasse.length<8)return send(400,{erreur:'Nom du responsable, établissement, email et mot de passe de 8 caractères minimum requis.'});
-  if(db.utilisateurs.some(x=>x.email.toLowerCase()===email))return send(409,{erreur:'Cet email possède déjà un compte. Utilisez un email distinct pour le responsable de l’établissement.'});
-  const e={id:uid(),nom:nomEcole,adresse:'',description:'',telephone:'',email,livresIds:[],creeLe:new Date().toISOString()};
+  if(db.utilisateurs.some(x=>String(x.email||'').toLowerCase()===email))return send(409,{erreur:'Cet email possède déjà un compte. Utilisez un email distinct pour le responsable de l’établissement.'});
+  const e={id:uid(),nom:nomEcole,formule:'petite',limiteEleves:100,adresse:'',description:'',telephone:'',email,livresIds:[],creeLe:new Date().toISOString()};
   const user={id:uid(),nom,email,role:'admin_etablissement',ecoleId:e.id,actif:true,...hashMdp(b.motDePasse),creeLe:new Date().toISOString()};
   e.responsableId=user.id;db.ecoles.push(e);db.utilisateurs.push(user);const jeton=uid()+uid();db.sessions[jeton]=user.id;sauverDB();return send(201,{jeton,utilisateur:publicUser(user)});
  }
@@ -27,7 +33,7 @@ module.exports={active,roles,publicUser,async route(req,res,c){
  const e=db.ecoles.find(e=>e.id===u.ecoleId);if(!e||u.actif===false)return send(403,{erreur:'Aucun espace établissement accessible.'});
  const gestion=roles.includes(u.role),owner=u.role==='admin_etablissement';
  const members=()=>db.utilisateurs.filter(x=>x.ecoleId===e.id);
- if(s[2]==='mon-espace'&&m==='GET')return send(200,{ecole:{...e,actif:active(e)},utilisateur:publicUser(u),gestion,catalogue:db.livres.filter(l=>(e.livresIds||[]).includes(l.id)).map(l=>({id:l.id,titre:l.titre,auteur:l.auteur,categorie:l.categorie,couverture:!!l.couverture})),travaux:db.travauxEcoles.filter(t=>t.ecoleId===e.id&&(gestion||!t.classe||t.classe===u.classe))});
+ if(s[2]==='mon-espace'&&m==='GET')return send(200,{ecole:{...e,actif:active(e),limiteEleves:quota(e),elevesActifs:effectif(db,e)},utilisateur:publicUser(u),gestion,catalogue:db.livres.filter(l=>(e.livresIds||[]).includes(l.id)).map(l=>({id:l.id,titre:l.titre,auteur:l.auteur,categorie:l.categorie,couverture:!!l.couverture})),travaux:db.travauxEcoles.filter(t=>t.ecoleId===e.id&&(gestion||!t.classe||t.classe===u.classe))});
  if(!gestion)return send(403,{erreur:'Réservé aux responsables de cet établissement.'});
  if(s[2]==='parametres'&&m==='PUT'){
   const b=await lireCorps(req);if(!texte(b.nom))return send(400,{erreur:'Nom de l’établissement requis.'});
@@ -38,19 +44,25 @@ module.exports={active,roles,publicUser,async route(req,res,c){
   if(!b.length||b.length>5*1024*1024||!png&&!jpg)return send(400,{erreur:'Image PNG ou JPEG de 5 Mo maximum requise.'});
   const folder=path.join(__dirname,'../data/ecoles');fs.mkdirSync(folder,{recursive:true});fs.writeFileSync(path.join(folder,e.id+'-'+s[3]),b);e[s[3]]=true;e[s[3]+'Mime']=png?'image/png':'image/jpeg';sauverDB();return send(201,{ok:true});
  }
- if(!active(e))return send(402,{erreur:'Activez l’abonnement établissement annuel de 50 000 HTG pour gérer les élèves et les lectures.'});
+ if(s[2]==='devis'&&m==='POST'){
+  if(!owner)return send(403,{erreur:'Réservé à l’administrateur de l’établissement.'});
+  const b=await lireCorps(req),nombre=Number(b.eleves);if(!Number.isInteger(nombre)||nombre<=600||nombre>100000)return send(400,{erreur:'Indiquez un effectif supérieur à 600 élèves.'});
+  db.devisEcoles ||= [];db.devisEcoles.push({id:uid(),ecoleId:e.id,eleves:nombre,message:texte(b.message,2000),contact:u.email,statut:'a_traiter',creeLe:new Date().toISOString()});sauverDB();return send(201,{ok:true});
+ }
+ if(!active(e))return send(402,{erreur:'Activez l’abonnement établissement annuel adapté à votre effectif pour gérer les élèves et les lectures.'});
  if(s[2]==='membres'&&m==='GET')return send(200,members().map(publicUser));
  if(s[2]==='membres'&&m==='POST'){
   const b=await lireCorps(req),nom=texte(b.nom),email=texte(b.email).toLowerCase(),role=b.role==='bibliothecaire_ecole'?'bibliothecaire_ecole':'apprenant';
   if(role!=='apprenant'&&!owner)return send(403,{erreur:'Seul l’administrateur peut créer un bibliothécaire.'});
   if(!nom||!/^\S+@\S+\.\S+$/.test(email)||typeof b.motDePasse!=='string'||b.motDePasse.length<8)return send(400,{erreur:'Nom, email et mot de passe de 8 caractères minimum requis.'});
-  if(db.utilisateurs.some(x=>x.email.toLowerCase()===email))return send(409,{erreur:'Cet email est déjà utilisé.'});
+  if(db.utilisateurs.some(x=>String(x.email||'').toLowerCase()===email))return send(409,{erreur:'Cet email est déjà utilisé.'});
+  if(role==='apprenant'&&effectif(db,e)>=quota(e))return send(409,{erreur:`Votre formule permet ${quota(e)} élèves actifs. Désactivez un compte ou choisissez une formule supérieure.`});
   const user={id:uid(),nom,email,role,ecoleId:e.id,classe:texte(b.classe,80),actif:true,...hashMdp(b.motDePasse),creeLe:new Date().toISOString()};db.utilisateurs.push(user);sauverDB();return send(201,publicUser(user));
  }
  if(s[2]==='membres'&&s[3]&&m==='PUT'){
   const v=members().find(v=>v.id===s[3]);if(!v)return send(404,{erreur:'Membre introuvable.'});
   if(v.role==='admin_etablissement'||v.role==='bibliothecaire_ecole'&&!owner)return send(403,{erreur:'Ce compte ne peut pas être modifié ici.'});
-  const b=await lireCorps(req);if(b.motDePasse!==undefined&&(typeof b.motDePasse!=='string'||b.motDePasse.length<8))return send(400,{erreur:'Mot de passe de 8 caractères minimum requis.'});if(b.nom!==undefined){if(!texte(b.nom))return send(400,{erreur:'Nom requis.'});v.nom=texte(b.nom)}
+  const b=await lireCorps(req);if(b.actif===true&&v.actif===false&&v.role==='apprenant'&&effectif(db,e)>=quota(e))return send(409,{erreur:`Limite de ${quota(e)} élèves actifs atteinte.`});if(b.motDePasse!==undefined&&(typeof b.motDePasse!=='string'||b.motDePasse.length<8))return send(400,{erreur:'Mot de passe de 8 caractères minimum requis.'});if(b.nom!==undefined){if(!texte(b.nom))return send(400,{erreur:'Nom requis.'});v.nom=texte(b.nom)}
   if(b.classe!==undefined)v.classe=texte(b.classe,80);if(typeof b.actif==='boolean')v.actif=b.actif;
   if(b.motDePasse!==undefined){if(typeof b.motDePasse!=='string'||b.motDePasse.length<8)return send(400,{erreur:'Mot de passe de 8 caractères minimum requis.'});Object.assign(v,hashMdp(b.motDePasse));}
   if(b.actif===false||b.motDePasse!==undefined)for(const [key,id] of Object.entries(db.sessions))if(id===v.id)delete db.sessions[key];

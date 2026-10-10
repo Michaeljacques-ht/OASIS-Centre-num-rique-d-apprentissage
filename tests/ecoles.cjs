@@ -1,5 +1,9 @@
 const assert=require('node:assert/strict');const E=require('../modules/ecoles'),A=require('../modules/abonnement'),PP=require('../lib/plopplop');
 (async()=>{
+const vm=require('node:vm'),fs=require('node:fs');
+const root={innerHTML:'',querySelector:()=>({prepend(){},querySelector:()=>({})})};
+vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../public/ecole.js'),'utf8'),{document:{getElementById:id=>id==='ecoleApp'?root:{},createElement:()=>({})},localStorage:{getItem:()=>'',setItem(){},removeItem(){}},location:{search:'?inscription=1'},URLSearchParams,fetch:async()=>{throw Error('offline')},setTimeout,clearInterval});
+await new Promise(resolve=>setImmediate(resolve));assert(root.innerHTML.includes('schoolName'));assert(root.innerHTML.includes('Petite école'));assert(root.innerHTML.includes('École moyenne'));assert(root.innerHTML.includes('Grande école'));
 let serial=0,paid=false,montant;
 const db={ecoles:[],utilisateurs:[],sessions:{},livres:[{id:'book',titre:'Livre scolaire'}],progressions:[],progressionsMedias:[],medias:[],commandesAbonnement:[]};
 async function call(path,method='GET',body={},user=null){let r;assert(await E.route({url:'/api/ecoles/'+path,method,headers:{}},{},{db,utilisateur:user,json:(res,code,data)=>r={code,data},lireCorps:async()=>body,lireBinaire:async()=>Buffer.from('invalid'),sauverDB:()=>{},uid:()=>String(++serial),hashMdp:p=>({hash:p})}));return r}
