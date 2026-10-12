@@ -15,7 +15,6 @@ const dureeLecture=require('./modules/duree-lecture');
 const ecoles = require('./modules/ecoles');
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
-const baseJSON=require('./modules/base-json');
 const PUBLIC = path.join(__dirname, 'public');
 
 // Les règles de fonctionnement sont des paramètres modifiables dans l'espace bibliothécaire
@@ -39,9 +38,8 @@ function seedParametres() {
 // ---------- Base de données JSON ----------
 let db = null;
 function chargerDB() {
-  const chargee=baseJSON.charger(DB_PATH);
-  if (chargee) {
-    db = chargee;
+  if (fs.existsSync(DB_PATH)) {
+    db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
     // Migration douce : les bases créées avant ces fonctionnalités reçoivent les nouvelles collections
     if (!db.reservations) db.reservations = [];
     if (!db.placesLecture) db.placesLecture = [];
@@ -80,20 +78,16 @@ function chargerDB() {
     sauverDB();
   }
 }
-let ecritureEnAttente = false, minuteurSauvegarde=null;
-function flushDB(){
-  if(!ecritureEnAttente||!db)return;
-  if(minuteurSauvegarde){clearTimeout(minuteurSauvegarde);minuteurSauvegarde=null}
-  baseJSON.sauver(DB_PATH,db);ecritureEnAttente=false;
-}
+let ecritureEnAttente = false;
 function sauverDB() {
-  ecritureEnAttente=true;
-  if(minuteurSauvegarde)return;
-  minuteurSauvegarde=setTimeout(()=>{minuteurSauvegarde=null;try{flushDB()}catch(err){console.error('SAUVEGARDE ÉCHOUÉE (données en mémoire conservées) :',err);}},50);
+  if (ecritureEnAttente) return;
+  ecritureEnAttente = true;
+  setTimeout(() => {
+    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+    ecritureEnAttente = false;
+  }, 50);
 }
-process.on('SIGTERM',()=>{try{flushDB();process.exitCode=0}catch(err){console.error('Sauvegarde avant arrêt impossible :',err);process.exitCode=1}process.exit(process.exitCode)});
-process.on('SIGINT',()=>{try{flushDB();process.exit(0)}catch(err){console.error(err);process.exit(1)}});
-
 const uid = () => crypto.randomBytes(8).toString('hex');
 const maintenant = () => new Date().toISOString();
 const hashMdp = (mdp, sel) => {
@@ -368,7 +362,7 @@ async function api(req, res, u) {
     });
   }
   if (pathname === '/api/version' && req.method === 'GET') {
-    return json(res, 200, { version: '1.6.6', formulesEtablissements: true, etablissements: true, apercuGratuit: true, abonnements: true });
+    return json(res, 200, { version: '1.6.5', formulesEtablissements: true, etablissements: true, apercuGratuit: true, abonnements: true });
   }
   if (await ecoles.route(req, res, {db, utilisateur, json, lireCorps, lireBinaire, sauverDB, uid, hashMdp})) return;
   if (await abonnement.route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid})) return;
