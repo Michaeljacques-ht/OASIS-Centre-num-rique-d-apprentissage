@@ -15,6 +15,7 @@ const dureeLecture=require('./modules/duree-lecture');
 const ecoles = require('./modules/ecoles');
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
+const baseJSON=require('./modules/base-json');
 const PUBLIC = path.join(__dirname, 'public');
 
 // Les règles de fonctionnement sont des paramètres modifiables dans l'espace bibliothécaire
@@ -38,8 +39,9 @@ function seedParametres() {
 // ---------- Base de données JSON ----------
 let db = null;
 function chargerDB() {
-  if (fs.existsSync(DB_PATH)) {
-    db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  const chargee=baseJSON.charger(DB_PATH);
+  if (chargee) {
+    db = chargee;
     // Migration douce : les bases créées avant ces fonctionnalités reçoivent les nouvelles collections
     if (!db.reservations) db.reservations = [];
     if (!db.placesLecture) db.placesLecture = [];
@@ -78,16 +80,20 @@ function chargerDB() {
     sauverDB();
   }
 }
-let ecritureEnAttente = false;
-function sauverDB() {
-  if (ecritureEnAttente) return;
-  ecritureEnAttente = true;
-  setTimeout(() => {
-    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-    ecritureEnAttente = false;
-  }, 50);
+let ecritureEnAttente = false, minuteurSauvegarde=null;
+function flushDB(){
+  if(!ecritureEnAttente||!db)return;
+  if(minuteurSauvegarde){clearTimeout(minuteurSauvegarde);minuteurSauvegarde=null}
+  baseJSON.sauver(DB_PATH,db);ecritureEnAttente=false;
 }
+function sauverDB() {
+  ecritureEnAttente=true;
+  if(minuteurSauvegarde)return;
+  minuteurSauvegarde=setTimeout(()=>{minuteurSauvegarde=null;try{flushDB()}catch(err){console.error('SAUVEGARDE ÉCHOUÉE (données en mémoire conservées) :',err);}},50);
+}
+process.on('SIGTERM',()=>{try{flushDB();process.exitCode=0}catch(err){console.error('Sauvegarde avant arrêt impossible :',err);process.exitCode=1}process.exit(process.exitCode)});
+process.on('SIGINT',()=>{try{flushDB();process.exit(0)}catch(err){console.error(err);process.exit(1)}});
+
 const uid = () => crypto.randomBytes(8).toString('hex');
 const maintenant = () => new Date().toISOString();
 const hashMdp = (mdp, sel) => {
@@ -200,6 +206,8 @@ function lireBinaire(req) {
 const DOSSIER_PDF = path.join(__dirname, 'data', 'pdfs');
 const cheminEpub = livreId => path.join(DOSSIER_PDF, livreId + '.epub');
 const cheminPdf = livreId => path.join(DOSSIER_PDF, livreId + '.pdf');
+let calculDureeQueue=Promise.resolve();
+function calculerDuree(l){const run=async()=>{if(l.contenu||l.nbMotsLecture||l.nbPagesLecture)return;try{if(l.pdf&&fs.existsSync(cheminPdf(l.id))){const data=await fs.promises.readFile(cheminPdf(l.id));const pdf=await require('./modules/pdf-lib').PDFDocument.load(data,{ignoreEncryption:true});l.nbPagesLecture=pdf.getPageCount();sauverDB()}else if(l.epub&&fs.existsSync(cheminEpub(l.id))){l.nbMotsLecture=dureeLecture.epub(await fs.promises.readFile(cheminEpub(l.id)));sauverDB()}}catch(e){console.warn('Calcul durée indisponible :',l.id,e.message)}};const result=calculDureeQueue.then(run);calculDureeQueue=result.catch(()=>{});return result}
 const DOSSIER_COUV = path.join(__dirname, 'data', 'couvertures');
 const cheminCouv = livreId => path.join(DOSSIER_COUV, livreId + '.png');
 const DOSSIER_RES_IMG = path.join(__dirname, 'data', 'ressources-img');
@@ -264,7 +272,7 @@ function vueLivre(l, utilisateur) {
     estimationLecture:dureeLecture.estimation(l),dureeLectureMinutes:l.dureeLectureMinutes||'',seuilLecture:l.seuilLecture===undefined?70:l.seuilLecture, accesComplet: abonnement.actif(db, utilisateur), id: l.id, titre: l.titre, auteur: l.auteur, categorie: l.categorie, type: l.type,
     resume: l.resume, couleur: l.couleur, icone: l.icone, annee: l.annee, isbn: l.isbn,
     note: moyenneNotes(l), nbNotes: l.notes.length, nbLectures: l.nbLectures,
-    editeur: l.editeur || '', langue: l.langue || 'Français', niveau: l.niveau || '', publicCible: l.publicCible || 'tous', motsCles: l.motsCles || '',
+    edition:l.edition||'',editeur: l.editeur || '', langue: l.langue || 'Français', niveau: l.niveau || '', publicCible: l.publicCible || 'tous', motsCles: l.motsCles || '',
     maProgression: utilisateur ? (db.progressions.find(p => p.utilisateurId === utilisateur.id && p.livreId === l.id) || null) : null,
     epub: !!l.epub, pdf: !!l.pdf, couverture: !!l.couverture,
     versionNumerique, versionPhysique,
@@ -362,7 +370,7 @@ async function api(req, res, u) {
     });
   }
   if (pathname === '/api/version' && req.method === 'GET') {
-    return json(res, 200, { version: '1.6.5', formulesEtablissements: true, etablissements: true, apercuGratuit: true, abonnements: true });
+    return json(res, 200, { version: '1.6.9', formulesEtablissements: true, etablissements: true, apercuGratuit: true, abonnements: true });
   }
   if (await ecoles.route(req, res, {db, utilisateur, json, lireCorps, lireBinaire, sauverDB, uid, hashMdp})) return;
   if (await abonnement.route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid})) return;
@@ -437,7 +445,8 @@ async function api(req, res, u) {
     if (!l) return json(res, 404, { erreur: 'Livre introuvable.' });
     let p = db.progressions.find(x => x.utilisateurId === utilisateur.id && x.livreId === l.id);
     if(!abonnement.actif(db,utilisateur))return json(res,402,{erreur:'Un abonnement actif est requis pour valider le livre.'});
-    const estimation=dureeLecture.estimation(l);
+    await calculerDuree(l);const estimation=dureeLecture.estimation(l);
+    if(estimation.minutes===null)return json(res,409,{erreur:"La durée ne peut pas être calculée : vérifiez le fichier du document."});
     if(!p?.termine && ((p?.secondesLecture||0)<estimation.secondesRequises || (p?.pourcentage||0)<95))return json(res,409,{erreur:`Validation indisponible : atteignez 95 % du parcours et ${Math.ceil(estimation.secondesRequises/60)} minutes actives de lecture. Il reste ${Math.ceil(Math.max(0,estimation.secondesRequises-(p?.secondesLecture||0))/60)} minute(s).`,estimationLecture:estimation});
     if (!p) { p = { id: uid(), utilisateurId: utilisateur.id, livreId: l.id, pourcentage: 100, termine: false, creeLe: maintenant() }; db.progressions.push(p); }
     if (!p.termine) { p.termine = true; p.pourcentage = 100; p.termineLe = maintenant(); journal('Lecture terminée', utilisateur, l.titre); }
@@ -1184,6 +1193,7 @@ async function api(req, res, u) {
   if (seg[1] === 'livres' && seg[2] && !seg[3] && m === 'GET') {
     const l = db.livres.find(x => x.id === seg[2]);
     if (!l) return json(res, 404, { erreur: 'Livre introuvable.' });
+    await calculerDuree(l);
     return json(res, 200, vueLivre(l, utilisateur));
   }
   if (pathname === '/api/livres' && m === 'POST') {
@@ -1194,7 +1204,7 @@ async function api(req, res, u) {
     if (!c.titre || !c.auteur || !c.categorie) return json(res, 400, { erreur: 'Titre, auteur et catégorie requis.' });
     const l = { id: uid(), titre: c.titre, auteur: c.auteur, categorie: c.categorie, type: c.type === 'physique' ? 'physique' : 'numerique',
       resume: c.resume || '', couleur: c.couleur || '#1e4fa3', icone: c.icone || '📘', annee: c.annee || new Date().getFullYear(),
-      isbn: c.isbn || '', editeur: c.editeur || '', langue: c.langue || 'Français', dureeLectureMinutes:c.dureeLectureMinutes||null,seuilLecture:c.seuilLecture===undefined?70:Number(c.seuilLecture),niveau: c.niveau || '', publicCible: c.publicCible || 'tous', motsCles: c.motsCles || '',
+      isbn: c.isbn || '', edition:String(c.edition||'').slice(0,300),editeur: c.editeur || '', langue: c.langue || 'Français', seuilLecture:c.seuilLecture===undefined?70:Number(c.seuilLecture),niveau: c.niveau || '', publicCible: c.publicCible || 'tous', motsCles: c.motsCles || '',
       contenu: c.contenu || null, notes: [], nbLectures: 0, nbTelechargements: 0, creeLe: maintenant() };
     db.livres.push(l); journal('Livre ajouté', utilisateur, l.titre); sauverDB();
     return json(res, 201, vueLivre(l, utilisateur));
@@ -1218,7 +1228,7 @@ async function api(req, res, u) {
     if(!dureeLecture.valide(c))return json(res,400,{erreur:'Durée (1 à 100000 minutes) ou seuil (1 à 100 %) invalide.'});
     if(c.publicCible !== undefined && !['tous','scolaire','universitaire','technique_professionnel'].includes(c.publicCible)) return json(res,400,{erreur:'Public cible invalide.'});
     if (['titre','auteur','categorie'].some(k => c[k] !== undefined && (typeof c[k] !== 'string' || !c[k].trim()))) return json(res,400,{erreur:'Titre, auteur et catégorie ne doivent pas être vides.'});
-    ['titre','auteur','categorie','resume','couleur','icone','annee','isbn','contenu','type','editeur','langue','niveau','publicCible','dureeLectureMinutes','seuilLecture','motsCles'].forEach(k => { if (c[k] !== undefined) db.livres[idx][k] = c[k]; });
+    ['titre','auteur','categorie','resume','couleur','icone','annee','isbn','contenu','type','editeur','edition','langue','niveau','publicCible','seuilLecture','motsCles'].forEach(k => { if (c[k] !== undefined) db.livres[idx][k] = c[k]; });
     sauverDB();
     return json(res, 200, vueLivre(db.livres[idx], utilisateur));
   }

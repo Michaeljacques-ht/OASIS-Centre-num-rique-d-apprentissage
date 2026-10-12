@@ -1,0 +1,13 @@
+window.OasisMetadonnees=(()=>{
+ const propre=s=>String(s||'').replace(/\s+/g,' ').trim().slice(0,300);
+ const edition=t=>propre(t.match(/\b(?:\d{1,2}\s*(?:e|ème|eme|re|ère)|première|deuxième|troisième|nouvelle|édition)\s+[ée]dition(?:\s+(?:revue|corrigée|augmentée|actualisée))?/i)?.[0]||t.match(/\b[ée]dition\s*[:–-]\s*([^\n]{2,70})/i)?.[1]);
+ async function lire(f){if(!f||f.size>50*1024*1024)return {};if(/\.epub$/i.test(f.name)){
+ const z=await JSZip.loadAsync(await f.arrayBuffer());let total=0;for(const x of Object.values(z.files)){total+=x._data?.uncompressedSize||0;if(total>80*1024*1024)throw Error('EPUB trop volumineux pour l’analyse.')}
+ const read=async name=>{const x=z.file(name);if(!x||(x._data?.uncompressedSize||0)>2*1024*1024)return '';return x.async('string')};const xml=s=>new DOMParser().parseFromString(s,'application/xml');const container=xml(await read('META-INF/container.xml'));const name=container.getElementsByTagNameNS('*','rootfile')[0]?.getAttribute('full-path');if(!name)return {};const opf=xml(await read(name));const values=k=>[...opf.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/',k)].map(n=>propre(n.textContent)).filter(Boolean);let ed=[...opf.getElementsByTagNameNS('*','meta')].find(n=>/^(?:edition|schema:bookEdition)$/i.test(n.getAttribute('name')||n.getAttribute('property')||''));let extrait='';const prefix=name.slice(0,name.lastIndexOf('/')+1);const manifest=new Map([...opf.getElementsByTagNameNS('*','item')].map(x=>[x.id,x]));for(const ref of [...opf.getElementsByTagNameNS('*','itemref')].slice(0,3)){const href=manifest.get(ref.getAttribute('idref'))?.getAttribute('href');if(href&&!/^(?:[a-z]+:|\/|\.\.)/i.test(href)){const doc=new DOMParser().parseFromString(await read(prefix+decodeURIComponent(href.split('#')[0])),'text/html');extrait+='\n'+doc.body.textContent}}
+ return {titre:values('title')[0]||'',auteur:values('creator').join(', '),editeur:values('publisher').join(', '),edition:propre(ed?.getAttribute('content')||ed?.textContent)||edition(extrait)};
+ }
+ if(/\.pdf$/i.test(f.name)){pdfjsLib.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/pdf.worker.min.js';const doc=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise;try{const m=await doc.getMetadata();let extrait='';for(let i=1;i<=Math.min(3,doc.numPages);i++){const t=await (await doc.getPage(i)).getTextContent();extrait+='\n'+t.items.map(x=>x.str+(x.hasEOL?'\n':' ')).join('')};return {titre:propre(m.info?.Title),auteur:propre(m.info?.Author||m.metadata?.get('dc:creator')),editeur:propre(m.metadata?.get('dc:publisher')||extrait.match(/(?:éditeur|publisher)\s*[:：]\s*([^\n]{2,100})/i)?.[1]),edition:edition(extrait)}}finally{await doc.destroy()}}
+ return {};
+ }
+ return {lire};
+})();

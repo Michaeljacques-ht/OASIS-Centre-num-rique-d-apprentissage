@@ -407,3 +407,5 @@ tr:hover td { background: #f7f9fd; }
 .ecole-offre{display:flex;justify-content:space-between;align-items:center;gap:20px;background:#eef4fc;border:1px solid #dbe5f4;border-radius:16px;padding:22px;margin:24px 0}.ecole-offre h3{color:#123e79}.ecole-offre p{margin:8px 0;line-height:1.6}.ecole-offre .btn{background:#123e79;color:#fff;text-align:center;flex-shrink:0}@media(max-width:650px){.ecole-offre{flex-direction:column;align-items:stretch;padding:18px}.ecole-offre .btn{white-space:normal}}
 
 .lecture-assistance{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px;background:#edf4fb;border-radius:12px}.lecture-assistance small{flex-basis:100%;color:#34475e}.lecture-assistance [data-time]{font-size:13px;font-weight:600}
+
+.catalogue-recherche{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:16px 0}.catalogue-recherche .champ{flex:1;min-width:200px;margin:0}.catalogue-recherche p{flex-basis:100%;font-size:13px;color:var(--gris)}.table-catalogue tr[hidden]{display:none!important}@media(max-width:600px){.catalogue-recherche .champ{flex-basis:100%}.catalogue-recherche input{width:100%}}

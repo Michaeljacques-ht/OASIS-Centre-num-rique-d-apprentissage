@@ -89,8 +89,9 @@
             <button class="btn btn-ajouter-livre" id="btnNouveauLivre">+ Ajouter un livre</button>
             <button class="btn btn-bleu" id="btnNouveauEpub">+ Ajouter EPUB</button>
           </span></div>
-        <div class="catalogue-table-scroll" role="region" aria-label="Catalogue des livres" tabindex="0"><table class="table-catalogue"><thead><tr><th>Titre</th><th>Auteur</th><th>Catégorie</th><th>Versions</th><th>Disponibilité</th><th>Actions</th></tr></thead><tbody>
-        ${livres.map(l => `<tr>
+        <div class="catalogue-recherche"><div class="champ"><label for="rechercheCatalogue">Rechercher dans le catalogue</label><input id="rechercheCatalogue" type="search" placeholder="Titre, auteur, catégorie, ISBN…" autocomplete="off" aria-controls="catalogueLignes"></div><button class="btn" id="effacerRechercheCatalogue">Effacer</button><p id="resultatsCatalogue" role="status" aria-live="polite"></p></div>
+        <div class="catalogue-table-scroll" role="region" aria-label="Catalogue des livres" tabindex="0"><table class="table-catalogue"><thead><tr><th>Titre</th><th>Auteur</th><th>Catégorie</th><th>Versions</th><th>Disponibilité</th><th>Actions</th></tr></thead><tbody id="catalogueLignes">
+        ${livres.map(l => `<tr data-catalogue-recherche="${echap([l.titre,l.auteur,l.categorie,l.isbn,l.editeur,l.niveau,l.motsCles].filter(Boolean).join(' '))}">
           <td>${l.icone} <b>${echap(l.titre)}</b></td>
           <td>${echap(l.auteur)}</td>
           <td>${echap(l.categorie)}</td>
@@ -107,7 +108,7 @@
             <button class="mini-btn rouge" data-supprimer="${l.id}">Supprimer</button>
           </div></td>
         </tr>`).join('')}
-        </tbody></table></div>`;
+        </tbody></table></div><p class="vide" id="catalogueAucunResultat" hidden>Aucun document ne correspond à votre recherche.</p>`;
     },
     async reservations() {
       const toutes = await api('/reservations');
@@ -358,14 +359,14 @@
       </div>
       <div class="admin-form-grid">
         <div class="champ"><label for="fEditeur">Éditeur</label><input id="fEditeur" placeholder="Ex. : Éduca Diffusion"></div>
-        <div class="champ"><label for="fIsbn">ISBN</label><input id="fIsbn" placeholder="Ex. : 978-…"></div>
+        <div class="champ"><label for="fEdition">Édition (récupérée si disponible)</label><input id="fEdition"></div><div class="champ"><label for="fIsbn">ISBN</label><input id="fIsbn" placeholder="Ex. : 978-…"></div>
       </div>
       <div class="admin-form-grid">
         <div class="champ"><label for="fLangue">Langue</label>
           <select id="fLangue"><option>Français</option><option>Créole haïtien</option><option>Anglais</option><option>Espagnol</option></select></div>
         <div class="champ"><label for="fPublicCible">Public cible</label><select id="fPublicCible"><option value="tous">Tous niveaux</option><option value="scolaire">Scolaire</option><option value="universitaire">Universitaire</option><option value="technique_professionnel">Technique et professionnel</option></select><label for="fNiveau">Classe ou spécialité (facultatif)</label><input id="fNiveau" placeholder="Ex. : NS4, 9e AF, Universitaire…"></div>
       </div>
-      <div class="admin-form-grid"><div class="champ"><label for="fDuree">Durée de lecture (minutes, facultatif)</label><input id="fDuree" type="number" min="1" max="100000" placeholder="Automatique si vide"></div><div class="champ"><label for="fSeuil">Temps minimum requis (%)</label><input id="fSeuil" type="number" min="1" max="100" value="70"></div></div><div class="champ"><label for="fMotsCles">Mots-clés (séparés par des virgules)</label><input id="fMotsCles" placeholder="Ex. : astronomie, planètes, cosmos"></div>
+      <div class="admin-form-grid"><p>La durée sera calculée automatiquement après l’ajout du document.</p><div class="champ"><label for="fSeuil">Temps minimum requis (%)</label><input id="fSeuil" type="number" min="1" max="100" value="70"></div></div><div class="champ"><label for="fMotsCles">Mots-clés (séparés par des virgules)</label><input id="fMotsCles" placeholder="Ex. : astronomie, planètes, cosmos"></div>
       <div class="champ"><label for="fResume">Résumé</label><textarea id="fResume" rows="3" placeholder="Brève présentation de l'ouvrage…"></textarea></div>
       <div class="rangee-boutons">
         <button class="btn btn-bleu" id="btnValiderLivre">Ajouter le livre</button>
@@ -380,6 +381,8 @@
     $('#fType').addEventListener('change', majChamps);
     if(modeEpub){$('#fType').value="numerique";$('#fPdf').accept=".epub,application/epub+zip";$('#fPdf').onchange=()=>{const f=$('#fPdf').files[0];if(f&&!$('#fTitre').value)$('#fTitre').value=f.name.replace(/\.epub$/i,'');};}
     majChamps();
+    const dirty=new Set();['fTitre','fAuteur','fEditeur','fEdition'].forEach(k=>$('#'+k).addEventListener('input',()=>dirty.add(k)));
+    $('#fPdf').addEventListener('change',async()=>{const f=$('#fPdf').files[0];if(!f)return;const btn=$('#btnValiderLivre');btn.disabled=true;try{const meta=await OasisMetadonnees.lire(f);if(!$('#fPdf')||$('#fPdf').files[0]!==f)return;for(const [k,id] of Object.entries({titre:'fTitre',auteur:'fAuteur',editeur:'fEditeur',edition:'fEdition'}))if(meta[k]&&!dirty.has(id))$('#'+id).value=meta[k];$('#msgForm').textContent='Métadonnées récupérées si disponibles. Vérifiez les champs avant l’ajout.'}catch(e){if($('#msgForm'))$('#msgForm').textContent='Métadonnées non disponibles : complétez les informations manuellement.'}finally{if(btn.isConnected)btn.disabled=false}});
     let livreCree = null;
     $('#btnValiderLivre').addEventListener('click', async () => {
       const btn = $('#btnValiderLivre');
@@ -392,8 +395,8 @@
           categorie: $('#fCategorie').value, type,
           annee: parseInt($('#fAnnee').value, 10), icone: $('#fIcone').value || '📘',
           couleur: $('#fCouleur').value, resume: $('#fResume').value.trim(),
-          editeur: $('#fEditeur').value.trim(), isbn: $('#fIsbn').value.trim(), langue: $('#fLangue').value,
-          dureeLectureMinutes:$('#fDuree').value||null,seuilLecture:Number($('#fSeuil').value),publicCible: $('#fPublicCible').value, niveau: $('#fNiveau').value.trim(), motsCles: $('#fMotsCles').value.trim(),
+          edition:$('#fEdition').value.trim(),editeur: $('#fEditeur').value.trim(), isbn: $('#fIsbn').value.trim(), langue: $('#fLangue').value,
+          seuilLecture:Number($('#fSeuil').value),publicCible: $('#fPublicCible').value, niveau: $('#fNiveau').value.trim(), motsCles: $('#fMotsCles').value.trim(),
           contenu: type !== 'physique' ? ($('#fContenu').value || null) : null
         }) });
         livreCree = livre;
@@ -460,8 +463,8 @@
   }
   async function modifierLivre(id) {
     const l=await api('/livres/'+id);
-    const champs=[['titre','Titre'],['auteur','Auteur'],['categorie','Catégorie'],['editeur','Éditeur'],['isbn','ISBN'],['langue','Langue'],['dureeLectureMinutes','Durée estimée (minutes, vide = automatique)'],['seuilLecture','Temps minimum requis (%)'],['publicCible','Public cible'],['niveau','Classe ou spécialité'],['motsCles','Mots-clés'],['annee','Année'],['icone','Icône'],['couleur','Couleur']];
-    modale(`<h3>Modifier le document</h3><div id="msgModification"></div><div class="form-document">${champs.map(([k,n])=>`<div class="champ"><label for="edit-${k}">${n}</label>${k==='publicCible' ? `<select id="edit-${k}">${['tous','scolaire','universitaire','technique_professionnel'].map((v,i)=>`<option value="${v}" ${(l.publicCible||'tous')===v?'selected':''}>${['Tous niveaux','Scolaire','Universitaire','Technique et professionnel'][i]}</option>`).join('')}</select>` : `<input id="edit-${k}" value="${echap(k==='seuilLecture'?(l[k]===undefined?70:l[k]):(l[k]||''))}" ${k==='annee'?'type="number"':k==='couleur'?'type="color"':''}>`}</div>`).join('')}</div><div class="champ"><label for="edit-resume">Résumé</label><textarea id="edit-resume" rows="4">${echap(l.resume||'')}</textarea></div><button class="btn btn-bleu" id="saveDocument">Enregistrer</button><section class="document-apercu"><h4>Couverture du document</h4>${l.couverture ? `<a href="/api/livres/${l.id}/couverture" target="_blank" rel="noopener"><img src="/api/livres/${l.id}/couverture" alt="Couverture de ${echap(l.titre)}"></a>` : `<p>Aucune couverture disponible pour ce document.</p>`}<p><b>${echap(l.titre)}</b><br>${echap(l.auteur)} · ${echap(l.annee || "Année non renseignée")}</p><p>Formats disponibles : ${[l.pdf ? "PDF" : "", l.epub ? "EPUB" : ""].filter(Boolean).join(" / ") || "Aucun fichier joint"}</p>${l.pdf || l.epub ? '<h4>Consulter le document</h4><p>Feuilletez les pages pour retrouver l’auteur, l’éditeur, l’année et les autres informations.</p><div id="apercuEdition"></div>' : ''}</section>`);
+    const champs=[['titre','Titre'],['auteur','Auteur'],['categorie','Catégorie'],['editeur','Éditeur'],['edition','Édition'],['isbn','ISBN'],['langue','Langue'],['seuilLecture','Temps minimum requis (%)'],['publicCible','Public cible'],['niveau','Classe ou spécialité'],['motsCles','Mots-clés'],['annee','Année'],['icone','Icône'],['couleur','Couleur']];
+    modale(`<h3>Modifier le document</h3><div id="msgModification"></div><p><b>Durée calculée automatiquement : ${l.estimationLecture?.minutes ? l.estimationLecture.minutes+' minutes' : 'Indisponible'}</b><br>${echap(l.estimationLecture?.source||'')}</p><div class="form-document">${champs.map(([k,n])=>`<div class="champ"><label for="edit-${k}">${n}</label>${k==='publicCible' ? `<select id="edit-${k}">${['tous','scolaire','universitaire','technique_professionnel'].map((v,i)=>`<option value="${v}" ${(l.publicCible||'tous')===v?'selected':''}>${['Tous niveaux','Scolaire','Universitaire','Technique et professionnel'][i]}</option>`).join('')}</select>` : `<input id="edit-${k}" value="${echap(k==='seuilLecture'?(l[k]===undefined?70:l[k]):(l[k]||''))}" ${k==='annee'?'type="number"':k==='couleur'?'type="color"':''}>`}</div>`).join('')}</div><div class="champ"><label for="edit-resume">Résumé</label><textarea id="edit-resume" rows="4">${echap(l.resume||'')}</textarea></div><button class="btn btn-bleu" id="saveDocument">Enregistrer</button><section class="document-apercu"><h4>Couverture du document</h4>${l.couverture ? `<a href="/api/livres/${l.id}/couverture" target="_blank" rel="noopener"><img src="/api/livres/${l.id}/couverture" alt="Couverture de ${echap(l.titre)}"></a>` : `<p>Aucune couverture disponible pour ce document.</p>`}<p><b>${echap(l.titre)}</b><br>${echap(l.auteur)} · ${echap(l.annee || "Année non renseignée")}</p><p>Formats disponibles : ${[l.pdf ? "PDF" : "", l.epub ? "EPUB" : ""].filter(Boolean).join(" / ") || "Aucun fichier joint"}</p>${l.pdf || l.epub ? '<h4>Consulter le document</h4><p>Feuilletez les pages pour retrouver l’auteur, l’éditeur, l’année et les autres informations.</p><div id="apercuEdition"></div>' : ''}</section>`);
     if(l.pdf||l.epub)OasisApercuDocument.open(l,jeton,$('#apercuEdition'));
     $('#saveDocument').onclick=async()=>{try{const body={};champs.forEach(([k])=>body[k]=$('#edit-'+k).value.trim());body.annee=Number(body.annee)||null;body.resume=$('#edit-resume').value;await api('/livres/'+id,{method:'PUT',body:JSON.stringify(body)});fermerModale();toast('Document modifié.');afficherOnglet('catalogue');}catch(e){$('#msgModification').textContent=e.message}};
   }
@@ -774,9 +777,9 @@
       <div class="champ"><label for="epubLotNiveau">Public cible du lot</label><select id="epubLotNiveau"><option value="tous">Tous niveaux</option><option value="scolaire">Scolaire</option><option value="universitaire">Universitaire</option><option value="technique_professionnel">Technique et professionnel</option></select></div><div id="epubLotListe"></div><p id="epubLotMessage" role="status"></p>
       <div class="rangee-boutons"><button class="btn btn-bleu" id="epubLotImporter" disabled>Importer les documents</button><button class="btn" id="epubLotFermer">Fermer</button></div>`);
     const input=$('#epubMultiples'),liste=$('#epubLotListe'),message=$('#epubLotMessage'),btn=$('#epubLotImporter'),fermer=$('#epubLotFermer');
-    let lignes=[],enCours=false;
+    let lignes=[],enCours=false;liste.addEventListener('input',e=>e.target.dataset.modifie='1');
     fermer.onclick=()=>{if(!enCours)fermerModale()};
-    input.onchange=()=>{
+    input.onchange=async()=>{
       lignes=[...input.files].map(f=>({f,id:null,ok:false}));
       liste.innerHTML=lignes.map(({f},i)=>{
         const nom=analyserNomFichier(f.name.replace(/\.epub$/i,'.pdf'));
@@ -784,9 +787,9 @@
         return `<section class="epub-import-fiche"><b>${echap(f.name)}</b><p>${(f.size/1048576).toFixed(1)} Mo</p>
         <div class="admin-form-grid"><div class="champ"><label>Titre<input data-epub-titre="${i}" value="${echap(nom.titre)}"></label></div><div class="champ"><label>Auteur<input data-epub-auteur="${i}" value="${echap(nom.auteur||'Auteur à préciser')}"></label></div></div>
         <div class="champ"><label>Catégorie<select data-epub-cat="${i}">${optionsCategories(classerParTitre(nom.titre))}</select></label></div>
-        <p data-epub-statut="${i}" role="status">${valide?'Prêt à importer':'Fichier vide, format incorrect ou taille supérieure à 50 Mo.'}</p></section>`;
+        <div class="admin-form-grid"><div class="champ"><label>Éditeur<input data-epub-editeur="${i}"></label></div><div class="champ"><label>Édition<input data-epub-edition="${i}"></label></div></div><p data-epub-statut="${i}" role="status">${valide?'Prêt à importer':'Fichier vide, format incorrect ou taille supérieure à 50 Mo.'}</p></section>`;
       }).join('');
-      message.textContent='';btn.disabled=!lignes.some(({f})=>/\.epub$/i.test(f.name)&&f.size>0&&f.size<=50*1024*1024);
+      message.textContent='Analyse des métadonnées…';btn.disabled=true;const lot=lignes;for(let i=0;i<lot.length;i++){try{const meta=await OasisMetadonnees.lire(lot[i].f);if(lignes!==lot||!liste.isConnected)return;for(const k of ['titre','auteur','editeur','edition']){const el=liste.querySelector(`[data-epub-${k}="${i}"]`);if(meta[k]&&el&&!el.dataset.modifie)el.value=meta[k]}}catch(e){}}message.textContent='Vérifiez les informations récupérées avant l’import.';btn.disabled=!lignes.some(({f})=>/\.epub$/i.test(f.name)&&f.size>0&&f.size<=50*1024*1024);
     };
     btn.onclick=async()=>{
       enCours=true;btn.disabled=true;input.disabled=true;fermer.disabled=true;
@@ -799,9 +802,9 @@
         btn.textContent=`Import ${i+1}/${lignes.length}…`;statut.textContent='Envoi en cours…';
         try{
           const titre=liste.querySelector(`[data-epub-titre="${i}"]`).value.trim(),auteur=liste.querySelector(`[data-epub-auteur="${i}"]`).value.trim()||'Auteur à préciser',categorie=liste.querySelector(`[data-epub-cat="${i}"]`).value;
-          if(!titre)throw Error('Renseignez le titre.');
-          if(!ligne.id){const livre=await api('/livres',{method:'POST',body:JSON.stringify({titre,auteur,categorie,publicCible:$('#epubLotNiveau').value,type:'numerique'})});ligne.id=livre.id;}
-          else await api('/livres/'+ligne.id,{method:'PUT',body:JSON.stringify({titre,auteur,categorie,publicCible:$('#epubLotNiveau').value})});
+          const editeur=liste.querySelector(`[data-epub-editeur="${i}"]`).value.trim(),edition=liste.querySelector(`[data-epub-edition="${i}"]`).value.trim();if(!titre)throw Error('Renseignez le titre.');
+          if(!ligne.id){const livre=await api('/livres',{method:'POST',body:JSON.stringify({titre,auteur,categorie,editeur,edition,publicCible:$('#epubLotNiveau').value,type:'numerique'})});ligne.id=livre.id;}
+          else await api('/livres/'+ligne.id,{method:'PUT',body:JSON.stringify({titre,auteur,categorie,editeur,edition,publicCible:$('#epubLotNiveau').value})});
           await envoyerEpub(ligne.id,f);ligne.ok=true;statut.textContent='✓ Importé';
           liste.querySelectorAll(`[data-epub-titre="${i}"],[data-epub-auteur="${i}"],[data-epub-cat="${i}"]`).forEach(el=>el.disabled=true);
         }catch(err){echecs++;statut.textContent='Échec : '+err.message;}
@@ -830,11 +833,11 @@
         <button class="btn" onclick="document.getElementById('zoneModale').innerHTML=''">Fermer</button>
       </div>`);
     let filesPdf = [];
-    $('#fPdfMultiples').addEventListener('change', e => {
+    $('#fPdfMultiples').addEventListener('change', async e => {
       filesPdf = [...e.target.files];
       if (!filesPdf.length) return;
       $('#apercuPdf').innerHTML = `
-        <table style="margin:10px 0"><thead><tr><th>Titre</th><th>Auteur</th><th>Catégorie (auto)</th><th>Taille</th></tr></thead><tbody>
+        <table style="margin:10px 0"><thead><tr><th>Titre</th><th>Auteur</th><th>Éditeur</th><th>Édition</th><th>Catégorie (auto)</th><th>Taille</th></tr></thead><tbody>
         ${filesPdf.map((f, i) => {
           const { titre, auteur } = analyserNomFichier(f.name);
           const cat = classerParTitre(titre);
@@ -842,13 +845,14 @@
           return `<tr ${tropGros ? 'style="opacity:.5"' : ''}>
             <td><input data-imp-titre="${i}" value="${echap(titre)}" style="width:100%;border:1px solid var(--bord);border-radius:6px;padding:5px 8px"></td>
             <td><input data-imp-auteur="${i}" value="${echap(auteur)}" placeholder="À préciser" style="width:100%;border:1px solid var(--bord);border-radius:6px;padding:5px 8px"></td>
-            <td><select data-imp-cat="${i}" style="border:1px solid var(--bord);border-radius:6px;padding:5px 8px">
+            <td><input data-imp-editeur="${i}"></td><td><input data-imp-edition="${i}"></td><td><select data-imp-cat="${i}" style="border:1px solid var(--bord);border-radius:6px;padding:5px 8px">
               ${optionsCategories(listeCategories.includes(cat) ? cat : listeCategories[0])}</select></td>
             <td style="white-space:nowrap">${(f.size / 1048576).toFixed(1)} Mo ${tropGros ? '<span class="retard">✖ trop gros</span>' : ''}</td>
           </tr>`;
         }).join('')}
         </tbody></table>
         <p style="font-size:12.5px;color:var(--gris)">💡 Le titre est modifiable, et la catégorie proposée peut être corrigée avant l'import.</p>`;
+      $('#btnLancerImportPdf').disabled=true;const lot=filesPdf;$('#apercuPdf').oninput=e=>e.target.dataset.modifie='1';for(let i=0;i<lot.length;i++){try{const meta=await OasisMetadonnees.lire(lot[i]);if(filesPdf!==lot||!$('#apercuPdf'))return;for(const k of ['titre','auteur','editeur','edition']){const el=document.querySelector(`[data-imp-${k}="${i}"]`);if(meta[k]&&el&&!el.dataset.modifie)el.value=meta[k]}}catch(e){}}
       $('#btnLancerImportPdf').disabled = !filesPdf.some(f => f.size <= 50 * 1024 * 1024);
     });
     $('#btnLancerImportPdf').addEventListener('click', async () => {
@@ -864,7 +868,7 @@
           const titre = document.querySelector(`[data-imp-titre="${i}"]`).value.trim() || analyserNomFichier(f.name).titre;
           const auteur = document.querySelector(`[data-imp-auteur="${i}"]`).value.trim() || 'Auteur à préciser';
           const categorie = document.querySelector(`[data-imp-cat="${i}"]`).value;
-          const livre = await api('/livres', { method: 'POST', body: JSON.stringify({ titre, auteur, categorie, type: 'numerique' }) });
+          const editeur=document.querySelector(`[data-imp-editeur="${i}"]`).value.trim(),edition=document.querySelector(`[data-imp-edition="${i}"]`).value.trim();const livre = await api('/livres', { method: 'POST', body: JSON.stringify({ titre, auteur, categorie, editeur,edition,type: 'numerique' }) });
           await envoyerPdf(livre.id, f);
           await genererCouverture(livre.id, f);
           ok++;
@@ -899,8 +903,13 @@
   }
 
   // ---------- Branchement des boutons dynamiques ----------
+  let rechercheCatalogue = "";
+  const normaliserRecherche=s=>String(s||" ").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const ongletsEtat = {};
   function brancherBoutons() {
+    const recherche=$('#rechercheCatalogue');
+    if(recherche){recherche.value=rechercheCatalogue;const filtrer=()=>{rechercheCatalogue=recherche.value;const mots=normaliserRecherche(rechercheCatalogue).trim().split(/\s+/).filter(Boolean);const lignes=[...document.querySelectorAll('[data-catalogue-recherche]')];let total=0;for(const ligne of lignes){const texte=normaliserRecherche(ligne.dataset.catalogueRecherche);ligne.hidden=!mots.every(m=>texte.includes(m));if(!ligne.hidden)total++}$('#resultatsCatalogue').textContent=total+' document(s) affiché(s) sur '+lignes.length;$('#catalogueAucunResultat').hidden=total!==0;};recherche.addEventListener('input',filtrer);$('#effacerRechercheCatalogue').onclick=()=>{recherche.value='';filtrer();recherche.focus()};filtrer();}
+
     $('#btnNouvelEmprunt')?.addEventListener('click', formEmpruntGuichet);
     document.querySelectorAll('[data-modifier-livre]').forEach(b=>b.addEventListener('click',()=>modifierLivre(b.dataset.modifierLivre).catch(e=>toast(e.message))));
     document.querySelectorAll('[data-epub]').forEach(b=>b.addEventListener('click',()=>joindreEpub(b.dataset.epub)));

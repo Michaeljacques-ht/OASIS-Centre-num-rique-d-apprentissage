@@ -43,7 +43,7 @@ async function request(route,token,method='GET',body){const r=await fetch(base+'
  assert.equal((await request('/livres/'+gated.id+'/terminer',admin,'POST')).code,200);
  assert.equal((await request('/livres/'+gated.id,learner)).data.maProgression,null);
  assert.equal((await request('/livres/'+gated.id,admin,'PUT',{seuilLecture:0})).code,400);
- const estimate=require('../modules/duree-lecture');assert.equal(estimate.estimation({contenu:'mot '.repeat(400)}).minutes,2);assert.equal(estimate.estimation({nbPagesLecture:8}).minutes,10);
+ const estimate=require('../modules/duree-lecture');assert.equal(estimate.estimation({contenu:'mot '.repeat(400)}).minutes,2);assert.equal(estimate.estimation({nbPagesLecture:8}).minutes,10);assert.equal(estimate.estimation({contenu:'mot '.repeat(400),dureeLectureMinutes:999}).minutes,2);assert.equal(estimate.estimation({}).minutes,null);
  const prices={mensuel:650,annuel:6500,petite:60000,moyenne:120000,grande:180000};
  assert.equal((await request('/parametres',learner,'PUT',{tarifsAbonnement:prices})).code,403);
  assert.equal((await request('/parametres',admin,'PUT',{tarifsAbonnement:{...prices,mensuel:-1}})).code,400);
