@@ -20,7 +20,7 @@ module.exports.route=async(req,res,c)=>{
    if(offre&&E.effectif(db,school)>offre.limiteEleves)return send(409,{erreur:'Cette formule ne couvre pas tous vos élèves actifs.'});
    if(offre&&E.active(school)&&offre.limiteEleves<E.quota(school))return send(409,{erreur:'Une baisse de formule est possible après expiration, avec un effectif compatible.'});
    if(!PP.passerelleActive())return send(503,{erreur:'Les paiements ne sont pas encore configurés par l’administration.'});
-   const commande={id:'ABO-'+uid(),utilisateurId:u.id,plan:b.plan,ecoleId:b.plan==='etablissement'?school.id:null,formule,limiteEleves:offre?.limiteEleves,montant:b.plan==='etablissement'?offre.montant:b.plan==='mensuel'?500:5000,statut:'en_attente',creeLe:new Date().toISOString()};db.commandesAbonnement.push(commande);sauverDB();
+   const commande={id:'ABO-'+uid(),utilisateurId:u.id,plan:b.plan,ecoleId:b.plan==='etablissement'?school.id:null,formule,limiteEleves:offre?.limiteEleves,montant:require('./tarifs').lire(db)[b.plan==='etablissement'?formule:b.plan],statut:'en_attente',creeLe:new Date().toISOString()};db.commandesAbonnement.push(commande);sauverDB();
    const r=await PP.initierPaiement({reference:commande.id,montant:commande.montant,methode:'all'});
    if(!r.ok){commande.statut='erreur';sauverDB();return send(502,{erreur:r.error})}
    try{if(new URL(r.urlPaiement).protocol!=='https:')throw Error()}catch{commande.statut='erreur';sauverDB();return send(502,{erreur:'Adresse de paiement invalide.'})}

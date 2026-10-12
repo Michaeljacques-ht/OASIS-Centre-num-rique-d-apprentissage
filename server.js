@@ -10,9 +10,12 @@ const crypto = require('crypto');
 const url = require('url');
 
 const abonnement = require('./modules/abonnement');
+const tarifs=require('./modules/tarifs');
+const dureeLecture=require('./modules/duree-lecture');
 const ecoles = require('./modules/ecoles');
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
+const baseJSON=require('./modules/base-json');
 const PUBLIC = path.join(__dirname, 'public');
 
 // Les règles de fonctionnement sont des paramètres modifiables dans l'espace bibliothécaire
@@ -36,8 +39,9 @@ function seedParametres() {
 // ---------- Base de données JSON ----------
 let db = null;
 function chargerDB() {
-  if (fs.existsSync(DB_PATH)) {
-    db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  const chargee=baseJSON.charger(DB_PATH);
+  if (chargee) {
+    db = chargee;
     // Migration douce : les bases créées avant ces fonctionnalités reçoivent les nouvelles collections
     if (!db.reservations) db.reservations = [];
     if (!db.placesLecture) db.placesLecture = [];
@@ -76,16 +80,20 @@ function chargerDB() {
     sauverDB();
   }
 }
-let ecritureEnAttente = false;
-function sauverDB() {
-  if (ecritureEnAttente) return;
-  ecritureEnAttente = true;
-  setTimeout(() => {
-    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-    ecritureEnAttente = false;
-  }, 50);
+let ecritureEnAttente = false, minuteurSauvegarde=null;
+function flushDB(){
+  if(!ecritureEnAttente||!db)return;
+  if(minuteurSauvegarde){clearTimeout(minuteurSauvegarde);minuteurSauvegarde=null}
+  baseJSON.sauver(DB_PATH,db);ecritureEnAttente=false;
 }
+function sauverDB() {
+  ecritureEnAttente=true;
+  if(minuteurSauvegarde)return;
+  minuteurSauvegarde=setTimeout(()=>{minuteurSauvegarde=null;try{flushDB()}catch(err){console.error('SAUVEGARDE ÉCHOUÉE (données en mémoire conservées) :',err);}},50);
+}
+process.on('SIGTERM',()=>{try{flushDB();process.exitCode=0}catch(err){console.error('Sauvegarde avant arrêt impossible :',err);process.exitCode=1}process.exit(process.exitCode)});
+process.on('SIGINT',()=>{try{flushDB();process.exit(0)}catch(err){console.error(err);process.exit(1)}});
+
 const uid = () => crypto.randomBytes(8).toString('hex');
 const maintenant = () => new Date().toISOString();
 const hashMdp = (mdp, sel) => {
@@ -259,10 +267,10 @@ function vueLivre(l, utilisateur) {
     };
   }
   return {
-    accesComplet: abonnement.actif(db, utilisateur), id: l.id, titre: l.titre, auteur: l.auteur, categorie: l.categorie, type: l.type,
+    estimationLecture:dureeLecture.estimation(l),dureeLectureMinutes:l.dureeLectureMinutes||'',seuilLecture:l.seuilLecture===undefined?70:l.seuilLecture, accesComplet: abonnement.actif(db, utilisateur), id: l.id, titre: l.titre, auteur: l.auteur, categorie: l.categorie, type: l.type,
     resume: l.resume, couleur: l.couleur, icone: l.icone, annee: l.annee, isbn: l.isbn,
     note: moyenneNotes(l), nbNotes: l.notes.length, nbLectures: l.nbLectures,
-    editeur: l.editeur || '', langue: l.langue || 'Français', niveau: l.niveau || '', motsCles: l.motsCles || '',
+    editeur: l.editeur || '', langue: l.langue || 'Français', niveau: l.niveau || '', publicCible: l.publicCible || 'tous', motsCles: l.motsCles || '',
     maProgression: utilisateur ? (db.progressions.find(p => p.utilisateurId === utilisateur.id && p.livreId === l.id) || null) : null,
     epub: !!l.epub, pdf: !!l.pdf, couverture: !!l.couverture,
     versionNumerique, versionPhysique,
@@ -336,7 +344,8 @@ async function api(req, res, u) {
   const { pathname, query } = url.parse(req.url, true);
   const seg = pathname.split('/').filter(Boolean); // ['api', ...]
   const utilisateur = authentifier(req);
-  if (pathname === '/api/ecoles/formules' && req.method === 'GET') return json(res, 200, {formules:Object.values(require('./modules/formules-ecoles')),devisAuDela:600});
+  if(pathname==='/api/abonnement/tarifs'&&req.method==='GET')return json(res,200,tarifs.lire(db));
+  if (pathname === '/api/ecoles/formules' && req.method === 'GET') return json(res, 200, {formules:tarifs.formules(db),devisAuDela:600});
   if (pathname === '/api/statistiques-publiques' && req.method === 'GET') {
     db.statistiquesPubliques ||= { visiteurs: 0, depuis: new Date().toISOString() };
     if (!/(?:^|;\s*)oasis_visite=1(?:;|$)/.test(req.headers.cookie || '')) {
@@ -359,7 +368,7 @@ async function api(req, res, u) {
     });
   }
   if (pathname === '/api/version' && req.method === 'GET') {
-    return json(res, 200, { version: '1.6.1', formulesEtablissements: true, etablissements: true, apercuGratuit: true, abonnements: true });
+    return json(res, 200, { version: '1.6.6', formulesEtablissements: true, etablissements: true, apercuGratuit: true, abonnements: true });
   }
   if (await ecoles.route(req, res, {db, utilisateur, json, lireCorps, lireBinaire, sauverDB, uid, hashMdp})) return;
   if (await abonnement.route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid})) return;
@@ -369,14 +378,15 @@ async function api(req, res, u) {
 
   // --- Auth ---
   if (pathname === '/api/inscription' && m === 'POST') {
-    const { nom, email, motDePasse, classe } = await lireCorps(req);
+    const { nom, email, motDePasse, classe, niveau, niveauDetail } = await lireCorps(req);
+    if (niveau !== undefined && !['scolaire','universitaire','technique_professionnel'].includes(niveau)) return json(res,400,{erreur:'Choisissez un niveau valide.'});
     if (!nom || !email || !motDePasse || motDePasse.length < 6) return json(res, 400, { erreur: 'Nom, email et mot de passe (6 caractères min.) requis.' });
     if (db.utilisateurs.some(x => x.email.toLowerCase() === email.toLowerCase())) return json(res, 409, { erreur: 'Un compte existe déjà avec cet email.' });
-    const nu = { id: uid(), nom, email, classe: classe || '', role: 'apprenant', ...hashMdp(motDePasse), creeLe: maintenant() };
+    const nu = { id: uid(), nom, email, classe: classe || '', niveau: niveau || '', niveauDetail: String(niveauDetail || '').slice(0,80), role: 'apprenant', ...hashMdp(motDePasse), creeLe: maintenant() };
     db.utilisateurs.push(nu);
     const jeton = uid() + uid();
     db.sessions[jeton] = nu.id; sauverDB();
-    return json(res, 201, { jeton, utilisateur: { id: nu.id, nom: nu.nom, email: nu.email, role: nu.role, classe: nu.classe } });
+    return json(res, 201, { jeton, utilisateur: ecoles.publicUser(nu) });
   }
   if (pathname === '/api/connexion' && m === 'POST') {
     const { email, motDePasse } = await lireCorps(req);
@@ -397,6 +407,23 @@ async function api(req, res, u) {
   }
 
   // --- Progression de lecture, historique, livres terminés ---
+  if (seg[1] === 'livres' && seg[2] && seg[3] === 'temps-lecture' && m === 'POST') {
+    if (!exigeAuth()) return;
+    const l=db.livres.find(x=>x.id===seg[2]);if(!l)return json(res,404,{erreur:'Livre introuvable.'});
+    const {session,secondes}=await lireCorps(req);
+    if(typeof session!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(session)||!Number.isSafeInteger(secondes)||secondes<0||secondes>86400)return json(res,400,{erreur:'Durée ou session invalide.'});
+    let p=db.progressions.find(x=>x.utilisateurId===utilisateur.id&&x.livreId===l.id);
+    if(!p){p={id:uid(),utilisateurId:utilisateur.id,livreId:l.id,pourcentage:0,termine:false,creeLe:maintenant()};db.progressions.push(p)}
+    p.sessionsTemps=p.sessionsTemps||{};
+    const old=p.sessionsTemps[session]||{secondes:0,debut:Date.now()};
+    const now=Date.now();const budget=Math.min(30,(p.budgetTemps===undefined?20:p.budgetTemps)+Math.min(30,Math.max(0,(now-(p.dernierTempsServeur||now))/1000)));
+    const accepted=old.secondes+Math.min(Math.max(0,secondes-old.secondes),Math.floor(budget));
+    p.budgetTemps=budget-(accepted-old.secondes);p.dernierTempsServeur=now;
+    if(accepted>old.secondes){p.secondesLecture=(p.secondesLecture||0)+accepted-old.secondes;old.secondes=accepted;p.majLe=maintenant()}
+    p.sessionsTemps[session]=old;
+    const keys=Object.keys(p.sessionsTemps);if(keys.length>100)delete p.sessionsTemps[keys[0]];
+    sauverDB();return json(res,200,{secondesLecture:p.secondesLecture||0});
+  }
   if (seg[1] === 'livres' && seg[2] && seg[3] === 'progression' && m === 'POST') {
     if (!exigeAuth()) return;
     const { pourcentage } = await lireCorps(req);
@@ -415,6 +442,9 @@ async function api(req, res, u) {
     const l = db.livres.find(x => x.id === seg[2]);
     if (!l) return json(res, 404, { erreur: 'Livre introuvable.' });
     let p = db.progressions.find(x => x.utilisateurId === utilisateur.id && x.livreId === l.id);
+    if(!abonnement.actif(db,utilisateur))return json(res,402,{erreur:'Un abonnement actif est requis pour valider le livre.'});
+    const estimation=dureeLecture.estimation(l);
+    if(!p?.termine && ((p?.secondesLecture||0)<estimation.secondesRequises || (p?.pourcentage||0)<95))return json(res,409,{erreur:`Validation indisponible : atteignez 95 % du parcours et ${Math.ceil(estimation.secondesRequises/60)} minutes actives de lecture. Il reste ${Math.ceil(Math.max(0,estimation.secondesRequises-(p?.secondesLecture||0))/60)} minute(s).`,estimationLecture:estimation});
     if (!p) { p = { id: uid(), utilisateurId: utilisateur.id, livreId: l.id, pourcentage: 100, termine: false, creeLe: maintenant() }; db.progressions.push(p); }
     if (!p.termine) { p.termine = true; p.pourcentage = 100; p.termineLe = maintenant(); journal('Lecture terminée', utilisateur, l.titre); }
     toucherActivite(utilisateur); sauverDB();
@@ -501,11 +531,11 @@ async function api(req, res, u) {
       ...db.emprunts.filter(e => e.utilisateurId === utilisateur.id).map(e => e.livreId),
       ...db.progressions.filter(p => p.utilisateurId === utilisateur.id && p.termine).map(p => p.livreId)
     ]);
-    const liste = db.livres.filter(l => !dejaVus.has(l.id))
-      .map(l => ({ l, score: (scores[l.categorie] || 0) * 10 + moyenneNotes(l) * 2 + l.nbLectures / 50 }))
+    const liste = db.livres.filter(l => !dejaVus.has(l.id) && (!utilisateur.niveau || !l.publicCible || l.publicCible==='tous' || l.publicCible===utilisateur.niveau))
+      .map(l => ({ l, score: (utilisateur.niveau && l.publicCible===utilisateur.niveau ? 1000 : 0) + (scores[l.categorie] || 0) * 10 + moyenneNotes(l) * 2 + l.nbLectures / 50 }))
       .sort((a, b) => b.score - a.score)
       .map(x => vueLivre(x.l, utilisateur));
-    return json(res, 200, { personnalise: Object.keys(scores).length > 0, interets: Object.entries(scores).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]), livres: liste });
+    return json(res, 200, { niveau: utilisateur.niveau || '', personnalise: !!utilisateur.niveau || Object.keys(scores).length > 0, interets: Object.entries(scores).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]), livres: liste });
   }
 
   // --- Classement et badges ---
@@ -847,12 +877,13 @@ async function api(req, res, u) {
 
   // --- Paramètres de la bibliothèque ---
   if (pathname === '/api/parametres' && m === 'GET') {
-    return json(res, 200, db.parametres);
+    return json(res, 200, {...db.parametres,tarifsAbonnement:tarifs.lire(db)});
   }
   if (pathname === '/api/parametres' && m === 'PUT') {
     if (!exigeBiblio()) return;
     const c = await lireCorps(req);
     const p = db.parametres;
+    if(c.tarifsAbonnement!==undefined){if(!tarifs.valide(c.tarifsAbonnement))return json(res,400,{erreur:'Les cinq prix doivent être des montants entiers de 1 à 10 000 000 HTG.'});p.tarifsAbonnement={...c.tarifsAbonnement};journal('Tarifs des abonnements modifiés',utilisateur,JSON.stringify(p.tarifsAbonnement));}
     ['nom', 'slogan', 'messageAccueil', 'adresse', 'telephone', 'email', 'horaires', 'piedDePage'].forEach(k => {
       if (typeof c[k] === 'string') p[k] = c[k].trim().slice(0, 300);
     });
@@ -1078,7 +1109,7 @@ async function api(req, res, u) {
     if (m === 'POST') {
       let b; try { b = await lireBinaire(req); } catch(e) { return json(res, 413, {erreur:e.message}); }
       if (!require('./modules/epub-valide')(b)) return json(res,400,{erreur:'Le fichier doit être un EPUB valide (mimetype et META-INF/container.xml).'});
-      fs.mkdirSync(DOSSIER_PDF,{recursive:true}); fs.writeFileSync(cheminEpub(l.id),b);l.epub=true;recupererCouvertureEpub(l,true);sauverDB();return json(res,201,{ok:true,couverture:!!l.couverture});
+      fs.mkdirSync(DOSSIER_PDF,{recursive:true}); fs.writeFileSync(cheminEpub(l.id),b);l.epub=true;try{l.nbMotsLecture=dureeLecture.epub(b)}catch(e){console.warn('Estimation EPUB indisponible :',e.message)}recupererCouvertureEpub(l,true);sauverDB();return json(res,201,{ok:true,couverture:!!l.couverture});
     }
     if (m === 'GET') {
       if (!l.epub || !fs.existsSync(cheminEpub(l.id))) return json(res,404,{erreur:'Aucun EPUB associé.'});
@@ -1098,6 +1129,7 @@ async function api(req, res, u) {
     if (!donnees.length || donnees.slice(0, 5).toString() !== '%PDF-') return json(res, 400, { erreur: 'Le fichier doit être un PDF valide.' });
     fs.mkdirSync(DOSSIER_PDF, { recursive: true });
     fs.writeFileSync(cheminPdf(l.id), donnees);
+    try{const pdf=await require('./modules/pdf-lib').PDFDocument.load(donnees,{ignoreEncryption:true});l.nbPagesLecture=pdf.getPageCount()}catch(e){console.warn('Estimation PDF indisponible :',e.message)}
     l.pdf = true; // s'il a aussi des exemplaires en rayon, le livre devient hybride
     sauverDB();
     return json(res, 201, { ok: true, taille: donnees.length });
@@ -1163,10 +1195,12 @@ async function api(req, res, u) {
   if (pathname === '/api/livres' && m === 'POST') {
     if (!exigeBiblio()) return;
     const c = await lireCorps(req);
+    if(!dureeLecture.valide(c))return json(res,400,{erreur:'Durée (1 à 100000 minutes) ou seuil (1 à 100 %) invalide.'});
+    if(c.publicCible !== undefined && !['tous','scolaire','universitaire','technique_professionnel'].includes(c.publicCible)) return json(res,400,{erreur:'Public cible invalide.'});
     if (!c.titre || !c.auteur || !c.categorie) return json(res, 400, { erreur: 'Titre, auteur et catégorie requis.' });
     const l = { id: uid(), titre: c.titre, auteur: c.auteur, categorie: c.categorie, type: c.type === 'physique' ? 'physique' : 'numerique',
       resume: c.resume || '', couleur: c.couleur || '#1e4fa3', icone: c.icone || '📘', annee: c.annee || new Date().getFullYear(),
-      isbn: c.isbn || '', editeur: c.editeur || '', langue: c.langue || 'Français', niveau: c.niveau || '', motsCles: c.motsCles || '',
+      isbn: c.isbn || '', editeur: c.editeur || '', langue: c.langue || 'Français', dureeLectureMinutes:c.dureeLectureMinutes||null,seuilLecture:c.seuilLecture===undefined?70:Number(c.seuilLecture),niveau: c.niveau || '', publicCible: c.publicCible || 'tous', motsCles: c.motsCles || '',
       contenu: c.contenu || null, notes: [], nbLectures: 0, nbTelechargements: 0, creeLe: maintenant() };
     db.livres.push(l); journal('Livre ajouté', utilisateur, l.titre); sauverDB();
     return json(res, 201, vueLivre(l, utilisateur));
@@ -1187,8 +1221,10 @@ async function api(req, res, u) {
       return json(res, 200, { ok: true });
     }
     const c = await lireCorps(req);
+    if(!dureeLecture.valide(c))return json(res,400,{erreur:'Durée (1 à 100000 minutes) ou seuil (1 à 100 %) invalide.'});
+    if(c.publicCible !== undefined && !['tous','scolaire','universitaire','technique_professionnel'].includes(c.publicCible)) return json(res,400,{erreur:'Public cible invalide.'});
     if (['titre','auteur','categorie'].some(k => c[k] !== undefined && (typeof c[k] !== 'string' || !c[k].trim()))) return json(res,400,{erreur:'Titre, auteur et catégorie ne doivent pas être vides.'});
-    ['titre','auteur','categorie','resume','couleur','icone','annee','isbn','contenu','type','editeur','langue','niveau','motsCles'].forEach(k => { if (c[k] !== undefined) db.livres[idx][k] = c[k]; });
+    ['titre','auteur','categorie','resume','couleur','icone','annee','isbn','contenu','type','editeur','langue','niveau','publicCible','dureeLectureMinutes','seuilLecture','motsCles'].forEach(k => { if (c[k] !== undefined) db.livres[idx][k] = c[k]; });
     sauverDB();
     return json(res, 200, vueLivre(db.livres[idx], utilisateur));
   }
@@ -1314,10 +1350,11 @@ async function api(req, res, u) {
   }
   if (pathname === '/api/membres' && m === 'POST') {
     if (!exigeBiblio()) return;
-    const { nom, email, motDePasse, classe } = await lireCorps(req);
+    const { nom, email, motDePasse, classe, niveau, niveauDetail } = await lireCorps(req);
+    if (niveau !== undefined && !['scolaire','universitaire','technique_professionnel'].includes(niveau)) return json(res,400,{erreur:'Choisissez un niveau valide.'});
     if (!nom || !email) return json(res, 400, { erreur: 'Nom et email requis.' });
     if (db.utilisateurs.some(x => x.email.toLowerCase() === email.toLowerCase())) return json(res, 409, { erreur: 'Email déjà utilisé.' });
-    const nu = { id: uid(), nom, email, classe: classe || '', role: 'apprenant', ...hashMdp(motDePasse || 'oasis123'), creeLe: maintenant() };
+    const nu = { id: uid(), nom, email, classe: classe || '', niveau: niveau || '', niveauDetail: String(niveauDetail || '').slice(0,80), role: 'apprenant', ...hashMdp(motDePasse || 'oasis123'), creeLe: maintenant() };
     db.utilisateurs.push(nu); sauverDB();
     return json(res, 201, { id: nu.id, nom: nu.nom, email: nu.email, classe: nu.classe });
   }

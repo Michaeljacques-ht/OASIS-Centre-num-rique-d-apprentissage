@@ -56,7 +56,7 @@
     $('#lienBascule').addEventListener('click', e => {
       e.preventDefault();
       modeInscription = !modeInscription;
-      $('#champNom').hidden = !modeInscription;
+      $('#champNom').hidden = !modeInscription; $('#champNiveau').hidden = !modeInscription; $('#inNiveau').required = modeInscription;
       $('#inNom').required = modeInscription;
       $('#inMdp').autocomplete = modeInscription ? 'new-password' : 'current-password';
       $('#titreConnexion').textContent = modeInscription ? 'Commencez votre parcours avec OASIS.' : 'Votre prochaine découverte commence ici.';
@@ -70,7 +70,7 @@
       $('#msgAuth').innerHTML = '';
       try {
         const corps = { email: $('#inEmail').value.trim(), motDePasse: $('#inMdp').value };
-        if (modeInscription) corps.nom = $('#inNom').value.trim();
+        if (modeInscription) { corps.nom = $('#inNom').value.trim(); corps.niveau = $('#inNiveau').value; corps.niveauDetail = $('#inNiveauDetail').value.trim(); }
         const r = await api(modeInscription ? '/inscription' : '/connexion', { method: 'POST', body: JSON.stringify(corps) });
         jeton = r.jeton; moi = r.utilisateur;
         localStorage.setItem('oasis_jeton', jeton); localStorage.removeItem('educa_jeton');
@@ -100,7 +100,7 @@
           </div>`}
       <div class="infos">
         ${l.couverture ? `<b style="font-size:13.5px;color:var(--encre);display:block;line-height:1.25;margin-bottom:2px">${echap(l.titre)}</b>` : ''}
-        <div class="auteur">${echap(l.auteur)}</div>
+        <div class="auteur">${echap(l.auteur)}</div>${l.maProgression?.secondesLecture ? `<small>⏱ ${Math.floor(l.maProgression.secondesLecture/60)} min ${l.maProgression.secondesLecture%60} s de lecture</small>` : ''}
         ${etoiles(l.note, l.nbNotes)}
         <div style="margin-top:7px"><span class="etiquette" style="background:${couleurCat(l.categorie)}">${echap(l.categorie)}</span></div>
       </div>
@@ -115,10 +115,11 @@
     abonnement: () => OasisAbonnement.render(api, moi),
     espace: async () => `<h2>Mon espace</h2><p>Bienvenue ${echap(moi?.nom || "")}. Retrouvez vos lectures dans la bibliothèque et gérez votre abonnement ci-dessous.</p><button class="btn btn-bleu" data-vue="bibliotheque">Explorer la bibliothèque</button>` + await OasisAbonnement.render(api, moi),
     async accueil() {
-      const [nouveautes, cats, compteurs] = await Promise.all([
+      const [nouveautes, cats, compteurs, suggestions] = await Promise.all([
         api('/livres?tri=nouveautes'),
         chargerCategories(),
-        api('/statistiques-publiques').catch(() => null)
+        api('/statistiques-publiques').catch(() => null),
+        moi?.niveau ? api('/recommandations').catch(()=>null) : null
       ]);
       return `
         <button class="banniere-accueil" data-vue="bibliotheque" aria-label="Accéder à la bibliothèque">
@@ -140,8 +141,8 @@
             <button class="btn-orange" data-vue="bibliotheque">Accéder</button>
           </div>
         </div>
-        <section class="ecole-offre"><div><h3>Une bibliothèque pour votre école</h3><p>Personnalisez votre espace, inscrivez vos élèves et accompagnez leurs lectures.</p><strong>À partir de 50 000 gourdes / an · jusqu’à 100 élèves</strong></div><a class="btn btn-bleu" href="/ecole?inscription=1">Créer un espace établissement</a></section>
-        <div class="section-titre"><h3>Nouveautés</h3><button data-vue="nouveautes">Voir Plus ›</button></div>
+        <section class="ecole-offre"><div><h3>Une bibliothèque pour votre école</h3><p>Personnalisez votre espace, inscrivez vos élèves et accompagnez leurs lectures.</p><strong>À partir de ${Number(parametres.tarifsAbonnement?.petite||50000).toLocaleString('fr-FR')} gourdes / an · jusqu’à 100 élèves</strong></div><a class="btn btn-bleu" href="/ecole?inscription=1">Créer un espace établissement</a></section>
+        ${suggestions ? `<div class="section-titre"><h3>Pour votre niveau</h3><button data-vue="recommandes">Voir Plus ›</button></div>${grille(suggestions.livres.slice(0,4))}` : ''}<div class="section-titre"><h3>Nouveautés</h3><button data-vue="nouveautes">Voir Plus ›</button></div>
         ${grille(nouveautes.slice(0, 4))}
         <div class="section-titre"><h3>Catégories Populaires</h3><button data-vue="categories">Voir Plus ›</button></div>
         <div class="grille-categories">
@@ -314,7 +315,7 @@
     async recommandes() {
       const r = await api('/recommandations');
       return `<div class="section-titre"><h3>⭐ Recommandés pour vous</h3></div>
-        ${r.personnalise ? `<p style="color:var(--gris);font-size:13px;margin-bottom:12px">Basé sur vos intérêts : <b>${r.interets.map(echap).join(', ')}</b> (favoris, emprunts et lectures)</p>` : '<p style="color:var(--gris);font-size:13px;margin-bottom:12px">Ajoutez des favoris et lisez des livres pour affiner vos recommandations.</p>'}
+        ${r.niveau ? `<p>Lectures pour votre niveau : <b>${echap({scolaire:'Scolaire',universitaire:'Universitaire',technique_professionnel:'Technique et professionnel'}[r.niveau])}</b>. Les contenus tous niveaux restent proposés.</p>` : ''}${r.personnalise ? `<p style="color:var(--gris);font-size:13px;margin-bottom:12px">Basé sur vos intérêts : <b>${r.interets.map(echap).join(', ')}</b> (favoris, emprunts et lectures)</p>` : '<p style="color:var(--gris);font-size:13px;margin-bottom:12px">Ajoutez des favoris et lisez des livres pour affiner vos recommandations.</p>'}
         ${grille(r.livres)}`;
     },
     async defis() {
@@ -457,6 +458,7 @@
     $('#voile').addEventListener('click', e => { if (e.target.id === 'voile') fermerModale(); });
   }
   const fermerModale = () => {
+    window.OasisLecture?.close();
     window.OasisEpub?.close();
     if (nettoyerPdf) { nettoyerPdf(); nettoyerPdf = null; }
     $('#zoneModale').innerHTML = '';
@@ -523,12 +525,13 @@
       <div class="pdf-outils"><button class="mini-btn" id="pdfAvant" aria-label="Page précédente">←</button><label>Page <input type="number" id="pdfPage" min="1" value="1" aria-label="Numéro de page"></label><span id="pdfTotal"></span><button class="mini-btn" id="pdfApres" aria-label="Page suivante">→</button><button class="mini-btn" id="pdfMoins" aria-label="Réduire le zoom">−</button><button class="mini-btn" id="pdfPlus" aria-label="Augmenter le zoom">+</button><a class="mini-btn" href="${urlPdfActive}" download="${echap(livre.titre)}.pdf">Télécharger</a><a class="mini-btn" href="${urlPdfActive}" target="_blank" rel="noopener">Ouvrir ↗</a><button class="mini-btn bleu" id="btnTerminerPdf" ${!livre.accesComplet ? 'hidden' : ''}>Terminer</button></div>
       ${!livre.accesComplet ? '<div class="pdf-abonnement">Aperçu gratuit : cinq pages maximum. <button class="mini-btn bleu" data-abonner>Lire la suite — s’abonner</button></div>' : ''}<p id="pdfEtat" role="status" aria-live="polite">Chargement du document…</p><div class="pdf-pages" id="pdfPages"><canvas id="pdfCanvas" aria-label="Page du document PDF"></canvas></div></div></div>`;
     let doc=null, renderTask=null, closed=false, page=1, zoom=1, sequence=0;
+    const assistance=OasisLecture.start($('#zoneModale .lecteur'),livre,moi?jeton:null,async()=>{if(!doc)return '';const text=await (await doc.getPage(page)).getTextContent();return text.items.map(x=>x.str+(x.hasEOL?'\n':' ')).join('')});
     nettoyerPdf=()=>{closed=true;sequence++;renderTask?.cancel();doc?.destroy();};
     $('#btnFermer').onclick=fermerModale;
     $('#voile').onclick=e=>{if(e.target.id==='voile')fermerModale()};
     $('#btnTerminerPdf').onclick=()=>terminerLivre(livre.id);
     async function render(){
-      if(!doc||closed)return;const ticket=++sequence;
+      if(!doc||closed)return;assistance?.changed();const ticket=++sequence;
       renderTask?.cancel();$('#pdfEtat').textContent='Chargement de la page…';
       try{
         const p=await doc.getPage(page);if(ticket!==sequence||closed)return;
@@ -539,7 +542,7 @@
         canvas.width=Math.floor(viewport.width*ratio);canvas.height=Math.floor(viewport.height*ratio);canvas.style.width=viewport.width+'px';canvas.style.height=viewport.height+'px';
         renderTask=p.render({canvasContext:canvas.getContext('2d'),viewport,transform:[ratio,0,0,ratio,0,0]});await renderTask.promise;
         if(ticket!==sequence||closed)return;$('#pdfEtat').textContent='Page '+page+' sur '+doc.numPages;
-        $('#pdfPage').value=page;$('#pdfAvant').disabled=page===1;$('#pdfApres').disabled=page===doc.numPages;area.scrollTop=0;
+        assistance?.ready();assistance?.progress(Math.round(page/doc.numPages*100));$('#pdfPage').value=page;$('#pdfAvant').disabled=page===1;$('#pdfApres').disabled=page===doc.numPages;area.scrollTop=0;
         if(moi && livre.accesComplet) api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:Math.round(page/doc.numPages*100)})}).catch(()=>{});
       }catch(e){if(e.name!=='RenderingCancelledException'&&!closed&&ticket===sequence)$('#pdfEtat').textContent='Lecture impossible : utilisez Télécharger ou Ouvrir.'}
     }
@@ -597,7 +600,7 @@
     requestAnimationFrame(() => { if (pct > 0 && pct < 100) modaleEl.scrollTop = (modaleEl.scrollHeight - modaleEl.clientHeight) * pct / 100; });
     // Sauvegarde de la progression au défilement
     let minuteurProg;
-    const pctActuel = () => Math.round(modaleEl.scrollTop / Math.max(1, modaleEl.scrollHeight - modaleEl.clientHeight) * 100);
+    const pctActuel = () => modaleEl.scrollHeight<=modaleEl.clientHeight+2 ? 100 : Math.round(modaleEl.scrollTop / Math.max(1, modaleEl.scrollHeight - modaleEl.clientHeight) * 100);
     modaleEl.addEventListener('scroll', () => {
       $('#jaugeLecture').style.width = pctActuel() + '%';
       clearTimeout(minuteurProg);
@@ -615,16 +618,7 @@
       if (document.fullscreenElement) document.exitFullscreen();
       else modaleEl.requestFullscreen?.().catch(() => toast('Plein écran non disponible sur ce navigateur.'));
     });
-    // Lecture vocale (personnes malvoyantes)
-    $('#btnVoix').addEventListener('click', () => {
-      if (!('speechSynthesis' in window)) return toast('Lecture vocale non prise en charge par ce navigateur.');
-      if (speechSynthesis.speaking) { speechSynthesis.cancel(); $('#btnVoix').textContent = '🔊 Écouter'; return; }
-      syntheseVocale = new SpeechSynthesisUtterance($('#texteLecture').innerText);
-      syntheseVocale.lang = 'fr-FR'; syntheseVocale.rate = 0.95;
-      syntheseVocale.onend = () => { const b = $('#btnVoix'); if (b) b.textContent = '🔊 Écouter'; };
-      speechSynthesis.speak(syntheseVocale);
-      $('#btnVoix').textContent = '⏹ Arrêter';
-    });
+    const assistanceTexte=OasisLecture.start($('#modaleLecteur'),livre,jeton,()=>$('#texteLecture').innerText);assistanceTexte.ready();modaleEl.addEventListener('scroll',()=>assistanceTexte.progress(pctActuel()));assistanceTexte.progress(pctActuel());api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:pctActuel()})}).catch(()=>{});$('#btnVoix').hidden=true;
     // Marque-page
     $('#btnSignet').addEventListener('click', async () => {
       try {

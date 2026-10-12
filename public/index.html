@@ -7,7 +7,7 @@
   <link rel="icon" href="/icone-192.png">
   <link rel="apple-touch-icon" href="/icone-192.png">
   <title>OASIS Bibliothèque Numérique</title>
-  <link rel="stylesheet" href="/styles.css?v39">
+  <link rel="stylesheet" href="/styles.css?v43">
   <link rel="manifest" href="/manifest.json">
 </head>
 <body>
@@ -28,7 +28,7 @@
       </div>
       <div id="msgAuth" role="status" aria-live="polite"></div>
       <form id="formConnexion">
-        <div class="champ" id="champNom" hidden>
+        <fieldset id="champNiveau" hidden class="champ"><legend>Votre parcours d’apprentissage</legend><label for="inNiveau">Niveau *</label><select id="inNiveau"><option value="">Choisir votre niveau</option><option value="scolaire">Scolaire</option><option value="universitaire">Universitaire</option><option value="technique_professionnel">Technique et professionnel</option></select><label for="inNiveauDetail">Classe, année ou spécialité (facultatif)</label><input id="inNiveauDetail" maxlength="80" placeholder="Ex. : 9e AF, licence 2, mécanique"><small>Ce niveau nous aide à vous proposer des lectures adaptées.</small></fieldset><div class="champ" id="champNom" hidden>
           <label for="inNom">Nom complet</label>
           <input id="inNom" type="text" autocomplete="name" placeholder="Ex. : Jean Baptiste">
         </div>
@@ -120,9 +120,10 @@
   </div>
 
   <div id="zoneModale"></div>
-  <script src="/abonnement.js?v39"></script>
+  <script src="/abonnement.js?v43"></script>
   <script src="/vendor/jszip/jszip.min.js"></script>
-  <script src="/lecteur-epub.js?v39"></script>
-  <script src="/app.js?v39"></script>
+  <script src="/lecture-assistance.js?v43"></script>
+  <script src="/lecteur-epub.js?v43"></script>
+  <script src="/app.js?v43"></script>
 </body>
 </html>

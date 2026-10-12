@@ -405,3 +405,5 @@ tr:hover td { background: #f7f9fd; }
 @media(max-width:600px){.stats-accueil{padding:14px;border-radius:14px}.stats-accueil-titre{align-items:start;flex-direction:column;gap:4px}.stats-accueil-grille{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.stats-accueil-item{padding:10px 4px}.stats-accueil-item>b{font-size:22px}.stats-accueil-item>small{font-size:11px}}
 
 .ecole-offre{display:flex;justify-content:space-between;align-items:center;gap:20px;background:#eef4fc;border:1px solid #dbe5f4;border-radius:16px;padding:22px;margin:24px 0}.ecole-offre h3{color:#123e79}.ecole-offre p{margin:8px 0;line-height:1.6}.ecole-offre .btn{background:#123e79;color:#fff;text-align:center;flex-shrink:0}@media(max-width:650px){.ecole-offre{flex-direction:column;align-items:stretch;padding:18px}.ecole-offre .btn{white-space:normal}}
+
+.lecture-assistance{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px;background:#edf4fb;border-radius:12px}.lecture-assistance small{flex-basis:100%;color:#34475e}.lecture-assistance [data-time]{font-size:13px;font-weight:600}

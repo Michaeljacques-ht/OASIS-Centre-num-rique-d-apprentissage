@@ -4,7 +4,7 @@ const quota=e=>Number(e?.limiteEleves)||formules[e?.formule||'petite']?.limiteEl
 const effectif=(db,e)=>db.utilisateurs.filter(x=>x.ecoleId===e.id&&x.role==='apprenant'&&x.actif!==false).length;
 const roles=['admin_etablissement','bibliothecaire_ecole'];
 const active=e=>!!e&&new Date(e.abonnementFin||0)>new Date();
-const publicUser=u=>({id:u.id,nom:u.nom,email:u.email,role:u.role,classe:u.classe||'',ecoleId:u.ecoleId||null,actif:u.actif!==false});
+const publicUser=u=>({id:u.id,nom:u.nom,email:u.email,role:u.role,classe:u.classe||'',niveau:u.niveau||'',niveauDetail:u.niveauDetail||'',ecoleId:u.ecoleId||null,actif:u.actif!==false});
 module.exports={active,roles,publicUser,quota,effectif,async route(req,res,c){
  const {db,utilisateur:u,json,lireCorps,lireBinaire,sauverDB,uid,hashMdp}=c;
  const url=new URL(req.url,'http://localhost'),s=url.pathname.split('/').filter(Boolean),m=req.method;
@@ -14,7 +14,7 @@ module.exports={active,roles,publicUser,quota,effectif,async route(req,res,c){
  const send=(code,data)=>{json(res,code,data);return true};
  const texte=(v,max=160)=>typeof v==='string'?v.trim().slice(0,max):'';
  if(s[2]==='devis-admin'&&m==='GET'){if(u?.role!=='bibliothecaire')return send(403,{erreur:'Réservé à l’administration OASIS.'});return send(200,(db.devisEcoles||[]).map(d=>({...d,ecole:db.ecoles.find(e=>e.id===d.ecoleId)?.nom||'Établissement'})));}
- if(s[2]==='formules'&&m==='GET')return send(200,{formules:Object.values(formules),devisAuDela:600});
+ if(s[2]==='formules'&&m==='GET')return send(200,{formules:require('./tarifs').formules(db),devisAuDela:600});
  if(s[2]==='inscription'&&m==='POST'){
   const b=await lireCorps(req),nom=texte(b.nom),nomEcole=texte(b.nomEcole),email=texte(b.email).toLowerCase();
   if(!nom||!nomEcole||!/^\S+@\S+\.\S+$/.test(email)||typeof b.motDePasse!=='string'||b.motDePasse.length<8)return send(400,{erreur:'Nom du responsable, établissement, email et mot de passe de 8 caractères minimum requis.'});
@@ -57,12 +57,14 @@ module.exports={active,roles,publicUser,quota,effectif,async route(req,res,c){
   if(!nom||!/^\S+@\S+\.\S+$/.test(email)||typeof b.motDePasse!=='string'||b.motDePasse.length<8)return send(400,{erreur:'Nom, email et mot de passe de 8 caractères minimum requis.'});
   if(db.utilisateurs.some(x=>String(x.email||'').toLowerCase()===email))return send(409,{erreur:'Cet email est déjà utilisé.'});
   if(role==='apprenant'&&effectif(db,e)>=quota(e))return send(409,{erreur:`Votre formule permet ${quota(e)} élèves actifs. Désactivez un compte ou choisissez une formule supérieure.`});
-  const user={id:uid(),nom,email,role,ecoleId:e.id,classe:texte(b.classe,80),actif:true,...hashMdp(b.motDePasse),creeLe:new Date().toISOString()};db.utilisateurs.push(user);sauverDB();return send(201,publicUser(user));
+  if(b.niveau!==undefined&&!['scolaire','universitaire','technique_professionnel'].includes(b.niveau))return send(400,{erreur:'Niveau invalide.'});
+  const user={id:uid(),nom,email,role,ecoleId:e.id,niveau:b.niveau||'scolaire',classe:texte(b.classe,80),actif:true,...hashMdp(b.motDePasse),creeLe:new Date().toISOString()};db.utilisateurs.push(user);sauverDB();return send(201,publicUser(user));
  }
  if(s[2]==='membres'&&s[3]&&m==='PUT'){
   const v=members().find(v=>v.id===s[3]);if(!v)return send(404,{erreur:'Membre introuvable.'});
   if(v.role==='admin_etablissement'||v.role==='bibliothecaire_ecole'&&!owner)return send(403,{erreur:'Ce compte ne peut pas être modifié ici.'});
-  const b=await lireCorps(req);if(b.actif===true&&v.actif===false&&v.role==='apprenant'&&effectif(db,e)>=quota(e))return send(409,{erreur:`Limite de ${quota(e)} élèves actifs atteinte.`});if(b.motDePasse!==undefined&&(typeof b.motDePasse!=='string'||b.motDePasse.length<8))return send(400,{erreur:'Mot de passe de 8 caractères minimum requis.'});if(b.nom!==undefined){if(!texte(b.nom))return send(400,{erreur:'Nom requis.'});v.nom=texte(b.nom)}
+  const b=await lireCorps(req);if(b.niveau!==undefined&&!['scolaire','universitaire','technique_professionnel'].includes(b.niveau))return send(400,{erreur:'Niveau invalide.'});if(b.actif===true&&v.actif===false&&v.role==='apprenant'&&effectif(db,e)>=quota(e))return send(409,{erreur:`Limite de ${quota(e)} élèves actifs atteinte.`});if(b.motDePasse!==undefined&&(typeof b.motDePasse!=='string'||b.motDePasse.length<8))return send(400,{erreur:'Mot de passe de 8 caractères minimum requis.'});if(b.nom!==undefined){if(!texte(b.nom))return send(400,{erreur:'Nom requis.'});v.nom=texte(b.nom)}
+  if(b.niveau!==undefined)v.niveau=b.niveau;
   if(b.classe!==undefined)v.classe=texte(b.classe,80);if(typeof b.actif==='boolean')v.actif=b.actif;
   if(b.motDePasse!==undefined){if(typeof b.motDePasse!=='string'||b.motDePasse.length<8)return send(400,{erreur:'Mot de passe de 8 caractères minimum requis.'});Object.assign(v,hashMdp(b.motDePasse));}
   if(b.actif===false||b.motDePasse!==undefined)for(const [key,id] of Object.entries(db.sessions))if(id===v.id)delete db.sessions[key];
@@ -81,7 +83,7 @@ module.exports={active,roles,publicUser,quota,effectif,async route(req,res,c){
   const eleves=members().filter(x=>x.role==='apprenant'),ids=new Set(eleves.map(x=>x.id));
   const filtre=texte(url.searchParams.get('classe'),80);
   const lignes=eleves.filter(x=>!filtre||x.classe===filtre).map(x=>{
-   const livres=db.progressions.filter(p=>p.utilisateurId===x.id).map(p=>({livreId:p.livreId,titre:db.livres.find(l=>l.id===p.livreId)?.titre||'Document retiré',pourcentage:p.pourcentage,termine:!!p.termine,majLe:p.majLe||p.modifieLe||p.creeLe}));
+   const livres=db.progressions.filter(p=>p.utilisateurId===x.id).map(p=>({livreId:p.livreId,titre:db.livres.find(l=>l.id===p.livreId)?.titre||'Document retiré',pourcentage:p.pourcentage,secondesLecture:p.secondesLecture||0,termine:!!p.termine,majLe:p.majLe||p.modifieLe||p.creeLe}));
    const medias=(db.progressionsMedias||[]).filter(p=>p.utilisateurId===x.id).map(p=>({titre:(db.medias||[]).find(v=>v.id===p.mediaId)?.titre||'Média retiré',secondes:p.secondes}));
    return {eleve:publicUser(x),livres,medias,termines:livres.filter(p=>p.termine).length};
   });return send(200,{eleves:eleves.length,lectures:db.progressions.filter(p=>ids.has(p.utilisateurId)).length,termines:db.progressions.filter(p=>ids.has(p.utilisateurId)&&p.termine).length,lignes});

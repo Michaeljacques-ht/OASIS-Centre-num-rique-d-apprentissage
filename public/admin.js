@@ -193,7 +193,7 @@
       const p = await api('/parametres');
       return `
         <div class="section-titre"><h3>⚙️ Paramètres de la bibliothèque</h3></div>
-        <div id="msgParam"></div>
+        <div id="msgParam"></div><section class="panneau" style="margin-bottom:16px"><h4>Tarifs des abonnements (HTG)</h4><p>Les nouveaux tarifs s’appliquent aux prochains paiements. Les commandes déjà initiées conservent leur montant et les abonnements actifs gardent leur échéance.</p><div class="admin-form-grid">${[['mensuel','Individuel mensuel'],['annuel','Individuel annuel'],['petite','Petite école — annuel (100 élèves)'],['moyenne','École moyenne — annuel (300 élèves)'],['grande','Grande école — annuel (600 élèves)']].map(([k,n])=>`<div class="champ"><label for="tarif-${k}">${n}</label><input id="tarif-${k}" type="number" min="1" max="10000000" step="1" value="${p.tarifsAbonnement[k]}"></div>`).join('')}</div></section>
         <div class="panneau" style="margin-bottom:16px">
           <h4 style="margin-bottom:12px;color:var(--encre)">Identité (en-tête et pied de page)</h4>
           <div class="champ"><label for="pNom">Nom de la bibliothèque</label><input id="pNom" value="${echap(p.nom)}"></div>
@@ -363,9 +363,9 @@
       <div class="admin-form-grid">
         <div class="champ"><label for="fLangue">Langue</label>
           <select id="fLangue"><option>Français</option><option>Créole haïtien</option><option>Anglais</option><option>Espagnol</option></select></div>
-        <div class="champ"><label for="fNiveau">Niveau scolaire</label><input id="fNiveau" placeholder="Ex. : NS4, 9e AF, Universitaire…"></div>
+        <div class="champ"><label for="fPublicCible">Public cible</label><select id="fPublicCible"><option value="tous">Tous niveaux</option><option value="scolaire">Scolaire</option><option value="universitaire">Universitaire</option><option value="technique_professionnel">Technique et professionnel</option></select><label for="fNiveau">Classe ou spécialité (facultatif)</label><input id="fNiveau" placeholder="Ex. : NS4, 9e AF, Universitaire…"></div>
       </div>
-      <div class="champ"><label for="fMotsCles">Mots-clés (séparés par des virgules)</label><input id="fMotsCles" placeholder="Ex. : astronomie, planètes, cosmos"></div>
+      <div class="admin-form-grid"><div class="champ"><label for="fDuree">Durée de lecture (minutes, facultatif)</label><input id="fDuree" type="number" min="1" max="100000" placeholder="Automatique si vide"></div><div class="champ"><label for="fSeuil">Temps minimum requis (%)</label><input id="fSeuil" type="number" min="1" max="100" value="70"></div></div><div class="champ"><label for="fMotsCles">Mots-clés (séparés par des virgules)</label><input id="fMotsCles" placeholder="Ex. : astronomie, planètes, cosmos"></div>
       <div class="champ"><label for="fResume">Résumé</label><textarea id="fResume" rows="3" placeholder="Brève présentation de l'ouvrage…"></textarea></div>
       <div class="rangee-boutons">
         <button class="btn btn-bleu" id="btnValiderLivre">Ajouter le livre</button>
@@ -393,7 +393,7 @@
           annee: parseInt($('#fAnnee').value, 10), icone: $('#fIcone').value || '📘',
           couleur: $('#fCouleur').value, resume: $('#fResume').value.trim(),
           editeur: $('#fEditeur').value.trim(), isbn: $('#fIsbn').value.trim(), langue: $('#fLangue').value,
-          niveau: $('#fNiveau').value.trim(), motsCles: $('#fMotsCles').value.trim(),
+          dureeLectureMinutes:$('#fDuree').value||null,seuilLecture:Number($('#fSeuil').value),publicCible: $('#fPublicCible').value, niveau: $('#fNiveau').value.trim(), motsCles: $('#fMotsCles').value.trim(),
           contenu: type !== 'physique' ? ($('#fContenu').value || null) : null
         }) });
         livreCree = livre;
@@ -460,8 +460,8 @@
   }
   async function modifierLivre(id) {
     const l=await api('/livres/'+id);
-    const champs=[['titre','Titre'],['auteur','Auteur'],['categorie','Catégorie'],['editeur','Éditeur'],['isbn','ISBN'],['langue','Langue'],['niveau','Niveau scolaire'],['motsCles','Mots-clés'],['annee','Année'],['icone','Icône'],['couleur','Couleur']];
-    modale(`<h3>Modifier le document</h3><div id="msgModification"></div><div class="form-document">${champs.map(([k,n])=>`<div class="champ"><label for="edit-${k}">${n}</label><input id="edit-${k}" value="${echap(l[k]||'')}" ${k==='annee'?'type="number"':k==='couleur'?'type="color"':''}></div>`).join('')}</div><div class="champ"><label for="edit-resume">Résumé</label><textarea id="edit-resume" rows="4">${echap(l.resume||'')}</textarea></div><button class="btn btn-bleu" id="saveDocument">Enregistrer</button><section class="document-apercu"><h4>Couverture du document</h4>${l.couverture ? `<a href="/api/livres/${l.id}/couverture" target="_blank" rel="noopener"><img src="/api/livres/${l.id}/couverture" alt="Couverture de ${echap(l.titre)}"></a>` : `<p>Aucune couverture disponible pour ce document.</p>`}<p><b>${echap(l.titre)}</b><br>${echap(l.auteur)} · ${echap(l.annee || "Année non renseignée")}</p><p>Formats disponibles : ${[l.pdf ? "PDF" : "", l.epub ? "EPUB" : ""].filter(Boolean).join(" / ") || "Aucun fichier joint"}</p>${l.pdf || l.epub ? '<h4>Consulter le document</h4><p>Feuilletez les pages pour retrouver l’auteur, l’éditeur, l’année et les autres informations.</p><div id="apercuEdition"></div>' : ''}</section>`);
+    const champs=[['titre','Titre'],['auteur','Auteur'],['categorie','Catégorie'],['editeur','Éditeur'],['isbn','ISBN'],['langue','Langue'],['dureeLectureMinutes','Durée estimée (minutes, vide = automatique)'],['seuilLecture','Temps minimum requis (%)'],['publicCible','Public cible'],['niveau','Classe ou spécialité'],['motsCles','Mots-clés'],['annee','Année'],['icone','Icône'],['couleur','Couleur']];
+    modale(`<h3>Modifier le document</h3><div id="msgModification"></div><div class="form-document">${champs.map(([k,n])=>`<div class="champ"><label for="edit-${k}">${n}</label>${k==='publicCible' ? `<select id="edit-${k}">${['tous','scolaire','universitaire','technique_professionnel'].map((v,i)=>`<option value="${v}" ${(l.publicCible||'tous')===v?'selected':''}>${['Tous niveaux','Scolaire','Universitaire','Technique et professionnel'][i]}</option>`).join('')}</select>` : `<input id="edit-${k}" value="${echap(k==='seuilLecture'?(l[k]===undefined?70:l[k]):(l[k]||''))}" ${k==='annee'?'type="number"':k==='couleur'?'type="color"':''}>`}</div>`).join('')}</div><div class="champ"><label for="edit-resume">Résumé</label><textarea id="edit-resume" rows="4">${echap(l.resume||'')}</textarea></div><button class="btn btn-bleu" id="saveDocument">Enregistrer</button><section class="document-apercu"><h4>Couverture du document</h4>${l.couverture ? `<a href="/api/livres/${l.id}/couverture" target="_blank" rel="noopener"><img src="/api/livres/${l.id}/couverture" alt="Couverture de ${echap(l.titre)}"></a>` : `<p>Aucune couverture disponible pour ce document.</p>`}<p><b>${echap(l.titre)}</b><br>${echap(l.auteur)} · ${echap(l.annee || "Année non renseignée")}</p><p>Formats disponibles : ${[l.pdf ? "PDF" : "", l.epub ? "EPUB" : ""].filter(Boolean).join(" / ") || "Aucun fichier joint"}</p>${l.pdf || l.epub ? '<h4>Consulter le document</h4><p>Feuilletez les pages pour retrouver l’auteur, l’éditeur, l’année et les autres informations.</p><div id="apercuEdition"></div>' : ''}</section>`);
     if(l.pdf||l.epub)OasisApercuDocument.open(l,jeton,$('#apercuEdition'));
     $('#saveDocument').onclick=async()=>{try{const body={};champs.forEach(([k])=>body[k]=$('#edit-'+k).value.trim());body.annee=Number(body.annee)||null;body.resume=$('#edit-resume').value;await api('/livres/'+id,{method:'PUT',body:JSON.stringify(body)});fermerModale();toast('Document modifié.');afficherOnglet('catalogue');}catch(e){$('#msgModification').textContent=e.message}};
   }
@@ -771,7 +771,7 @@
     modale(`<h3>Ajouter des fichiers EPUB</h3>
       <p>Sélectionnez un ou plusieurs EPUB. Ajustez les informations de chaque livre avant l’import. La couverture est récupérée du document lorsqu’elle est disponible.</p>
       <div class="champ"><label for="epubMultiples">Fichiers EPUB — 50 Mo maximum chacun</label><input id="epubMultiples" type="file" accept=".epub,application/epub+zip" multiple></div>
-      <div id="epubLotListe"></div><p id="epubLotMessage" role="status"></p>
+      <div class="champ"><label for="epubLotNiveau">Public cible du lot</label><select id="epubLotNiveau"><option value="tous">Tous niveaux</option><option value="scolaire">Scolaire</option><option value="universitaire">Universitaire</option><option value="technique_professionnel">Technique et professionnel</option></select></div><div id="epubLotListe"></div><p id="epubLotMessage" role="status"></p>
       <div class="rangee-boutons"><button class="btn btn-bleu" id="epubLotImporter" disabled>Importer les documents</button><button class="btn" id="epubLotFermer">Fermer</button></div>`);
     const input=$('#epubMultiples'),liste=$('#epubLotListe'),message=$('#epubLotMessage'),btn=$('#epubLotImporter'),fermer=$('#epubLotFermer');
     let lignes=[],enCours=false;
@@ -800,8 +800,8 @@
         try{
           const titre=liste.querySelector(`[data-epub-titre="${i}"]`).value.trim(),auteur=liste.querySelector(`[data-epub-auteur="${i}"]`).value.trim()||'Auteur à préciser',categorie=liste.querySelector(`[data-epub-cat="${i}"]`).value;
           if(!titre)throw Error('Renseignez le titre.');
-          if(!ligne.id){const livre=await api('/livres',{method:'POST',body:JSON.stringify({titre,auteur,categorie,type:'numerique'})});ligne.id=livre.id;}
-          else await api('/livres/'+ligne.id,{method:'PUT',body:JSON.stringify({titre,auteur,categorie})});
+          if(!ligne.id){const livre=await api('/livres',{method:'POST',body:JSON.stringify({titre,auteur,categorie,publicCible:$('#epubLotNiveau').value,type:'numerique'})});ligne.id=livre.id;}
+          else await api('/livres/'+ligne.id,{method:'PUT',body:JSON.stringify({titre,auteur,categorie,publicCible:$('#epubLotNiveau').value})});
           await envoyerEpub(ligne.id,f);ligne.ok=true;statut.textContent='✓ Importé';
           liste.querySelectorAll(`[data-epub-titre="${i}"],[data-epub-auteur="${i}"],[data-epub-cat="${i}"]`).forEach(el=>el.disabled=true);
         }catch(err){echecs++;statut.textContent='Échec : '+err.message;}
@@ -951,7 +951,7 @@
     $('#btnSauverParametres')?.addEventListener('click', async () => {
       try {
         await api('/parametres', { method: 'PUT', body: JSON.stringify({
-          nom: $('#pNom').value, slogan: $('#pSlogan').value, messageAccueil: $('#pAccueil').value, piedDePage: $('#pPied').value, aPropos: $('#pAPropos').value,
+          tarifsAbonnement:Object.fromEntries(['mensuel','annuel','petite','moyenne','grande'].map(k=>[k,Number($('#tarif-'+k).value)])),nom: $('#pNom').value, slogan: $('#pSlogan').value, messageAccueil: $('#pAccueil').value, piedDePage: $('#pPied').value, aPropos: $('#pAPropos').value,
           adresse: $('#pAdresse').value, telephone: $('#pTel').value, email: $('#pEmail').value, horaires: $('#pHoraires').value,
           dureeEmpruntPhysique: $('#pDureeP').value, dureeEmpruntNumerique: $('#pDureeN').value,
           maxEmprunts: $('#pMax').value, retraitReservationJours: $('#pRetrait').value,
