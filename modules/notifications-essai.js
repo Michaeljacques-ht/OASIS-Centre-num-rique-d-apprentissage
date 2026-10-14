@@ -1,0 +1,9 @@
+const Essai=require('./essai'),crypto=require('crypto');
+let running=false;
+async function traiter(db,sauver,env=process.env,envoyer=fetch){if(running||env.ESSAI_EMAIL_ACTIVE!=='true'||!env.BREVO_API_KEY||!env.BREVO_SENDER_EMAIL)return;running=true;try{
+ const clients=[...(db.utilisateurs||[]).filter(u=>u.role==='apprenant'&&!u.ecoleId&&u.actif!==false).map(u=>({target:u,email:u.email,nom:u.nom,ecole:false})),...(db.ecoles||[]).map(e=>{const u=(db.utilisateurs||[]).find(u=>u.id===e.responsableId&&u.role==='admin_etablissement'&&u.actif!==false);return {target:e,email:u?.email,nom:u?.nom,ecole:true}})];
+ let count=0;for(const c of clients){const n=Essai.notification(c.target);if(!n.length||!/^\S+@\S+\.\S+$/.test(c.email||''))continue;const days=Essai.info(c.target).joursEssaiRestants;const phase=days<=0?'expire':days<=1?'1':days<=3?'3':'7';c.target.alertesEssai ||= {};if(c.target.alertesEssai[phase])continue;if(++count>100)break;
+ try{const base=env.SITE_URL||'https://oasis-centre-num-rique-d-apprentissage.onrender.com';const lien=new URL(c.ecole?'/ecole':'/?espace=1',base).href;const key=crypto.createHash('sha256').update(c.target.id+'|'+c.target.essaiFin+'|'+phase).digest('hex');const r=await envoyer('https://api.brevo.com/v3/smtp/email',{method:'POST',signal:AbortSignal.timeout(10000),headers:{'api-key':env.BREVO_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({sender:{email:env.BREVO_SENDER_EMAIL,name:'OASIS Bibliothèque Numérique'},to:[{email:c.email,name:c.nom||''}],subject:days?'Votre essai OASIS arrive à sa fin':'Votre essai OASIS est terminé',textContent:n[0].texte+'\nConnectez-vous pour choisir votre formule et payer : '+lien,headers:{'Idempotency-Key':key}})});if(!r.ok)throw Error('HTTP '+r.status);c.target.alertesEssai[phase]=new Date().toISOString();sauver()}catch(e){console.error('Rappel essai non envoyé pour le compte '+c.target.id+' : '+e.message);}
+ }
+ }finally{running=false}}
+module.exports={traiter};

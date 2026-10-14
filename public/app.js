@@ -60,7 +60,7 @@
       $('#inNom').required = modeInscription;
       $('#inMdp').autocomplete = modeInscription ? 'new-password' : 'current-password';
       $('#titreConnexion').textContent = modeInscription ? 'Commencez votre parcours avec OASIS.' : 'Votre prochaine découverte commence ici.';
-      $('#btnAuth').textContent = modeInscription ? 'Créer mon compte' : 'Se connecter';
+      $('#btnAuth').textContent = modeInscription ? 'Créer mon compte — 30 jours gratuits' : 'Se connecter';
       $('#txtBascule').textContent = modeInscription ? 'Déjà un compte ?' : 'Pas encore de compte ?';
       $('#lienBascule').textContent = modeInscription ? 'Se connecter' : 'Créer un compte';
       $('#msgAuth').innerHTML = '';
@@ -257,7 +257,7 @@
         <p style="color:var(--gris);font-size:13px;margin-bottom:14px">${SOUS[t]}</p>
         ${medias.length ? `<div class="grille-livres">${medias.map(x => `
           <button class="carte-livre" data-media="${x.id}">
-            <div class="couverture" style="background:linear-gradient(150deg, var(--bleu), #10243e)">
+            <div class="couverture ${x.type==='video'?'couverture-video':''}" ${x.type==='video'&&x.fichier&&!x.vignette?`data-vignette-video="${x.id}" data-video-titre="${echap(x.titre)}"`:''} style="background:linear-gradient(150deg, var(--bleu), #10243e)">${x.type==='video'&&x.vignette?`<img src="/api/medias/${x.id}/vignette" alt="Vignette de ${echap(x.titre)}" loading="lazy">`:''}
               <span class="badge-type">${x.fichier ? ICO[x.type] + ' ' + (x.duree || 'Disponible') : '⏳ Bientôt'}</span>
               <div class="titre-couv">${echap(x.titre)}</div>
               <div class="icone-couv">${ICO[x.type]}</div>
@@ -351,7 +351,7 @@
     $('#btnMenu').setAttribute('aria-expanded', 'false');
     const zone = $('#zonePrincipale');
     zone.innerHTML = '<p class="vide">Chargement…</p>';
-    try { zone.innerHTML = await (vues[nom] || vues.accueil)(param); }
+    try { zone.innerHTML = await (vues[nom] || vues.accueil)(param);OasisVignetteVideo.afficher(zone,jeton,moi?.role==='bibliothecaire'); }
     catch (err) { zone.innerHTML = `<div class="erreur">${echap(err.message)}</div>`; }
   }
 

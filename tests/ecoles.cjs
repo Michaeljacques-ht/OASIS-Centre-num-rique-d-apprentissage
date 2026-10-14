@@ -10,7 +10,7 @@ async function call(path,method='GET',body={},user=null){let r;assert(await E.ro
 async function abo(path,body={},user){let r;assert(await A.route({url:'/api/abonnement/'+path,method:'POST'},{},{db,utilisateur:user,json:(res,code,data)=>r={code,data},lireCorps:async()=>body,sauverDB:()=>{},uid:()=>String(++serial)}));return r}
 const school=async(n)=>{const r=await call('inscription','POST',{nom:'Responsable '+n,nomEcole:'École '+n,email:n+'@ecole.ht',motDePasse:'secret123',role:'bibliothecaire'});assert.equal(r.code,201);const u=db.utilisateurs.find(x=>x.id===r.data.utilisateur.id);assert.equal(u.role,'admin_etablissement');return u};
 const u=await school('alpha'),v=await school('beta');const e=db.ecoles.find(x=>x.id===u.ecoleId),f=db.ecoles.find(x=>x.id===v.ecoleId);
-assert.equal((await call('membres')).code,401);assert.equal((await call('membres','GET',{},u)).code,402);
+assert.equal((await call('membres')).code,401);assert.equal((await call('membres','GET',{},u)).code,200);e.essaiFin='2000-01-01';
 assert.equal((await call('parametres','PUT',{nom:'Nouvelle école',ecoleId:f.id},u)).code,200);assert.equal(f.nom,'École beta');
 PP.passerelleActive=()=>true;PP.initierPaiement=async c=>{montant=c.montant;return{ok:true,urlPaiement:'https://plopplop.solutionip.app/test'}};PP.verifierPaiement=async()=>({ok:true,paye:paid});
 assert.equal((await abo('payer',{plan:'etablissement'},v)).code,201);

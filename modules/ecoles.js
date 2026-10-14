@@ -3,8 +3,8 @@ const formules=require('./formules-ecoles');
 const quota=e=>Number(e?.limiteEleves)||formules[e?.formule||'petite']?.limiteEleves||100;
 const effectif=(db,e)=>db.utilisateurs.filter(x=>x.ecoleId===e.id&&x.role==='apprenant'&&x.actif!==false).length;
 const roles=['admin_etablissement','bibliothecaire_ecole'];
-const active=e=>!!e&&new Date(e.abonnementFin||0)>new Date();
-const publicUser=u=>({id:u.id,nom:u.nom,email:u.email,role:u.role,classe:u.classe||'',niveau:u.niveau||'',niveauDetail:u.niveauDetail||'',ecoleId:u.ecoleId||null,actif:u.actif!==false});
+const active=e=>!!e&&(new Date(e.abonnementFin||0)>new Date()||require('./essai').actif(e));
+const publicUser=u=>({id:u.id,nom:u.nom,email:u.email,role:u.role,classe:u.classe||'',niveau:u.niveau||'',niveauDetail:u.niveauDetail||'',ecoleId:u.ecoleId||null,essaiFin:u.essaiFin||null,actif:u.actif!==false});
 module.exports={active,roles,publicUser,quota,effectif,async route(req,res,c){
  const {db,utilisateur:u,json,lireCorps,lireBinaire,sauverDB,uid,hashMdp}=c;
  const url=new URL(req.url,'http://localhost'),s=url.pathname.split('/').filter(Boolean),m=req.method;
@@ -21,7 +21,7 @@ module.exports={active,roles,publicUser,quota,effectif,async route(req,res,c){
   if(db.utilisateurs.some(x=>String(x.email||'').toLowerCase()===email))return send(409,{erreur:'Cet email possède déjà un compte. Utilisez un email distinct pour le responsable de l’établissement.'});
   const e={id:uid(),nom:nomEcole,formule:'petite',limiteEleves:100,adresse:'',description:'',telephone:'',email,livresIds:[],creeLe:new Date().toISOString()};
   const user={id:uid(),nom,email,role:'admin_etablissement',ecoleId:e.id,actif:true,...hashMdp(b.motDePasse),creeLe:new Date().toISOString()};
-  e.responsableId=user.id;db.ecoles.push(e);db.utilisateurs.push(user);const jeton=uid()+uid();db.sessions[jeton]=user.id;sauverDB();return send(201,{jeton,utilisateur:publicUser(user)});
+  require('./essai').initialiser(e);e.responsableId=user.id;db.ecoles.push(e);db.utilisateurs.push(user);const jeton=uid()+uid();db.sessions[jeton]=user.id;sauverDB();return send(201,{jeton,utilisateur:publicUser(user)});
  }
  // Branding is public; student lists, reading histories and settings are private.
  if(s[2]&&['logo','banniere'].includes(s[3])&&m==='GET'){
@@ -33,7 +33,7 @@ module.exports={active,roles,publicUser,quota,effectif,async route(req,res,c){
  const e=db.ecoles.find(e=>e.id===u.ecoleId);if(!e||u.actif===false)return send(403,{erreur:'Aucun espace établissement accessible.'});
  const gestion=roles.includes(u.role),owner=u.role==='admin_etablissement';
  const members=()=>db.utilisateurs.filter(x=>x.ecoleId===e.id);
- if(s[2]==='mon-espace'&&m==='GET')return send(200,{ecole:{...e,actif:active(e),limiteEleves:quota(e),elevesActifs:effectif(db,e)},utilisateur:publicUser(u),gestion,catalogue:db.livres.filter(l=>(e.livresIds||[]).includes(l.id)).map(l=>({id:l.id,titre:l.titre,auteur:l.auteur,categorie:l.categorie,couverture:!!l.couverture})),travaux:db.travauxEcoles.filter(t=>t.ecoleId===e.id&&(gestion||!t.classe||t.classe===u.classe))});
+ if(s[2]==='mon-espace'&&m==='GET')return send(200,{ecole:{...e,...require('./essai').info(e),actif:active(e),limiteEleves:quota(e),elevesActifs:effectif(db,e)},utilisateur:publicUser(u),gestion,catalogue:db.livres.filter(l=>(e.livresIds||[]).includes(l.id)).map(l=>({id:l.id,titre:l.titre,auteur:l.auteur,categorie:l.categorie,couverture:!!l.couverture})),travaux:db.travauxEcoles.filter(t=>t.ecoleId===e.id&&(gestion||!t.classe||t.classe===u.classe))});
  if(!gestion)return send(403,{erreur:'Réservé aux responsables de cet établissement.'});
  if(s[2]==='parametres'&&m==='PUT'){
   const b=await lireCorps(req);if(!texte(b.nom))return send(400,{erreur:'Nom de l’établissement requis.'});

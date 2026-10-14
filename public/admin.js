@@ -83,7 +83,7 @@
       return `
         <div class="section-titre catalogue-entete"><h3>📚 Catalogue (${livres.length} titres)</h3>
           <span style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn" id="btnCategories">🗂️ Catégories</button>
+            <button class="btn" id="btnDoublons">Détecter les doublons</button><button class="btn" id="btnCategories">🗂️ Catégories</button>
             <button class="btn" id="btnImporterPdf">📚 Importer des PDF</button>
             <button class="btn" id="btnImporter">📥 Importer (CSV / JSON)</button>
             <button class="btn btn-ajouter-livre" id="btnNouveauLivre">+ Ajouter un livre</button>
@@ -190,6 +190,7 @@
           <td>${echap(e.utilisateur)}</td><td><b>${echap(e.action)}</b></td><td>${echap(e.detail)}</td></tr>`).join('')}
         </tbody></table>` : '<p class="vide">Aucune activité enregistrée pour le moment.</p>'}`;
     },
+    abonnementsComptabilite:()=>OasisAdminAbonnements.ouvrir(api),
     async parametres() {
       const p = await api('/parametres');
       return `
@@ -329,7 +330,7 @@
     });
   }
 
-  function formNouveauLivre(modeEpub = false) {
+  function formNouveauLivre(modeEpub = false, partage = null) {
     modeEpub = modeEpub === true;
     chargerCategories();
     modale(`
@@ -417,13 +418,19 @@
           btn.textContent = 'Génération de la couverture…';
           if (!/\.epub$/i.test(fichierPdf.name)) await genererCouverture(livre.id, fichierPdf);
         }
-        fermerModale(); toast('Livre ajouté au catalogue.'); afficherOnglet('catalogue');
+        if(partage)await OasisPartages.supprimer(partage.id);
+        fermerModale(); toast('Livre ajouté au catalogue.'); afficherOnglet('catalogue'); rafraichirPartages();
       } catch (err) {
         btn.disabled = false; btn.textContent = 'Ajouter le livre';
         $('#msgForm').innerHTML = `<div class="erreur">${echap(err.message)}</div>`;
       }
     });
   }
+
+  async function rafraichirPartages(){
+    let zone=document.getElementById('partagesEnAttente');if(!zone){zone=document.createElement('section');zone.id='partagesEnAttente';zone.className='panneau';document.querySelector('main').before(zone)}
+    try{const rows=await OasisPartages.liste();zone.hidden=!rows.length;zone.innerHTML='<h3>Documents partagés — à vérifier</h3><p>Compte destinataire : '+echap(moi.nom)+'. Les fichiers expirent après 24 heures.</p>';
+    for(const row of rows){const line=document.createElement('div');line.className='rangee-boutons';const title=document.createElement('span');title.textContent=row.file.name;title.style.overflowWrap='anywhere';const add=document.createElement('button');add.className='btn btn-bleu';add.textContent='Vérifier et ajouter';add.onclick=()=>{formNouveauLivre(false,row);const dt=new DataTransfer();dt.items.add(row.file);$('#fPdf').files=dt.files;$('#fType').value='numerique';$('#fType').dispatchEvent(new Event('change'));$('#fTitre').value=row.file.name.replace(/\.(pdf|epub)$/i,'');$('#fPdf').dispatchEvent(new Event('change'))};const remove=document.createElement('button');remove.className='btn';remove.textContent='Retirer';remove.onclick=async()=>{await OasisPartages.supprimer(row.id);rafraichirPartages()};line.append(title,add,remove);zone.append(line)}}catch(e){zone.hidden=true;toast('Documents partagés : stockage local indisponible.')}}
 
   // Génère la couverture (image de la 1ʳᵉ page du PDF) via pdf.js, avec repli silencieux hors ligne
   async function genererCouverture(livreId, fichierPdf) {
@@ -907,6 +914,9 @@
   const normaliserRecherche=s=>String(s||" ").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const ongletsEtat = {};
   function brancherBoutons() {
+    OasisAdminAbonnements.brancher();
+    $('#btnDoublons')?.addEventListener('click',async()=>{try{const groupes=await api('/doublons');modale(`<h3>Doublons du catalogue et des ressources</h3><p>Vérifiez chaque groupe. La fusion conserve le premier document, ses liens et les fichiers ; le second est retiré du catalogue et archivé.</p>${groupes.map(g=>`<section class="panneau"><b>${echap(g.type)}</b>${g.documents.map((d,i)=>`<p>${echap(d.titre)} — ${echap(d.auteur)} ${echap(d.edition)} ${i?`<button class="mini-btn rouge" data-fusion-type="${g.type}" data-conserve="${g.documents[0].id}" data-retire="${d.id}">Fusionner ce doublon</button>`:' · Conservé'}</p>`).join('')}</section>`).join('')||'<p>Aucun doublon détecté.</p>'}`);document.querySelectorAll('[data-fusion-type]').forEach(b=>b.onclick=async()=>{try{await api('/doublons/fusionner',{method:'POST',body:JSON.stringify({type:b.dataset.fusionType,conserve:b.dataset.conserve,retire:b.dataset.retire})});b.closest('p').remove();toast('Doublon fusionné.');afficherOnglet('catalogue')}catch(e){toast(e.message)}})}catch(e){toast(e.message)}});
+
     const recherche=$('#rechercheCatalogue');
     if(recherche){recherche.value=rechercheCatalogue;const filtrer=()=>{rechercheCatalogue=recherche.value;const mots=normaliserRecherche(rechercheCatalogue).trim().split(/\s+/).filter(Boolean);const lignes=[...document.querySelectorAll('[data-catalogue-recherche]')];let total=0;for(const ligne of lignes){const texte=normaliserRecherche(ligne.dataset.catalogueRecherche);ligne.hidden=!mots.every(m=>texte.includes(m));if(!ligne.hidden)total++}$('#resultatsCatalogue').textContent=total+' document(s) affiché(s) sur '+lignes.length;$('#catalogueAucunResultat').hidden=total!==0;};recherche.addEventListener('input',filtrer);$('#effacerRechercheCatalogue').onclick=()=>{recherche.value='';filtrer();recherche.focus()};filtrer();}
 
@@ -934,6 +944,7 @@
             method: 'POST', headers: { 'Content-Type': f.type || 'application/octet-stream', Authorization: 'Bearer ' + jeton }, body: f
           });
           if (!rep.ok) { const d = await rep.json().catch(() => ({})); throw new Error(d.erreur || 'Fichier refusé.'); }
+          if($('#mType').value==='video'){try{await OasisVignetteVideo.fichier(media.id,f,jeton)}catch(e){toast('Vidéo ajoutée ; la vignette sera générée à l’ouverture de la cinémathèque.')}}
         }
         toast('Média ajouté' + (f ? ' avec son fichier.' : ' — pensez à joindre le fichier.'));
         afficherOnglet('multimedia');
@@ -1063,5 +1074,6 @@
     $('#avatarProfil').textContent = moi.nom.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
     remplirPied();
     afficherOnglet('tableau');
+    rafraichirPartages();
   })();
 })();
