@@ -14,7 +14,7 @@
       headers: { 'Content-Type': 'application/json', ...(jeton ? { Authorization: 'Bearer ' + jeton } : {}), ...(options.headers || {}) }
     });
     const data = await rep.json().catch(() => ({}));
-    if (!rep.ok) throw new Error(data.erreur || 'Erreur serveur');
+    if (!rep.ok) { const erreur = new Error(data.erreur || 'Erreur serveur'); erreur.statut = rep.status; throw erreur; }
     if (chemin.split('?')[0] === '/livres' && (!options.method || options.method === 'GET')) {
       if (Array.isArray(data)) return data;
       for (const key of ['livres', 'items', 'data', 'results']) if (Array.isArray(data[key])) return data[key];
@@ -382,8 +382,8 @@
     $('#fType').addEventListener('change', majChamps);
     if(modeEpub){$('#fType').value="numerique";$('#fPdf').accept=".epub,application/epub+zip";$('#fPdf').onchange=()=>{const f=$('#fPdf').files[0];if(f&&!$('#fTitre').value)$('#fTitre').value=f.name.replace(/\.epub$/i,'');};}
     majChamps();
-    const dirty=new Set();['fTitre','fAuteur','fEditeur','fEdition'].forEach(k=>$('#'+k).addEventListener('input',()=>dirty.add(k)));
-    $('#fPdf').addEventListener('change',async()=>{const f=$('#fPdf').files[0];if(!f)return;const btn=$('#btnValiderLivre');btn.disabled=true;try{const meta=await OasisMetadonnees.lire(f);if(!$('#fPdf')||$('#fPdf').files[0]!==f)return;for(const [k,id] of Object.entries({titre:'fTitre',auteur:'fAuteur',editeur:'fEditeur',edition:'fEdition'}))if(meta[k]&&!dirty.has(id))$('#'+id).value=meta[k];$('#msgForm').textContent='Métadonnées récupérées si disponibles. Vérifiez les champs avant l’ajout.'}catch(e){if($('#msgForm'))$('#msgForm').textContent='Métadonnées non disponibles : complétez les informations manuellement.'}finally{if(btn.isConnected)btn.disabled=false}});
+    const dirty=new Set();['fTitre','fAuteur','fEditeur','fEdition','fIsbn','fCategorie','fAnnee','fLangue'].forEach(k=>$('#'+k).addEventListener('input',()=>dirty.add(k)));
+    $('#fPdf').addEventListener('change',async()=>{const f=$('#fPdf').files[0];if(!f)return;const btn=$('#btnValiderLivre');btn.disabled=true;try{const meta=await OasisMetadonnees.lire(f);if(!$('#fPdf')||$('#fPdf').files[0]!==f)return;for(const [k,id] of Object.entries({titre:'fTitre',auteur:'fAuteur',editeur:'fEditeur',edition:'fEdition',isbn:'fIsbn',annee:'fAnnee'}))if(meta[k]&&!dirty.has(id))$('#'+id).value=meta[k];const cat=classerParTitre((meta.titre||'')+' '+(meta.extrait||''));if(listeCategories.includes(cat)&&!dirty.has('fCategorie'))$('#fCategorie').value=cat;$('#msgForm').textContent='Analyse des trois premières pages terminée. Vérifiez les suggestions avant l’ajout. Un document scanné sans texte nécessite une saisie manuelle.'}catch(e){if($('#msgForm'))$('#msgForm').textContent='Métadonnées non disponibles : complétez les informations manuellement.'}finally{if(btn.isConnected)btn.disabled=false}});
     let livreCree = null;
     $('#btnValiderLivre').addEventListener('click', async () => {
       const btn = $('#btnValiderLivre');
@@ -794,9 +794,9 @@
         return `<section class="epub-import-fiche"><b>${echap(f.name)}</b><p>${(f.size/1048576).toFixed(1)} Mo</p>
         <div class="admin-form-grid"><div class="champ"><label>Titre<input data-epub-titre="${i}" value="${echap(nom.titre)}"></label></div><div class="champ"><label>Auteur<input data-epub-auteur="${i}" value="${echap(nom.auteur||'Auteur à préciser')}"></label></div></div>
         <div class="champ"><label>Catégorie<select data-epub-cat="${i}">${optionsCategories(classerParTitre(nom.titre))}</select></label></div>
-        <div class="admin-form-grid"><div class="champ"><label>Éditeur<input data-epub-editeur="${i}"></label></div><div class="champ"><label>Édition<input data-epub-edition="${i}"></label></div></div><p data-epub-statut="${i}" role="status">${valide?'Prêt à importer':'Fichier vide, format incorrect ou taille supérieure à 50 Mo.'}</p></section>`;
+        <div class="admin-form-grid"><div class="champ"><label>Éditeur<input data-epub-editeur="${i}"></label></div><div class="champ"><label>Édition<input data-epub-edition="${i}"></label></div></div><div class="champ"><label>ISBN<input data-epub-isbn="${i}"></label></div><p data-epub-statut="${i}" role="status">${valide?'Prêt à importer':'Fichier vide, format incorrect ou taille supérieure à 50 Mo.'}</p></section>`;
       }).join('');
-      message.textContent='Analyse des métadonnées…';btn.disabled=true;const lot=lignes;for(let i=0;i<lot.length;i++){try{const meta=await OasisMetadonnees.lire(lot[i].f);if(lignes!==lot||!liste.isConnected)return;for(const k of ['titre','auteur','editeur','edition']){const el=liste.querySelector(`[data-epub-${k}="${i}"]`);if(meta[k]&&el&&!el.dataset.modifie)el.value=meta[k]}}catch(e){}}message.textContent='Vérifiez les informations récupérées avant l’import.';btn.disabled=!lignes.some(({f})=>/\.epub$/i.test(f.name)&&f.size>0&&f.size<=50*1024*1024);
+      message.textContent='Analyse des trois premières pages…';btn.disabled=true;const lot=lignes;for(let i=0;i<lot.length;i++){try{const meta=await OasisMetadonnees.lire(lot[i].f);if(lignes!==lot||!liste.isConnected)return;for(const k of ['titre','auteur','editeur','edition','isbn']){const el=liste.querySelector(`[data-epub-${k}="${i}"]`);if(meta[k]&&el&&!el.dataset.modifie)el.value=meta[k]}const cat=classerParTitre((meta.titre||'')+' '+(meta.extrait||''));const sel=liste.querySelector(`[data-epub-cat="${i}"]`);if(sel&&!sel.dataset.modifie&&listeCategories.includes(cat))sel.value=cat}catch(e){}}message.textContent='Vérifiez les informations récupérées avant l’import.';btn.disabled=!lignes.some(({f})=>/\.epub$/i.test(f.name)&&f.size>0&&f.size<=50*1024*1024);
     };
     btn.onclick=async()=>{
       enCours=true;btn.disabled=true;input.disabled=true;fermer.disabled=true;
@@ -809,9 +809,9 @@
         btn.textContent=`Import ${i+1}/${lignes.length}…`;statut.textContent='Envoi en cours…';
         try{
           const titre=liste.querySelector(`[data-epub-titre="${i}"]`).value.trim(),auteur=liste.querySelector(`[data-epub-auteur="${i}"]`).value.trim()||'Auteur à préciser',categorie=liste.querySelector(`[data-epub-cat="${i}"]`).value;
-          const editeur=liste.querySelector(`[data-epub-editeur="${i}"]`).value.trim(),edition=liste.querySelector(`[data-epub-edition="${i}"]`).value.trim();if(!titre)throw Error('Renseignez le titre.');
-          if(!ligne.id){const livre=await api('/livres',{method:'POST',body:JSON.stringify({titre,auteur,categorie,editeur,edition,publicCible:$('#epubLotNiveau').value,type:'numerique'})});ligne.id=livre.id;}
-          else await api('/livres/'+ligne.id,{method:'PUT',body:JSON.stringify({titre,auteur,categorie,editeur,edition,publicCible:$('#epubLotNiveau').value})});
+          const isbn=liste.querySelector(`[data-epub-isbn="${i}"]`).value.trim();const editeur=liste.querySelector(`[data-epub-editeur="${i}"]`).value.trim(),edition=liste.querySelector(`[data-epub-edition="${i}"]`).value.trim();if(!titre)throw Error('Renseignez le titre.');
+          if(!ligne.id){const livre=await api('/livres',{method:'POST',body:JSON.stringify({titre,auteur,categorie,editeur,edition,isbn,publicCible:$('#epubLotNiveau').value,type:'numerique'})});ligne.id=livre.id;}
+          else await api('/livres/'+ligne.id,{method:'PUT',body:JSON.stringify({titre,auteur,categorie,editeur,edition,isbn,publicCible:$('#epubLotNiveau').value})});
           await envoyerEpub(ligne.id,f);ligne.ok=true;statut.textContent='✓ Importé';
           liste.querySelectorAll(`[data-epub-titre="${i}"],[data-epub-auteur="${i}"],[data-epub-cat="${i}"]`).forEach(el=>el.disabled=true);
         }catch(err){echecs++;statut.textContent='Échec : '+err.message;}
@@ -827,9 +827,9 @@
     modale(`
       <h3 style="margin-bottom:6px">📚 Importer plusieurs livres PDF</h3>
       <p style="color:var(--gris);font-size:13px;margin-bottom:12px">
-        Sélectionnez plusieurs fichiers PDF d'un coup. Le système déduit le <b>titre</b> du nom de fichier
-        (nommez-les « Titre - Auteur.pdf » pour récupérer aussi l'auteur), détermine automatiquement la
-        <b>catégorie</b> d'après le titre, et génère la couverture depuis la 1ʳᵉ page.
+        Sélectionnez plusieurs fichiers PDF. Le système analyse les trois premières pages et les métadonnées
+        pour suggérer le titre, l’auteur, l’ISBN, l’éditeur, l’édition et la catégorie.
+        Le nom du fichier sert de repli ; la couverture provient de la première page.
         Vous pouvez tout ajuster dans l'aperçu avant de lancer l'import.</p>
       <div id="msgForm"></div>
       <div class="champ"><label for="fPdfMultiples">Fichiers PDF (50 Mo max chacun)</label>
@@ -844,7 +844,7 @@
       filesPdf = [...e.target.files];
       if (!filesPdf.length) return;
       $('#apercuPdf').innerHTML = `
-        <table style="margin:10px 0"><thead><tr><th>Titre</th><th>Auteur</th><th>Éditeur</th><th>Édition</th><th>Catégorie (auto)</th><th>Taille</th></tr></thead><tbody>
+        <table style="margin:10px 0"><thead><tr><th>Titre</th><th>Auteur</th><th>Éditeur</th><th>Édition</th><th>ISBN</th><th>Catégorie (auto)</th><th>Taille</th></tr></thead><tbody>
         ${filesPdf.map((f, i) => {
           const { titre, auteur } = analyserNomFichier(f.name);
           const cat = classerParTitre(titre);
@@ -852,14 +852,14 @@
           return `<tr ${tropGros ? 'style="opacity:.5"' : ''}>
             <td><input data-imp-titre="${i}" value="${echap(titre)}" style="width:100%;border:1px solid var(--bord);border-radius:6px;padding:5px 8px"></td>
             <td><input data-imp-auteur="${i}" value="${echap(auteur)}" placeholder="À préciser" style="width:100%;border:1px solid var(--bord);border-radius:6px;padding:5px 8px"></td>
-            <td><input data-imp-editeur="${i}"></td><td><input data-imp-edition="${i}"></td><td><select data-imp-cat="${i}" style="border:1px solid var(--bord);border-radius:6px;padding:5px 8px">
+            <td><input data-imp-editeur="${i}"></td><td><input data-imp-edition="${i}"></td><td><input data-imp-isbn="${i}" placeholder="ISBN"></td><td><select data-imp-cat="${i}" style="border:1px solid var(--bord);border-radius:6px;padding:5px 8px">
               ${optionsCategories(listeCategories.includes(cat) ? cat : listeCategories[0])}</select></td>
             <td style="white-space:nowrap">${(f.size / 1048576).toFixed(1)} Mo ${tropGros ? '<span class="retard">✖ trop gros</span>' : ''}</td>
           </tr>`;
         }).join('')}
         </tbody></table>
         <p style="font-size:12.5px;color:var(--gris)">💡 Le titre est modifiable, et la catégorie proposée peut être corrigée avant l'import.</p>`;
-      $('#btnLancerImportPdf').disabled=true;const lot=filesPdf;$('#apercuPdf').oninput=e=>e.target.dataset.modifie='1';for(let i=0;i<lot.length;i++){try{const meta=await OasisMetadonnees.lire(lot[i]);if(filesPdf!==lot||!$('#apercuPdf'))return;for(const k of ['titre','auteur','editeur','edition']){const el=document.querySelector(`[data-imp-${k}="${i}"]`);if(meta[k]&&el&&!el.dataset.modifie)el.value=meta[k]}}catch(e){}}
+      $('#btnLancerImportPdf').disabled=true;const lot=filesPdf;$('#apercuPdf').oninput=e=>e.target.dataset.modifie='1';for(let i=0;i<lot.length;i++){try{const meta=await OasisMetadonnees.lire(lot[i]);if(filesPdf!==lot||!$('#apercuPdf'))return;for(const k of ['titre','auteur','editeur','edition','isbn']){const el=document.querySelector(`[data-imp-${k}="${i}"]`);if(meta[k]&&el&&!el.dataset.modifie)el.value=meta[k]}const cat=classerParTitre((meta.titre||'')+' '+(meta.extrait||''));const sel=document.querySelector(`[data-imp-cat="${i}"]`);if(sel&&!sel.dataset.modifie&&listeCategories.includes(cat))sel.value=cat}catch(e){}}
       $('#btnLancerImportPdf').disabled = !filesPdf.some(f => f.size <= 50 * 1024 * 1024);
     });
     $('#btnLancerImportPdf').addEventListener('click', async () => {
@@ -875,7 +875,7 @@
           const titre = document.querySelector(`[data-imp-titre="${i}"]`).value.trim() || analyserNomFichier(f.name).titre;
           const auteur = document.querySelector(`[data-imp-auteur="${i}"]`).value.trim() || 'Auteur à préciser';
           const categorie = document.querySelector(`[data-imp-cat="${i}"]`).value;
-          const editeur=document.querySelector(`[data-imp-editeur="${i}"]`).value.trim(),edition=document.querySelector(`[data-imp-edition="${i}"]`).value.trim();const livre = await api('/livres', { method: 'POST', body: JSON.stringify({ titre, auteur, categorie, editeur,edition,type: 'numerique' }) });
+          const isbn=document.querySelector(`[data-imp-isbn="${i}"]`).value.trim();const editeur=document.querySelector(`[data-imp-editeur="${i}"]`).value.trim(),edition=document.querySelector(`[data-imp-edition="${i}"]`).value.trim();const livre = await api('/livres', { method: 'POST', body: JSON.stringify({ titre, auteur, categorie, editeur,edition,isbn,type: 'numerique' }) });
           await envoyerPdf(livre.id, f);
           await genererCouverture(livre.id, f);
           ok++;
@@ -915,7 +915,7 @@
   const ongletsEtat = {};
   function brancherBoutons() {
     OasisAdminAbonnements.brancher();
-    $('#btnDoublons')?.addEventListener('click',async()=>{try{const groupes=await api('/doublons');modale(`<h3>Doublons du catalogue et des ressources</h3><p>Vérifiez chaque groupe. La fusion conserve le premier document, ses liens et les fichiers ; le second est retiré du catalogue et archivé.</p>${groupes.map(g=>`<section class="panneau"><b>${echap(g.type)}</b>${g.documents.map((d,i)=>`<p>${echap(d.titre)} — ${echap(d.auteur)} ${echap(d.edition)} ${i?`<button class="mini-btn rouge" data-fusion-type="${g.type}" data-conserve="${g.documents[0].id}" data-retire="${d.id}">Fusionner ce doublon</button>`:' · Conservé'}</p>`).join('')}</section>`).join('')||'<p>Aucun doublon détecté.</p>'}`);document.querySelectorAll('[data-fusion-type]').forEach(b=>b.onclick=async()=>{try{await api('/doublons/fusionner',{method:'POST',body:JSON.stringify({type:b.dataset.fusionType,conserve:b.dataset.conserve,retire:b.dataset.retire})});b.closest('p').remove();toast('Doublon fusionné.');afficherOnglet('catalogue')}catch(e){toast(e.message)}})}catch(e){toast(e.message)}});
+    $('#btnDoublons')?.addEventListener('click',async()=>{try{let groupes;try{groupes=await api('/doublons')}catch(e){if(e.statut===404){let version='inconnue';try{version=(await api('/version')).version||version}catch{}throw new Error('La détection des doublons est absente du serveur déployé (version '+version+'). Mettez à jour server.js, package.json et le dossier modules, puis redéployez sur Render. Vos documents doivent être conservés dans data.')}throw e}if(!Array.isArray(groupes))throw new Error('Réponse de détection invalide. Mettez à jour les fichiers du serveur.');modale(`<h3>Doublons du catalogue et des ressources</h3><p>Vérifiez chaque groupe. La fusion conserve le premier document, ses liens et les fichiers ; le second est retiré du catalogue et archivé.</p>${groupes.map(g=>`<section class="panneau"><b>${echap(g.type)}</b>${g.documents.map((d,i)=>`<p>${echap(d.titre)} — ${echap(d.auteur)} ${echap(d.edition)} ${i?`<button class="mini-btn rouge" data-fusion-type="${g.type}" data-conserve="${g.documents[0].id}" data-retire="${d.id}">Fusionner ce doublon</button>`:' · Conservé'}</p>`).join('')}</section>`).join('')||'<p>Aucun doublon détecté.</p>'}`);document.querySelectorAll('[data-fusion-type]').forEach(b=>b.onclick=async()=>{try{await api('/doublons/fusionner',{method:'POST',body:JSON.stringify({type:b.dataset.fusionType,conserve:b.dataset.conserve,retire:b.dataset.retire})});b.closest('p').remove();toast('Doublon fusionné.');afficherOnglet('catalogue')}catch(e){toast(e.message)}})}catch(e){toast(e.message)}});
 
     const recherche=$('#rechercheCatalogue');
     if(recherche){recherche.value=rechercheCatalogue;const filtrer=()=>{rechercheCatalogue=recherche.value;const mots=normaliserRecherche(rechercheCatalogue).trim().split(/\s+/).filter(Boolean);const lignes=[...document.querySelectorAll('[data-catalogue-recherche]')];let total=0;for(const ligne of lignes){const texte=normaliserRecherche(ligne.dataset.catalogueRecherche);ligne.hidden=!mots.every(m=>texte.includes(m));if(!ligne.hidden)total++}$('#resultatsCatalogue').textContent=total+' document(s) affiché(s) sur '+lignes.length;$('#catalogueAucunResultat').hidden=total!==0;};recherche.addEventListener('input',filtrer);$('#effacerRechercheCatalogue').onclick=()=>{recherche.value='';filtrer();recherche.focus()};filtrer();}

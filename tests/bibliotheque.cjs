@@ -53,6 +53,11 @@ async function request(route,token,method='GET',body){const r=await fetch(base+'
  assert.equal((await request('/parametres')).data.tarifsAbonnement.annuel,6500);
  assert.equal((await request('/livres',admin,'POST',{titre:'Titre modifié',auteur:'Auteur',categorie:'Sciences'})).code,409);
  assert.equal((await request('/doublons',learner)).code,403);
+ assert.equal((await request('/doublons')).code,403);
+ assert.equal((await request('/doublons',schoolToken)).code,403);
+ const detection=await request('/doublons',admin);assert.equal(detection.code,200);assert(Array.isArray(detection.data));
+ assert.equal((await request('/doublons/fusionner',admin,'POST',{type:'livres',conserve:'absent',retire:'absent2'})).code,409);
+ const versionServeur=(await request('/version')).data;assert.equal(versionServeur.detectionDoublons,true);assert.equal(versionServeur.version,require('../package.json').version);
  const schoolSpace=(await request('/ecoles/mon-espace',schoolToken)).data;assert(schoolSpace.ecole.essaiActif);assert.equal(schoolSpace.ecole.joursEssaiRestants,30);
  const ordered=(await request('/livres')).data.map(x=>x.titre);assert.deepEqual(ordered,[...ordered].sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base',numeric:true})));
  assert.equal((await request('/admin-abonnements',learner)).code,403);assert.equal((await request('/admin-abonnements',schoolToken)).code,403);

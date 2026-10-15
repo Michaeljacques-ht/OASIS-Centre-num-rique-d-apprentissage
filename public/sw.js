@@ -1,6 +1,6 @@
 /* OASIS Bibliothèque Numérique — Service Worker (PWA) */
 importScripts('/partage-stockage.js');
-const CACHE = 'oasis-v50';
+const CACHE = 'oasis-v52';
 self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(cles => Promise.all(cles.map(k => caches.delete(k)))).then(() => self.clients.claim()));
