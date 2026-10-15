@@ -10,6 +10,7 @@
   async function api(chemin, options = {}) {
     const rep = await fetch('/api' + chemin, {
       ...options,
+      signal:options.signal||AbortSignal.timeout(15000),
       headers: { 'Content-Type': 'application/json', ...(jeton ? { Authorization: 'Bearer ' + jeton } : {}), ...(options.headers || {}) }
     });
     const data = await rep.json().catch(() => ({}));
@@ -1220,9 +1221,15 @@
     rafraichirPanneaux();
   }
   (async () => {
-    initAuth();
-    if (await verifierSession()) demarrer();
-    else demarrer();
+    try{
+      for(const [nom,fichier] of [['OasisProfilAbonnement','profil-abonnement.js'],['OasisNavigationEcole','navigation-ecole.js']]){
+        if(!window[nom])await new Promise((resolve,reject)=>{const script=document.createElement('script');let fini=false;const terminer=err=>{if(fini)return;fini=true;clearTimeout(delai);script.onload=script.onerror=null;if(err)reject(err);else resolve()};const delai=setTimeout(()=>terminer(new Error('Délai dépassé pour '+fichier)),10000);script.src='/'+fichier+'?v58&reprise=1';script.onload=()=>terminer(window[nom]?null:new Error('Le fichier '+fichier+' est invalide.'));script.onerror=()=>terminer(new Error('Fichier absent : public/'+fichier+'. Déployez ce fichier.'));document.head.appendChild(script)});
+      }
+      initAuth();
+      await verifierSession();
+      demarrer();
+      window.OasisDemarrage?.termine();
+    }catch(err){console.error('Démarrage OASIS :',err);window.OasisDemarrage?.erreur('Démarrage interrompu : '+err.message+' Rechargez la page ou vérifiez que tous les fichiers de la mise à jour ont été déployés.');}
   })();
 
   window.addEventListener('oasis-connexion',()=>{fermerModale();$('#appli').hidden=true;$('#ecranConnexion').hidden=false;});

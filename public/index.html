@@ -7,10 +7,24 @@
   <link rel="icon" href="/icone-192.png">
   <link rel="apple-touch-icon" href="/icone-192.png">
   <title>OASIS Bibliothèque Numérique</title>
-  <link rel="stylesheet" href="/styles.css?v56">
+  <link rel="stylesheet" href="/styles.css?v58">
   <link rel="manifest" href="/manifest.json">
 </head>
 <body>
+  <section id="etatDemarrage" role="status" style="max-width:640px;margin:40px auto;padding:24px;background:white;color:#123e8c;border-radius:16px;font:18px system-ui">
+    <h1>OASIS Bibliothèque Numérique</h1><p id="texteDemarrage">Chargement de votre bibliothèque…</p><button id="reessayerDemarrage" type="button" style="padding:12px;background:#123e8c;color:white;border:0;border-radius:8px">Recharger la page</button>
+    <noscript><p>Activez JavaScript pour ouvrir la bibliothèque.</p></noscript>
+  </section>
+  <script>
+  (()=>{let fini=false;const panneau=document.getElementById('etatDemarrage'),message=document.getElementById('texteDemarrage');
+  const erreur=texte=>{if(fini)return;panneau.hidden=false;message.textContent=texte};
+  document.getElementById('reessayerDemarrage').onclick=()=>{const u=new URL(location.href);u.searchParams.set('maj',Date.now());location.replace(u.href)};
+  window.OasisDemarrage={termine(){fini=true;panneau.hidden=true},erreur};
+  window.addEventListener('error',e=>{if(e.target?.tagName==='SCRIPT')erreur('Un fichier du site n’a pas pu être chargé : '+new URL(e.target.src,location.href).pathname+'. Vérifiez le déploiement complet, puis rechargez.');else erreur('L’interface n’a pas pu démarrer. Rechargez la page. Si le problème persiste, communiquez l’erreur de la console du navigateur à l’administrateur.');},true);
+  window.addEventListener('unhandledrejection',()=>erreur('Le chargement a échoué. Vérifiez votre connexion et rechargez.'));
+  setTimeout(()=>erreur('Le démarrage prend trop de temps. Vérifiez votre connexion ou l’état du serveur, puis rechargez.'),20000);
+  })();
+  </script>
   <!-- Écran de connexion -->
   <div id="ecranConnexion" class="ecran-connexion" hidden>
     <section class="presentation-connexion" aria-label="Découvrir OASIS">
@@ -120,13 +134,13 @@
   </div>
 
   <div id="zoneModale"></div>
-  <script src="/abonnement.js?v56"></script>
+  <script src="/abonnement.js?v58"></script>
   <script src="/vendor/jszip/jszip.min.js"></script>
-  <script src="/lecture-assistance.js?v56"></script>
-  <script src="/lecteur-epub.js?v56"></script>
-  <script src="/vignette-video.js?v56"></script>
-  <script src="/navigation-ecole.js?v56"></script>
-  <script src="/profil-abonnement.js?v56"></script>
-<script src="/app.js?v56"></script>
+  <script src="/lecture-assistance.js?v58"></script>
+  <script src="/lecteur-epub.js?v58"></script>
+  <script src="/vignette-video.js?v58"></script>
+  <script src="/navigation-ecole.js?v58"></script>
+  <script src="/profil-abonnement.js?v58"></script>
+<script src="/app.js?v58"></script>
 </body>
 </html>
