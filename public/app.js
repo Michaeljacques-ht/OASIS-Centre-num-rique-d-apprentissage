@@ -46,6 +46,7 @@
   // ---------- Authentification ----------
   let modeInscription = false;
   function initAuth() {
+    $('#champsProfil').innerHTML=OasisProfilAbonnement.champs();$('#profilAbonnement').required=false;
     $('#voirMdp').addEventListener('click', () => {
       const visible = $('#inMdp').type === 'password';
       $('#inMdp').type = visible ? 'text' : 'password';
@@ -56,7 +57,7 @@
     $('#lienBascule').addEventListener('click', e => {
       e.preventDefault();
       modeInscription = !modeInscription;
-      $('#champNom').hidden = !modeInscription; $('#champNiveau').hidden = !modeInscription; $('#inNiveau').required = modeInscription;
+      $('#champsProfil').hidden=!modeInscription;$('#profilAbonnement').required=modeInscription;$('#champNom').hidden = !modeInscription; $('#champNiveau').hidden = !modeInscription; $('#inNiveau').required = modeInscription;
       $('#inNom').required = modeInscription;
       $('#inMdp').autocomplete = modeInscription ? 'new-password' : 'current-password';
       $('#titreConnexion').textContent = modeInscription ? 'Commencez votre parcours avec OASIS.' : 'Votre prochaine découverte commence ici.';
@@ -70,7 +71,7 @@
       $('#msgAuth').innerHTML = '';
       try {
         const corps = { email: $('#inEmail').value.trim(), motDePasse: $('#inMdp').value };
-        if (modeInscription) { corps.nom = $('#inNom').value.trim(); corps.niveau = $('#inNiveau').value; corps.niveauDetail = $('#inNiveauDetail').value.trim(); }
+        if (modeInscription) { Object.assign(corps,OasisProfilAbonnement.valeurs());corps.nom = $('#inNom').value.trim(); corps.niveau = $('#inNiveau').value; corps.niveauDetail = $('#inNiveauDetail').value.trim(); }
         const r = await api(modeInscription ? '/inscription' : '/connexion', { method: 'POST', body: JSON.stringify(corps) });
         jeton = r.jeton; moi = r.utilisateur;
         localStorage.setItem('oasis_jeton', jeton); localStorage.removeItem('educa_jeton');
@@ -514,7 +515,7 @@
     toast('Ouverture du PDF…');
     let blob;
     try {
-      const rep = await fetch('/api/livres/' + livre.id + (livre.accesComplet ? '/pdf' : '/apercu'), { headers: { Authorization: 'Bearer ' + jeton } });
+      const rep = await fetch('/api/livres/' + livre.id + (livre.accesComplet ? '/pdf?lecture=1' : '/apercu'), { headers: { Authorization: 'Bearer ' + jeton } });
       if (!rep.ok) { const d = await rep.json().catch(() => ({})); throw new Error(rep.status === 404 && !livre.accesComplet ? 'Le serveur doit être mis à jour pour ouvrir les aperçus gratuits. Veuillez réessayer après le déploiement.' : d.erreur || 'PDF indisponible.'); }
       blob = await rep.blob();
     } catch (err) { return toast(err.message); }
@@ -522,7 +523,7 @@
     urlPdfActive = URL.createObjectURL(blob);
     $('#zoneModale').innerHTML = `<div class="voile" id="voile"><div class="modale lecteur lecteur-pdf-mobile" role="dialog" aria-modal="true" aria-label="Lecture PDF">
       <div class="pdf-entete"><h3>${echap(livre.titre)}</h3><button class="mini-btn" id="btnFermer" aria-label="Fermer">✕</button></div>
-      <div class="pdf-outils"><button class="mini-btn" id="pdfAvant" aria-label="Page précédente">←</button><label>Page <input type="number" id="pdfPage" min="1" value="1" aria-label="Numéro de page"></label><span id="pdfTotal"></span><button class="mini-btn" id="pdfApres" aria-label="Page suivante">→</button><button class="mini-btn" id="pdfMoins" aria-label="Réduire le zoom">−</button><button class="mini-btn" id="pdfPlus" aria-label="Augmenter le zoom">+</button><a class="mini-btn" href="${urlPdfActive}" download="${echap(livre.titre)}.pdf">Télécharger</a><a class="mini-btn" href="${urlPdfActive}" target="_blank" rel="noopener">Ouvrir ↗</a><button class="mini-btn bleu" id="btnTerminerPdf" ${!livre.accesComplet ? 'hidden' : ''}>Terminer</button></div>
+      <div class="pdf-outils"><button class="mini-btn" id="pdfAvant" aria-label="Page précédente">←</button><label>Page <input type="number" id="pdfPage" min="1" value="1" aria-label="Numéro de page"></label><span id="pdfTotal"></span><button class="mini-btn" id="pdfApres" aria-label="Page suivante">→</button><button class="mini-btn" id="pdfMoins" aria-label="Réduire le zoom">−</button><button class="mini-btn" id="pdfPlus" aria-label="Augmenter le zoom">+</button>${livre.telechargementAutorise!==false?`<a class="mini-btn" href="${urlPdfActive}" download="${echap(livre.titre)}.pdf">Télécharger</a><a class="mini-btn" href="${urlPdfActive}" target="_blank" rel="noopener">Ouvrir ↗</a>`:'<span>🔒 Consultation en ligne uniquement</span>'}<button class="mini-btn bleu" id="btnTerminerPdf" ${!livre.accesComplet ? 'hidden' : ''}>Terminer</button></div>
       ${!livre.accesComplet ? '<div class="pdf-abonnement">Aperçu gratuit : cinq pages maximum. <button class="mini-btn bleu" data-abonner>Lire la suite — s’abonner</button></div>' : ''}<p id="pdfEtat" role="status" aria-live="polite">Chargement du document…</p><div class="pdf-pages" id="pdfPages"><canvas id="pdfCanvas" aria-label="Page du document PDF"></canvas></div></div></div>`;
     let doc=null, renderTask=null, closed=false, page=1, zoom=1, sequence=0;
     const assistance=OasisLecture.start($('#zoneModale .lecteur'),livre,moi?jeton:null,async()=>{if(!doc)return '';const text=await (await doc.getPage(page)).getTextContent();return text.items.map(x=>x.str+(x.hasEOL?'\n':' ')).join('')});
@@ -834,7 +835,7 @@
     const x = cacheMedias.find(v => v.id === id);
     if (!x) return;
     if (!x.fichier) return toast('Le fichier de ce média n\'est pas encore disponible.');
-    const src = `/api/medias/${x.id}/fichier?jeton=${jeton}`;
+    const src = `/api/medias/${x.id}/fichier?lecture=1&jeton=${jeton}`;
     if (x.type === 'carte') return ouvrirCarte(x, src);
     const balise = x.type === 'video'
       ? `<video id="lecteurMedia" controls preload="metadata" src="${src}" style="width:100%;border-radius:12px;background:#000;max-height:60vh"></video>`
@@ -859,7 +860,7 @@
                 <select id="selMinuteur" style="border:1px solid var(--bord);border-radius:7px;padding:4px 8px">
                   <option value="0">Désactivé</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option>
                 </select></label>
-              <a class="mini-btn" href="${src}" download="${echap(x.titre)}${x.ext}">⬇ Télécharger</a>
+              ${x.telechargementAutorise!==false?`<a class="mini-btn" href="${src.replace('lecture=1','telechargement=1')}" download="${echap(x.titre)}${x.ext}">⬇ Télécharger</a>`:'<span>🔒 Consultation uniquement</span>'}
             </div>
           </div>
         </div>
@@ -896,7 +897,7 @@
               <p style="color:var(--gris)">${echap(x.auteur || '')}${x.lieu ? ' · ' + echap(x.lieu) : ''} · ${x.annee}</p></div>
             ${estPdf ? '' : `<button class="btn" id="btnZoomCarteMoins">🔍−</button><button class="btn" id="btnZoomCartePlus">🔍+</button>`}
             <button class="btn" id="btnPleinEcranCarte">⛶</button>
-            <a class="btn" href="${src}" download="${echap(x.titre)}${x.ext}">⬇</a>
+            ${x.telechargementAutorise!==false?`<a class="btn" href="${src.replace('lecture=1','telechargement=1')}" download="${echap(x.titre)}${x.ext}">⬇</a>`:''}
             <button class="btn" id="btnImprimerCarte">🖨️</button>
             <button class="fermer" id="btnFermer" aria-label="Fermer">✕</button>
           </div>
@@ -1195,14 +1196,15 @@
 
   // ---------- Démarrage ----------
   function demarrer() {
-    if (moi && ['admin_etablissement','bibliothecaire_ecole'].includes(moi.role)) { location.href='/ecole'; return; }
+    const navigationEcole=OasisNavigationEcole.destination(moi?.role,location.search);
+    if (navigationEcole.redirigerEcole) { location.href='/ecole'; return; }
     $('.contenu').classList.toggle('sans-colonne', !moi);
     $('#ecranConnexion').hidden = true;
     $('#appli').hidden = false;
     if(!moi){
       $('#btnConnexionPublic').hidden=false;$('#nomProfil').textContent='Visiteur';$('#avatarProfil').textContent='';$('#avatarProfil').hidden=true;$('#lienAdmin').hidden=true;$('#btnDeconnexion').hidden=true;
       document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=!['accueil','bibliotheque','categories','nouveautes','recommandes','abonnement'].includes(b.dataset.vue));
-      $('#colonneDroite').hidden=true;$('#btnNotifs').hidden=true;chargerParametres();chargerCategories().then(()=>afficherVue('accueil'));return;
+      $('#colonneDroite').hidden=true;$('#btnNotifs').hidden=true;chargerParametres();chargerCategories().then(()=>afficherVue(navigationEcole.vue||'accueil'));return;
     }
     $('#avatarProfil').hidden=false;$('#btnDeconnexion').hidden=false;$('#btnNotifs').hidden=false;$('#colonneDroite').hidden=false;document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=false);$('#btnConnexionPublic').hidden=true;
     $('#nomProfil').textContent = moi.nom.split(' ')[0] + ' ' + (moi.nom.split(' ')[1]?.[0] || '') + (moi.nom.split(' ')[1] ? '.' : '');
@@ -1214,7 +1216,7 @@
     rafraichirNotifications();
     setInterval(rafraichirNotifications, 120000);
     const livrePartage = new URLSearchParams(location.search).get('livre');
-    chargerCategories().then(() => { afficherVue(localStorage.getItem('oasis_apres_auth')|| (new URLSearchParams(location.search).has('espace')?'espace':'accueil'));localStorage.removeItem('oasis_apres_auth'); if (livrePartage) ouvrirLivre(livrePartage); });
+    chargerCategories().then(() => { afficherVue(navigationEcole.vue || localStorage.getItem('oasis_apres_auth')|| (new URLSearchParams(location.search).has('espace')?'espace':'accueil'));localStorage.removeItem('oasis_apres_auth'); if (livrePartage) ouvrirLivre(livrePartage); });
     rafraichirPanneaux();
   }
   (async () => {

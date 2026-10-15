@@ -7,7 +7,7 @@
   <link rel="icon" href="/icone-192.png">
   <link rel="apple-touch-icon" href="/icone-192.png">
   <title>OASIS Bibliothèque Numérique</title>
-  <link rel="stylesheet" href="/styles.css?v52">
+  <link rel="stylesheet" href="/styles.css?v56">
   <link rel="manifest" href="/manifest.json">
 </head>
 <body>
@@ -28,7 +28,7 @@
       </div>
       <div id="msgAuth" role="status" aria-live="polite"></div>
       <form id="formConnexion">
-        <fieldset id="champNiveau" hidden class="champ"><legend>Votre parcours d’apprentissage</legend><label for="inNiveau">Niveau *</label><select id="inNiveau"><option value="">Choisir votre niveau</option><option value="scolaire">Scolaire</option><option value="universitaire">Universitaire</option><option value="technique_professionnel">Technique et professionnel</option></select><label for="inNiveauDetail">Classe, année ou spécialité (facultatif)</label><input id="inNiveauDetail" maxlength="80" placeholder="Ex. : 9e AF, licence 2, mécanique"><small>Ce niveau nous aide à vous proposer des lectures adaptées.</small></fieldset><div class="champ" id="champNom" hidden>
+        <div id="champsProfil" hidden></div><fieldset id="champNiveau" hidden class="champ"><legend>Votre parcours d’apprentissage</legend><label for="inNiveau">Niveau *</label><select id="inNiveau"><option value="">Choisir votre niveau</option><option value="scolaire">Scolaire</option><option value="universitaire">Universitaire</option><option value="technique_professionnel">Technique et professionnel</option></select><label for="inNiveauDetail">Classe, année ou spécialité (facultatif)</label><input id="inNiveauDetail" maxlength="80" placeholder="Ex. : 9e AF, licence 2, mécanique"><small>Ce niveau nous aide à vous proposer des lectures adaptées.</small></fieldset><div class="champ" id="champNom" hidden>
           <label for="inNom">Nom complet</label>
           <input id="inNom" type="text" autocomplete="name" placeholder="Ex. : Jean Baptiste">
         </div>
@@ -63,7 +63,7 @@
         <button class="nav-item" data-vue="bibliotheque"><span class="ic">📚</span> Bibliothèque</button>
         <button class="nav-item" data-vue="favoris"><span class="ic">❤️</span> Mes Favoris</button>
         <button class="nav-item" data-vue="emprunts"><span class="ic">🔖</span> Mes Emprunts</button>
-        <button class="nav-item" data-vue="abonnement"><span class="ic">💳</span> Abonnement</button><div class="sep"></div>
+        <a class="nav-item" href="/engagement.html?vue=don">💝 Faire un don</a><a class="nav-item" href="/engagement.html?vue=quiz">🏅 Tester vos connaissances</a><button class="nav-item" data-vue="abonnement"><span class="ic">💳</span> Abonnement</button><div class="sep"></div>
         <button class="nav-item" data-vue="categories"><span class="ic">🗂️</span> Catégories</button>
         <button class="nav-item" data-vue="nouveautes"><span class="ic">✨</span> Nouveautés</button>
         <button class="nav-item" data-vue="recommandes"><span class="ic">⭐</span> Recommandés</button>
@@ -120,11 +120,13 @@
   </div>
 
   <div id="zoneModale"></div>
-  <script src="/abonnement.js?v52"></script>
+  <script src="/abonnement.js?v56"></script>
   <script src="/vendor/jszip/jszip.min.js"></script>
-  <script src="/lecture-assistance.js?v52"></script>
-  <script src="/lecteur-epub.js?v52"></script>
-  <script src="/vignette-video.js?v52"></script>
-  <script src="/app.js?v52"></script>
+  <script src="/lecture-assistance.js?v56"></script>
+  <script src="/lecteur-epub.js?v56"></script>
+  <script src="/vignette-video.js?v56"></script>
+  <script src="/navigation-ecole.js?v56"></script>
+  <script src="/profil-abonnement.js?v56"></script>
+<script src="/app.js?v56"></script>
 </body>
 </html>

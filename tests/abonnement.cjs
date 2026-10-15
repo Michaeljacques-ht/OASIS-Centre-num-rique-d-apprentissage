@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');const PP=require('../lib/plopplop');const A=require('../modules/abonnement');
-(async()=>{let serial=0,paid=false,amount;const db={commandesAbonnement:[],livres:[]},user={id:'alice',role:'apprenant'};
+(async()=>{let serial=0,paid=false,amount;const db={commandesAbonnement:[],livres:[]},user={id:'alice',role:'apprenant',profilAbonnement:'etudiant'};
 PP.passerelleActive=()=>true;PP.initierPaiement=async c=>{amount=c.montant;return {ok:true,urlPaiement:'https://plopplop.solutionip.app/test',transactionId:'test'}};PP.verifierPaiement=async()=>({ok:true,paye:paid});
 async function call(route,body={},u=user){let result;assert(await A.route({url:'/api/abonnement/'+route,method:route==='statut'?'GET':'POST'},{},{db,utilisateur:u,json:(r,code,data)=>result={code,data},lireCorps:async()=>body,sauverDB:()=>{},uid:()=>String(++serial)}));return result}
 assert.equal((await call('payer',{plan:'mensuel'},null)).code,401);assert.equal((await call('payer',{plan:'gratuit'})).code,400);
@@ -9,7 +9,7 @@ paid=true;assert.equal((await call('verifier/'+cmd.data.id)).data.paye,true);ass
 const annual=await call('payer',{plan:'annuel',montant:0});assert.equal(amount,5000);await call('verifier/'+annual.data.id);assert(new Date(user.abonnementFin)>new Date(end));
 assert(!A.actif(db,{role:'apprenant',abonnementFin:'2000-01-01'}));assert(A.actif(db,{role:'bibliothecaire'}));
 PP.verifierPaiement=async()=>({ok:false,error:'Échec passerelle'});const fail=await call('payer',{plan:'mensuel'});const last=user.abonnementFin;assert.equal((await call('verifier/'+fail.data.id)).code,502);assert.equal(user.abonnementFin,last);
-db.parametres={tarifsAbonnement:{mensuel:750,annuel:7500,petite:65000,moyenne:130000,grande:195000}};
+db.parametres={tarifsProfils:{etudiant:750},tarifsAbonnement:{mensuel:750,annuel:7500,petite:65000,moyenne:130000,grande:195000}};
 const changed=await call('payer',{plan:'mensuel',montant:1});assert.equal(amount,750);assert.equal(db.commandesAbonnement.find(c=>c.id===cmd.data.id).montant,500);
 await call('payer',{plan:'annuel',montant:1});assert.equal(amount,7500);
 const owner={id:'school-owner',role:'admin_etablissement',ecoleId:'school-test'};db.ecoles=[{id:'school-test',formule:'petite',limiteEleves:100}];db.utilisateurs=[owner];

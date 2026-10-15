@@ -10,7 +10,7 @@ module.exports.route=async(req,res,c)=>{
  if(s[1]==='abonnement'){
   if(!u)return send(401,{erreur:'Créez un compte ou connectez-vous pour vous abonner.'});
   db.commandesAbonnement ||= [];
-  if(s[2]==='statut'&&m==='GET')return send(200,{...require('./essai').info(school||u),actif:actif(db,u),fin:(owner?school.abonnementFin:(u.abonnementFin||school?.abonnementFin))||school?.essaiFin||u.essaiFin||null,etablissement:!!owner,configure:PP.passerelleActive(),commandes:db.commandesAbonnement.filter(x=>x.utilisateurId===u.id).slice(-10).map(x=>({id:x.id,statut:x.statut,plan:x.plan,formule:x.formule,montant:x.montant}))});
+  if(s[2]==='statut'&&m==='GET')return send(200,{offre:require('./profils-abonnement').offre(db,u),...require('./essai').info(school||u),actif:actif(db,u),fin:(owner?school.abonnementFin:(u.abonnementFin||school?.abonnementFin))||school?.essaiFin||u.essaiFin||null,etablissement:!!owner,configure:PP.passerelleActive(),commandes:db.commandesAbonnement.filter(x=>x.utilisateurId===u.id).slice(-10).map(x=>({id:x.id,statut:x.statut,plan:x.plan,formule:x.formule,montant:x.montant}))});
   if(s[2]==='payer'&&m==='POST'){
    const b=await lireCorps(req);if(!['mensuel','annuel','etablissement'].includes(b.plan))return send(400,{erreur:'Choisissez un abonnement mensuel ou annuel.'});
    if(b.plan==='etablissement'&&!owner)return send(403,{erreur:'Seul l’administrateur de l’établissement peut régler son abonnement.'});
@@ -19,8 +19,10 @@ module.exports.route=async(req,res,c)=>{
    if(b.plan==='etablissement'&&!offre)return send(400,{erreur:'Choisissez une formule établissement valide.'});
    if(offre&&E.effectif(db,school)>offre.limiteEleves)return send(409,{erreur:'Cette formule ne couvre pas tous vos élèves actifs.'});
    if(offre&&E.active(school)&&offre.limiteEleves<E.quota(school))return send(409,{erreur:'Une baisse de formule est possible après expiration, avec un effectif compatible.'});
+   const offreProfil=require('./profils-abonnement').offre(db,u);
+   if(b.plan!=='etablissement'&&u.role==='apprenant'&&!u.ecoleId&&!offreProfil)return send(409,{erreur:'Complétez votre situation avant de consulter et payer votre abonnement.'});
    if(!PP.passerelleActive())return send(503,{erreur:'Les paiements ne sont pas encore configurés par l’administration.'});
-   const commande={id:'ABO-'+uid(),utilisateurId:u.id,plan:b.plan,ecoleId:b.plan==='etablissement'?school.id:null,formule,limiteEleves:offre?.limiteEleves,montant:require('./tarifs').lire(db)[b.plan==='etablissement'?formule:b.plan],statut:'en_attente',creeLe:new Date().toISOString()};db.commandesAbonnement.push(commande);sauverDB();
+   const commande={profilTarif:offreProfil?.categorie||null,id:'ABO-'+uid(),utilisateurId:u.id,plan:b.plan,ecoleId:b.plan==='etablissement'?school.id:null,formule,limiteEleves:offre?.limiteEleves,montant:b.plan!=='etablissement'&&offreProfil?offreProfil[b.plan]:require('./tarifs').lire(db)[b.plan==='etablissement'?formule:b.plan],statut:'en_attente',creeLe:new Date().toISOString()};db.commandesAbonnement.push(commande);sauverDB();
    const r=await PP.initierPaiement({reference:commande.id,montant:commande.montant,methode:'all'});
    if(!r.ok){commande.statut='erreur';sauverDB();return send(502,{erreur:r.error})}
    try{if(new URL(r.urlPaiement).protocol!=='https:')throw Error()}catch{commande.statut='erreur';sauverDB();return send(502,{erreur:'Adresse de paiement invalide.'})}

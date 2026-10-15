@@ -2,10 +2,11 @@ const assert=require('node:assert/strict');const fs=require('node:fs');const os=
 const source=path.resolve(__dirname,'..');const temp=fs.mkdtempSync(path.join(os.tmpdir(),'oasis-fusion-test-'));let server;let base;
 async function start(){server=spawn(process.execPath,['server.js'],{cwd:temp,env:{...process.env,PORT:'0'},stdio:['ignore','pipe','pipe']});base=await new Promise((ok,no)=>{let output='';server.stdout.on('data',c=>{output+=c;const match=output.match(/TEST_PORT:(\d+)/);if(match)ok('http://127.0.0.1:'+match[1])});server.on('error',no);server.on('exit',code=>no(Error('Server exit '+code)))});}
 async function stop(){if(server&&!server.killed){const done=new Promise(r=>server.once('exit',r));server.kill();await done}}
-async function request(route,token,method='GET',body){const r=await fetch(base+'/api'+route,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body)});return {code:r.status,data:await r.json()}}
+async function request(route,token,method='GET',body){if(route==='/inscription'&&body&&!body.profilAbonnement)body={...body,profilAbonnement:'etudiant',etablissement:'Université test',matricule:'TEST-123'};const r=await fetch(base+'/api'+route,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body)});return {code:r.status,data:await r.json()}}
 (async()=>{try{
  fs.cpSync(source,temp,{recursive:true,filter:p=>!['data','integrations','tests','node_modules'].includes(path.relative(source,p).split(path.sep)[0])});
  let code=fs.readFileSync(path.join(temp,'server.js'),'utf8');code=code.replace('http.createServer(async (req, res) => {','const testServer = http.createServer(async (req, res) => {').replace("}).listen(PORT, () => {","}).listen(PORT, () => { console.log('TEST_PORT:' + testServer.address().port);");fs.writeFileSync(path.join(temp,'server.js'),code);await start();
+ assert.equal((await request('/quiz')).code,200);assert.equal((await request('/dons/configuration')).code,200);assert.equal((await fetch(base+'/engagement.html?vue=don')).status,200);
  const stats=await request('/statistiques-publiques');assert.equal(stats.code,200);assert.equal(typeof stats.data.livres,'number');assert.equal(stats.data.visiteurs,1);
  const tracked=await fetch(base+'/api/statistiques-publiques',{headers:{Cookie:'oasis_visite=1'}});assert.equal((await tracked.json()).visiteurs,1);
  const login=async(email,motDePasse)=>{const r=await request('/connexion',null,'POST',{email,motDePasse});assert.equal(r.code,200);return r.data.jeton};
@@ -18,6 +19,15 @@ async function request(route,token,method='GET',body){const r=await fetch(base+'
  assert.equal((await request('/livres',schoolToken,'POST',{titre:'Interdit',auteur:'Test',categorie:'Sciences'})).code,403);
  assert.equal((await fetch(base+'/ecole')).status,200);
  const learner=await login('emma@oasis.ht','demo123');const admin=await login('admin@oasis.ht','admin123');
+ const delegation=await request('/administration-comptes',admin,'POST',{nom:'Catalogue assistant',email:'delegue@test.ht',motDePasse:'motdepasse12345',permissions:['catalogue']});assert.equal(delegation.code,201);
+ const delegue=await login('delegue@test.ht','motdepasse12345');assert.equal((await request('/moi',delegue)).data.adminDelegue,true);assert.equal((await request('/livres',delegue)).code,200);assert.equal((await request('/doublons',delegue)).code,200);
+ for(const r of ['/administration-comptes','/admin-abonnements','/membres','/ecoles/devis-admin','/stats'])assert.equal((await request(r,delegue)).code,403);
+ assert.equal((await request('/parametres',delegue,'PUT',{nom:'Interdit'})).code,403);assert.equal((await request('/administration-comptes',delegue,'POST',{nom:'Intrus'})).code,403);
+ assert.equal((await request('/administration-comptes/'+delegation.data.id,admin,'PUT',{actif:false})).code,200);assert.equal((await request('/moi',delegue)).code,401);
+ const publicPupil=await request('/inscription',null,'POST',{nom:'Élève public',email:'public@test.ht',motDePasse:'secret123',profilAbonnement:'eleve_public',etablissement:'Lycée national test',matricule:'12345',profilValide:true});assert.equal(publicPupil.code,201);const pupilToken=publicPupil.data.jeton;
+ let profileStatus=(await request('/abonnement/statut',pupilToken)).data;assert.equal(profileStatus.offre.mensuel,250);assert.equal(profileStatus.offre.validationEnAttente,true);
+ assert.equal((await request('/administration-comptes/'+publicPupil.data.utilisateur.id,pupilToken,'PUT',{validation:true})).code,403);
+ assert.equal((await request('/administration-comptes/'+publicPupil.data.utilisateur.id,admin,'PUT',{validation:true})).code,200);assert.equal((await request('/abonnement/statut',pupilToken)).data.offre.mensuel,100);
  const enrolled=await request('/inscription',null,'POST',{nom:'Niveau test',email:'niveau@test.ht',motDePasse:'secret123',niveau:'universitaire',niveauDetail:'Licence 2'});assert.equal(enrolled.code,201);assert.equal((await request('/moi',enrolled.data.jeton)).data.niveau,'universitaire');
  assert.equal((await request('/inscription',null,'POST',{nom:'Invalide',email:'invalid@test.ht',motDePasse:'secret123',niveau:'inconnu'})).code,400);
  const uni=(await request('/livres',admin,'POST',{titre:'Université',auteur:'Test',categorie:'Sciences',publicCible:'universitaire'})).data;
@@ -78,6 +88,21 @@ async function request(route,token,method='GET',body){const r=await fetch(base+'
  const upload=await fetch(base+'/api/livres/'+book.id+'/epub',{method:'POST',headers:{Authorization:'Bearer '+admin,'Content-Type':'application/epub+zip'},body:fs.readFileSync(epubPath)});assert.equal(upload.status,201);
  const download=await fetch(base+'/api/livres/'+book.id+'/epub',{headers:{Authorization:'Bearer '+admin}});assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),fs.readFileSync(epubPath));
  assert.equal((await fetch(base+'/api/livres/'+book.id+'/epub',{headers:{Authorization:'Bearer '+learner}})).status,200);
+ assert.equal((await request('/livres/'+book.id+'/telechargement',learner,'PUT',{autorise:false})).code,403);
+ assert.equal((await request('/livres/'+book.id+'/telechargement',admin,'PUT',{autorise:false})).code,200);
+ assert.equal((await request('/livres/'+book.id,learner)).data.telechargementAutorise,false);
+ assert.equal((await fetch(base+'/api/livres/'+book.id+'/epub',{headers:{Authorization:'Bearer '+learner}})).status,403);
+ assert.equal((await fetch(base+'/api/livres/'+book.id+'/epub?lecture=1',{headers:{Authorization:'Bearer '+learner}})).status,200);
+ assert.equal((await fetch(base+'/api/livres/'+book.id+'/epub',{headers:{Authorization:'Bearer '+admin}})).status,200);
+ assert.equal((await request('/livres/'+book.id+'/telechargement',admin,'PUT',{autorise:true})).code,200);
+ assert.equal((await fetch(base+'/api/livres/'+book.id+'/epub',{headers:{Authorization:'Bearer '+learner}})).status,200);
+ const restrictedResource=(await request('/ressources',admin,'POST',{genre:'base',titre:'Ressource protégée',contenu:'Contenu consultable',lien:'https://example.org/ressource'})).data;
+ assert.equal((await request('/ressources/'+restrictedResource.id+'/telechargement',admin,'PUT',{autorise:false})).code,200);
+ assert.equal((await request('/ressources',learner)).data.find(r=>r.id===restrictedResource.id).lien,'');
+ assert.equal((await request('/ressources',admin)).data.find(r=>r.id===restrictedResource.id).lien,'https://example.org/ressource');
+ assert.equal((await request('/medias/'+film.id+'/telechargement',admin,'PUT',{autorise:false})).code,200);
+ assert.equal((await request('/medias/'+film.id+'/telechargement',admin,'PUT',{autorise:'non'})).code,400);
+
  assert.equal((await request('/livres')).code,200);
  const {PDFDocument}=require('../modules/pdf-lib');const pdf=await PDFDocument.create();for(let i=0;i<8;i++)pdf.addPage().drawText('Page '+(i+1));
  const pdfBook=(await request('/livres',admin,'POST',{titre:'PDF huit pages',auteur:'Test',categorie:'Sciences'})).data;

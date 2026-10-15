@@ -37,6 +37,7 @@
 
   // ---------- Onglets ----------
   const onglets = {
+    administrationComptes:()=>OasisAdminComptes.ouvrir(api),
     async tableau() {
       const [s, emprunts, tousLivres, devis] = await Promise.all([api('/stats'), api('/emprunts?statut=en_cours'), api('/livres?tri=populaires'), api('/ecoles/devis-admin')]);
       const s2 = { topLivres: tousLivres.slice(0, 5) };
@@ -105,7 +106,7 @@
             <button class="mini-btn bleu" data-modifier-livre="${l.id}">Modifier</button>
             <button class="mini-btn" data-exemplaires="${l.id}" data-titre="${echap(l.titre)}">📕 Exemplaires${l.nbExemplaires ? ` (${l.nbExemplaires})` : ''}</button>
             <button class="mini-btn" data-pdf="${l.id}" data-titre="${echap(l.titre)}" data-deja="${l.pdf ? '1' : ''}">${l.pdf ? '📄 PDF ✓' : '📄 Joindre PDF'}</button>
-            <button class="mini-btn rouge" data-supprimer="${l.id}">Supprimer</button>
+            <button class="mini-btn" data-download-type="livres" data-download-id="${l.id}" data-download-etat="${l.telechargementAutorise!==false}">${l.telechargementAutorise===false?'🔒 Autoriser téléchargement':'Restreindre téléchargement'}</button><button class="mini-btn rouge" data-supprimer="${l.id}">Supprimer</button>
           </div></td>
         </tr>`).join('')}
         </tbody></table></div><p class="vide" id="catalogueAucunResultat" hidden>Aucun document ne correspond à votre recherche.</p>`;
@@ -178,7 +179,7 @@
         ${liste.map(r => `<tr>
           <td data-label="Section">${NOMS[r.genre] || echap(r.genre)}</td><td data-label="Titre">${r.image ? `<img src="/api/ressources/${r.id}/image" alt="" style="width:28px;height:28px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:6px">` : r.icone ? r.icone + ' ' : ''}<b>${echap(r.titre)}</b>${r.lien ? ` <a href="${echap(r.lien)}" target="_blank" rel="noopener" title="${echap(r.lien)}">🔗</a>` : ''}</td>
           <td data-label="Description">${echap(r.contenu.slice(0, 120))}${r.contenu.length > 120 ? '…' : ''}</td>
-          <td class="ressource-actions"><button class="mini-btn rouge" data-suppr-ressource="${r.id}">Supprimer</button></td>
+          <td class="ressource-actions"><button class="mini-btn" data-download-type="ressources" data-download-id="${r.id}" data-download-etat="${r.telechargementAutorise!==false}">${r.telechargementAutorise===false?'🔒 Autoriser téléchargement':'Restreindre téléchargement'}</button><button class="mini-btn rouge" data-suppr-ressource="${r.id}">Supprimer</button></td>
         </tr>`).join('')}
         </tbody></table>`;
     },
@@ -195,7 +196,7 @@
       const p = await api('/parametres');
       return `
         <div class="section-titre"><h3>⚙️ Paramètres de la bibliothèque</h3></div>
-        <div id="msgParam"></div><section class="panneau" style="margin-bottom:16px"><h4>Tarifs des abonnements (HTG)</h4><p>Les nouveaux tarifs s’appliquent aux prochains paiements. Les commandes déjà initiées conservent leur montant et les abonnements actifs gardent leur échéance.</p><div class="admin-form-grid">${[['mensuel','Individuel mensuel'],['annuel','Individuel annuel'],['petite','Petite école — annuel (100 élèves)'],['moyenne','École moyenne — annuel (300 élèves)'],['grande','Grande école — annuel (600 élèves)']].map(([k,n])=>`<div class="champ"><label for="tarif-${k}">${n}</label><input id="tarif-${k}" type="number" min="1" max="10000000" step="1" value="${p.tarifsAbonnement[k]}"></div>`).join('')}</div></section>
+        <div id="msgParam"></div><section class="panneau" style="margin-bottom:16px"><h4>Tarifs établissements et anciens paramètres (HTG)</h4><p>Les nouveaux tarifs individuels se règlent dans Administrateurs et profils.</p><p>Les nouveaux tarifs s’appliquent aux prochains paiements. Les commandes déjà initiées conservent leur montant et les abonnements actifs gardent leur échéance.</p><div class="admin-form-grid">${[['mensuel','Ancien tarif mensuel (hors profils)'],['annuel','Ancien tarif annuel (hors profils)'],['petite','Petite école — annuel (100 élèves)'],['moyenne','École moyenne — annuel (300 élèves)'],['grande','Grande école — annuel (600 élèves)']].map(([k,n])=>`<div class="champ"><label for="tarif-${k}">${n}</label><input id="tarif-${k}" type="number" min="1" max="10000000" step="1" value="${p.tarifsAbonnement[k]}"></div>`).join('')}</div></section>
         <div class="panneau" style="margin-bottom:16px">
           <h4 style="margin-bottom:12px;color:var(--encre)">Identité (en-tête et pied de page)</h4>
           <div class="champ"><label for="pNom">Nom de la bibliothèque</label><input id="pNom" value="${echap(p.nom)}"></div>
@@ -266,7 +267,7 @@
           <td><b>${echap(x.titre)}</b><br><small style="color:var(--gris)">${echap(x.auteur || '')}${x.categorie ? ' · ' + echap(x.categorie) : ''}</small></td>
           <td>${x.fichier ? `<span class="pastille dispo">✔ ${(x.taille / 1048576).toFixed(1)} Mo</span>` : '<span class="pastille indispo">✖ manquant</span>'}</td>
           <td>${x.nbLectures}</td>
-          <td><button class="mini-btn rouge" data-suppr-media="${x.id}">Supprimer</button></td>
+          <td><button class="mini-btn" data-download-type="medias" data-download-id="${x.id}" data-download-etat="${x.telechargementAutorise!==false}">${x.telechargementAutorise===false?'🔒 Autoriser téléchargement':'Restreindre téléchargement'}</button><button class="mini-btn rouge" data-suppr-media="${x.id}">Supprimer</button></td>
         </tr>`).join('')}
         </tbody></table>`;
     },
@@ -1035,7 +1036,9 @@
     }));
   }
 
-  document.addEventListener('click', e => {
+  document.addEventListener('click', async e => {
+    const restriction=e.target.closest('[data-download-id]');if(restriction){restriction.disabled=true;try{await api('/'+restriction.dataset.downloadType+'/'+restriction.dataset.downloadId+'/telechargement',{method:'PUT',body:JSON.stringify({autorise:restriction.dataset.downloadEtat!=='true'})});await afficherOnglet(ongletActif)}catch(err){toast(err.message);restriction.disabled=false}return;}
+
     const el = e.target.closest('[data-onglet]');
     if (el) afficherOnglet(el.dataset.onglet);
   });
@@ -1073,7 +1076,6 @@
     $('#nomProfil').textContent = moi.nom;
     $('#avatarProfil').textContent = moi.nom.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
     remplirPied();
-    afficherOnglet('tableau');
-    rafraichirPartages();
+    if(moi.adminDelegue){$('#gestionQuizDons').hidden=true;const perm=moi.permissions||[];const ongletsPermis={catalogue:['catalogue','categories'],ressources:['ressources','multimedia'],emprunts:['emprunts']};const permis=perm.flatMap(k=>ongletsPermis[k]||[]);document.querySelectorAll('[data-onglet]').forEach(b=>b.hidden=!permis.includes(b.dataset.onglet));afficherOnglet(permis[0]||'catalogue');if(perm.includes('catalogue'))rafraichirPartages()}else{afficherOnglet('tableau');rafraichirPartages();}
   })();
 })();

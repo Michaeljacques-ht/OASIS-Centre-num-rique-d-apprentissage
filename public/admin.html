@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#123e8c">
   <link rel="icon" href="/icone-192.png">
   <title>Espace Bibliothécaire — OASIS Bibliothèque Numérique</title>
-  <link rel="stylesheet" href="/styles.css?v52">
+  <link rel="stylesheet" href="/styles.css?v56">
 </head>
 <body>
   <div id="appli" class="app" hidden>
@@ -23,7 +23,7 @@
         <button class="nav-item" data-onglet="catalogue"><span class="ic">📚</span> Catalogue</button>
         <button class="nav-item" data-onglet="ressources"><span class="ic">🔎</span> Ressources</button>
         <button class="nav-item" data-onglet="multimedia"><span class="ic">🎬</span> Multimédia</button>
-        <button class="nav-item" data-onglet="membres"><span class="ic">👥</span> Membres</button>
+        <a class="nav-item" id="gestionQuizDons" href="/engagement.html?admin=1">🏅 Quiz et dons</a><button class="nav-item" data-onglet="administrationComptes">👤 Administrateurs et profils</button><button class="nav-item" data-onglet="membres"><span class="ic">👥</span> Membres</button>
         <button class="nav-item" data-onglet="journalActivites"><span class="ic">📜</span> Journal</button>
         <button class="nav-item" data-onglet="abonnementsComptabilite"><span class="ic">💳</span> Abonnements et comptabilité</button><button class="nav-item" data-onglet="parametres"><span class="ic">⚙️</span> Paramètres</button>
         <div class="sep"></div>
@@ -51,12 +51,13 @@
   <div id="zoneModale"></div>
   <script src="/vendor/pdfjs/pdf.min.js"></script>
   <script src="/vendor/jszip/jszip.min.js"></script>
-  <script src="/lecteur-epub.js?v52"></script>
-  <script src="/admin-apercu.js?v52"></script>
-  <script src="/document-metadonnees.js?v52"></script>
-  <script src="/admin-abonnements.js?v52"></script>
-  <script src="/vignette-video.js?v52"></script>
+  <script src="/lecteur-epub.js?v56"></script>
+  <script src="/admin-apercu.js?v56"></script>
+  <script src="/document-metadonnees.js?v56"></script>
+  <script src="/admin-abonnements.js?v56"></script>
+  <script src="/vignette-video.js?v56"></script>
   <script src="/partage-stockage.js"></script>
-  <script src="/admin.js?v52"></script>
+  <script src="/admin-comptes.js?v56"></script>
+<script src="/admin.js?v56"></script>
 </body>
 </html>

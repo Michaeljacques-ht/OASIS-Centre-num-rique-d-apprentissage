@@ -4,7 +4,7 @@ const quota=e=>Number(e?.limiteEleves)||formules[e?.formule||'petite']?.limiteEl
 const effectif=(db,e)=>db.utilisateurs.filter(x=>x.ecoleId===e.id&&x.role==='apprenant'&&x.actif!==false).length;
 const roles=['admin_etablissement','bibliothecaire_ecole'];
 const active=e=>!!e&&(new Date(e.abonnementFin||0)>new Date()||require('./essai').actif(e));
-const publicUser=u=>({id:u.id,nom:u.nom,email:u.email,role:u.role,classe:u.classe||'',niveau:u.niveau||'',niveauDetail:u.niveauDetail||'',ecoleId:u.ecoleId||null,essaiFin:u.essaiFin||null,actif:u.actif!==false});
+const publicUser=u=>({id:u.id,nom:u.nom,email:u.email,role:u.role,adminDelegue:!!u.adminDelegue,permissions:u.permissions||[],profilAbonnement:u.profilAbonnement||null,classe:u.classe||'',niveau:u.niveau||'',niveauDetail:u.niveauDetail||'',ecoleId:u.ecoleId||null,essaiFin:u.essaiFin||null,actif:u.actif!==false});
 module.exports={active,roles,publicUser,quota,effectif,async route(req,res,c){
  const {db,utilisateur:u,json,lireCorps,lireBinaire,sauverDB,uid,hashMdp}=c;
  const url=new URL(req.url,'http://localhost'),s=url.pathname.split('/').filter(Boolean),m=req.method;
