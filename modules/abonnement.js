@@ -1,6 +1,6 @@
 const fs=require('fs');const path=require('path');const PP=require('../lib/plopplop');const {PDFDocument,PDFName}=require('./pdf-lib');const locks=new Set();
 const E=require('./ecoles');const formules=require('./formules-ecoles');
-const actif=(db,u)=>!!u&&u.actif!==false&&(u.role==='bibliothecaire'||require('./essai').actif(u)||new Date(u.abonnementFin||0)>new Date()||E.active((db.ecoles||[]).find(e=>e.id===u.ecoleId)));
+const actif=(db,u)=>!!u&&u.actif!==false&&(u.role==='bibliothecaire'||require('./essai').actif(u)||new Date(u.abonnementFin||0)>new Date()||new Date(u.accesOffertFin||0)>new Date()||E.active((db.ecoles||[]).find(e=>e.id===u.ecoleId)));
 module.exports.actif=actif;
 module.exports.route=async(req,res,c)=>{
  const {db,utilisateur:u,json,lireCorps,sauverDB,uid}=c;const url=new URL(req.url,'http://localhost'),s=url.pathname.split('/').filter(Boolean);const m=req.method;

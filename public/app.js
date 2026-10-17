@@ -114,13 +114,16 @@
   // ---------- Vues ----------
   const vues = {
     abonnement: () => OasisAbonnement.render(api, moi),
-    espace: async () => `<h2>Mon espace</h2><p>Bienvenue ${echap(moi?.nom || "")}. Retrouvez vos lectures dans la bibliothèque et gérez votre abonnement ci-dessous.</p><button class="btn btn-bleu" data-vue="bibliotheque">Explorer la bibliothèque</button>` + await OasisAbonnement.render(api, moi),
+    don: () => OasisDon.render(api, moi),
+    quiz: () => OasisQuiz.render(api, moi),
+    espace: async () => `<h2>Mon espace</h2><p>Bienvenue ${echap(moi?.nom || "")}. Retrouvez vos lectures dans la bibliothèque et gérez votre abonnement ci-dessous.</p><button class="btn btn-bleu" data-vue="bibliotheque">Explorer la bibliothèque</button> <button class="mini-btn" data-sg-reactiver>Réactiver les suggestions personnalisées</button>` + await OasisAbonnement.render(api, moi),
     async accueil() {
-      const [nouveautes, cats, compteurs, suggestions] = await Promise.all([
+      const [nouveautes, cats, compteurs, suggestions, continuer] = await Promise.all([
         api('/livres?tri=nouveautes'),
         chargerCategories(),
         api('/statistiques-publiques').catch(() => null),
-        moi?.niveau ? api('/recommandations').catch(()=>null) : null
+        moi?.niveau ? api('/recommandations').catch(()=>null) : null,
+        moi ? OasisSuggestions.continuer(api) : ''
       ]);
       return `
         <button class="banniere-accueil" data-vue="bibliotheque" aria-label="Accéder à la bibliothèque">
@@ -143,7 +146,7 @@
           </div>
         </div>
         <section class="ecole-offre"><div><h3>Une bibliothèque pour votre école</h3><p>Personnalisez votre espace, inscrivez vos élèves et accompagnez leurs lectures.</p><strong>À partir de ${Number(parametres.tarifsAbonnement?.petite||50000).toLocaleString('fr-FR')} gourdes / an · jusqu’à 100 élèves</strong></div><a class="btn btn-bleu" href="/ecole?inscription=1">Créer un espace établissement</a></section>
-        ${suggestions ? `<div class="section-titre"><h3>Pour votre niveau</h3><button data-vue="recommandes">Voir Plus ›</button></div>${grille(suggestions.livres.slice(0,4))}` : ''}<div class="section-titre"><h3>Nouveautés</h3><button data-vue="nouveautes">Voir Plus ›</button></div>
+        ${continuer || ''}${suggestions ? `<div class="section-titre"><h3>Pour votre niveau</h3><button data-vue="recommandes">Voir Plus ›</button></div>${grille(suggestions.livres.slice(0,4))}` : ''}<div class="section-titre"><h3>Nouveautés</h3><button data-vue="nouveautes">Voir Plus ›</button></div>
         ${grille(nouveautes.slice(0, 4))}
         <div class="section-titre"><h3>Catégories Populaires</h3><button data-vue="categories">Voir Plus ›</button></div>
         <div class="grille-categories">
@@ -175,7 +178,7 @@
           <select data-filtre="tri"><option value="">Trier…</option><option value="note" ${f.tri==='note'?'selected':''}>Meilleures notes</option><option value="annee" ${f.tri==='annee'?'selected':''}>Plus récents</option></select>
           ${Object.values(f).some(Boolean) ? '<button class="mini-btn" data-vider-filtres="1">✕ Réinitialiser</button>' : ''}
         </div>
-        ${grille(filtres)}`;
+        ${grille(filtres)}${OasisRechercheTexte.section(q, api)}`;
     },
     async favoris() {
       const livres = await api('/favoris');
@@ -324,6 +327,7 @@
       const paliers = [[1, '📗', 'Premier livre'], [3, '📚', 'Lecteur régulier'], [5, '🏅', 'Grand lecteur'], [10, '🏆', 'Maître lecteur']];
       return `<div class="section-titre"><h3>🏆 Défis de lecture</h3></div>
         <p style="margin-bottom:12px">Vous avez terminé <b>${d.mesTermines}</b> livre${d.mesTermines > 1 ? 's' : ''}. Terminez des lectures pour débloquer les badges !</p>
+        <p style="margin-bottom:12px"><button class="btn btn-bleu" data-vue="quiz">🧠 Gagner plus de badges avec les quiz de lecture</button></p>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px">
           ${paliers.map(([n, e, titre]) => `
             <div class="carte-badge ${d.mesTermines >= n ? 'obtenu' : ''}">
@@ -345,7 +349,8 @@
   };
 
   async function afficherVue(nom, param) {
-    if(!moi&&!['accueil','bibliotheque','categorie','categories','nouveautes','recommandes','abonnement'].includes(nom)){window.dispatchEvent(new Event('oasis-connexion'));return;}
+    OasisQuiz.quitter();
+    if(!moi&&!['accueil','bibliotheque','categorie','categories','nouveautes','recommandes','abonnement','don'].includes(nom)){window.dispatchEvent(new Event('oasis-connexion'));return;}
     vueActive = nom;
     document.querySelectorAll('.nav-item[data-vue]').forEach(b => b.classList.toggle('actif', b.dataset.vue === nom));
     $('#sidebar').classList.remove('ouverte');
@@ -442,6 +447,7 @@
                 <small style="font-weight:700;color:var(--encre)">${l.maProgression.termine ? '✅ Lecture terminée' : `📖 Lecture en cours : ${l.maProgression.pourcentage} %`}</small>
                 <div class="barre-progression"><div style="width:${l.maProgression.pourcentage}%"></div></div>
               </div>` : ''}
+            ${OasisSuggestions.aussiLus(l.id, api)}
             ${(l.editeur || l.niveau || l.isbn || l.motsCles) ? `
               <p style="margin-top:12px;font-size:12.5px;color:var(--gris)">
                 ${l.editeur ? 'Éditeur : ' + echap(l.editeur) + ' · ' : ''}${l.langue ? 'Langue : ' + echap(l.langue) + ' · ' : ''}${l.niveau ? 'Niveau : ' + echap(l.niveau) + ' · ' : ''}${l.isbn ? 'ISBN : ' + echap(l.isbn) : ''}
@@ -459,6 +465,7 @@
     $('#voile').addEventListener('click', e => { if (e.target.id === 'voile') fermerModale(); });
   }
   const fermerModale = () => {
+    OasisSurlignage.fermer();
     window.OasisLecture?.close();
     window.OasisEpub?.close();
     if (nettoyerPdf) { nettoyerPdf(); nettoyerPdf = null; }
@@ -511,7 +518,7 @@
     }
   }
   let nettoyerPdf = null;
-  async function ouvrirLecteurPdf(livre) {
+  async function ouvrirLecteurPdf(livre, cible) {
     toast('Ouverture du PDF…');
     let blob;
     try {
@@ -524,9 +531,10 @@
     $('#zoneModale').innerHTML = `<div class="voile" id="voile"><div class="modale lecteur lecteur-pdf-mobile" role="dialog" aria-modal="true" aria-label="Lecture PDF">
       <div class="pdf-entete"><h3>${echap(livre.titre)}</h3><button class="mini-btn" id="btnFermer" aria-label="Fermer">✕</button></div>
       <div class="pdf-outils"><button class="mini-btn" id="pdfAvant" aria-label="Page précédente">←</button><label>Page <input type="number" id="pdfPage" min="1" value="1" aria-label="Numéro de page"></label><span id="pdfTotal"></span><button class="mini-btn" id="pdfApres" aria-label="Page suivante">→</button><button class="mini-btn" id="pdfMoins" aria-label="Réduire le zoom">−</button><button class="mini-btn" id="pdfPlus" aria-label="Augmenter le zoom">+</button>${livre.telechargementAutorise!==false?`<a class="mini-btn" href="${urlPdfActive}" download="${echap(livre.titre)}.pdf">Télécharger</a><a class="mini-btn" href="${urlPdfActive}" target="_blank" rel="noopener">Ouvrir ↗</a>`:'<span>🔒 Consultation en ligne uniquement</span>'}<button class="mini-btn bleu" id="btnTerminerPdf" ${!livre.accesComplet ? 'hidden' : ''}>Terminer</button></div>
-      ${!livre.accesComplet ? '<div class="pdf-abonnement">Aperçu gratuit : cinq pages maximum. <button class="mini-btn bleu" data-abonner>Lire la suite — s’abonner</button></div>' : ''}<p id="pdfEtat" role="status" aria-live="polite">Chargement du document…</p><div class="pdf-pages" id="pdfPages"><canvas id="pdfCanvas" aria-label="Page du document PDF"></canvas></div></div></div>`;
+      ${!livre.accesComplet ? '<div class="pdf-abonnement">Aperçu gratuit : cinq pages maximum. <button class="mini-btn bleu" data-abonner>Lire la suite — s’abonner</button></div>' : ''}${cible?.extrait ? `<div class="passage-recherche"><b>🔎 Passage recherché, page ${cible.page}${!livre.accesComplet && cible.page > 5 ? ' (au-delà de l’aperçu gratuit de 5 pages)' : ''} :</b> ${echap(cible.extrait)}</div>` : ''}<p id="pdfEtat" role="status" aria-live="polite">Chargement du document…</p><div class="pdf-pages" id="pdfPages"><div class="pdf-feuille"><canvas id="pdfCanvas" aria-label="Page du document PDF"></canvas><div class="textLayer" id="pdfTexte"></div></div></div></div></div>`;
     let doc=null, renderTask=null, closed=false, page=1, zoom=1, sequence=0;
-    const assistance=OasisLecture.start($('#zoneModale .lecteur'),livre,moi?jeton:null,async()=>{if(!doc)return '';const text=await (await doc.getPage(page)).getTextContent();return text.items.map(x=>x.str+(x.hasEOL?'\n':' ')).join('')});
+    const assistance=OasisLecture.start($('#zoneModale .lecteur'),livre,moi?jeton:null,async()=>{if(!doc)return '';const text=await (await doc.getPage(page)).getTextContent();return text.items.map(x=>x.str+(x.hasEOL?'\n':' ')).join('')},{unite:'page',page:()=>page,aller:n=>{if(!doc)return;page=Math.max(1,Math.min(doc.numPages,n));render()}});
+    const slPdf=moi?OasisSurlignage.brancher({livre,unite:'page',root:()=>$('#pdfTexte'),page:()=>page,filtre:n=>n.page===page,pourcentage:()=>doc?Math.round(page/doc.numPages*100):0}):null;
     nettoyerPdf=()=>{closed=true;sequence++;renderTask?.cancel();doc?.destroy();};
     $('#btnFermer').onclick=fermerModale;
     $('#voile').onclick=e=>{if(e.target.id==='voile')fermerModale()};
@@ -542,6 +550,7 @@
         const ratio=Math.min(window.devicePixelRatio||1,2,Math.sqrt(4000000/(viewport.width*viewport.height)));
         canvas.width=Math.floor(viewport.width*ratio);canvas.height=Math.floor(viewport.height*ratio);canvas.style.width=viewport.width+'px';canvas.style.height=viewport.height+'px';
         renderTask=p.render({canvasContext:canvas.getContext('2d'),viewport,transform:[ratio,0,0,ratio,0,0]});await renderTask.promise;
+        const couche=$('#pdfTexte');if(couche&&ticket===sequence){couche.replaceChildren();couche.style.width=viewport.width+'px';couche.style.height=viewport.height+'px';couche.style.setProperty('--scale-factor',viewport.scale);try{await pdfjsLib.renderTextLayer({textContentSource:await p.getTextContent(),container:couche,viewport,textDivs:[]}).promise}catch{}if(ticket===sequence)slPdf?.rafraichir();}
         if(ticket!==sequence||closed)return;$('#pdfEtat').textContent='Page '+page+' sur '+doc.numPages;
         assistance?.ready();assistance?.progress(Math.round(page/doc.numPages*100));$('#pdfPage').value=page;$('#pdfAvant').disabled=page===1;$('#pdfApres').disabled=page===doc.numPages;area.scrollTop=0;
         if(moi && livre.accesComplet) api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:Math.round(page/doc.numPages*100)})}).catch(()=>{});
@@ -551,7 +560,7 @@
       if(!window.pdfjsLib)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='/vendor/pdfjs/pdf.min.js';script.onload=resolve;script.onerror=()=>reject(new Error('Lecteur indisponible'));document.head.appendChild(script)});
       if(closed)return;pdfjsLib.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/pdf.worker.min.js';
       doc=await pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer()),isEvalSupported:false}).promise;
-      if(closed){doc.destroy();return}$('#pdfTotal').textContent='/ '+doc.numPages;$('#pdfPage').max=doc.numPages;
+      if(closed){doc.destroy();return}$('#pdfTotal').textContent='/ '+doc.numPages;if(cible?.page)page=Math.max(1,Math.min(doc.numPages,cible.page));$('#pdfPage').max=doc.numPages;
       $('#pdfAvant').onclick=()=>{page=Math.max(1,page-1);render()};$('#pdfApres').onclick=()=>{page=Math.min(doc.numPages,page+1);render()};
       $('#pdfPage').onchange=e=>{page=Math.max(1,Math.min(doc.numPages,Number(e.target.value)||1));render()};
       $('#pdfMoins').onclick=()=>{zoom=Math.max(.5,zoom-.25);render()};$('#pdfPlus').onclick=()=>{zoom=Math.min(3,zoom+.25);render()};
@@ -560,15 +569,15 @@
     }catch(e){if(!closed)$('#pdfEtat').textContent='Ce PDF ne peut pas être affiché. Utilisez Télécharger pour le lire dans votre application PDF.'}
   }
 
-  async function ouvrirLecteur(id) {
+  async function ouvrirLecteur(id, cible) {
     let livre;
     try { livre = await api('/livres/' + id); } catch (err) { return toast(err.message); }
     if (!livre.accesComplet && !livre.pdf) {
       if(livre.epub){fermerModale();afficherVue('abonnement');return}
       try{const d=await api('/livres/'+id+'/apercu');$('#zoneModale').innerHTML=`<div class="voile"><div class="modale"><div class="corps"><button class="mini-btn" id="fermerApercu">Fermer</button><h3>${echap(d.titre)}</h3><p>Extrait : ${d.pages} pages de texte (2 500 caractères par page).</p><div style="white-space:pre-wrap">${echap(d.contenu)}</div><button class="btn btn-orange" data-abonner>Lire la suite — s’abonner</button></div></div></div>`;$('#fermerApercu').onclick=fermerModale;}catch(e){toast(e.message)}return;
     }
-    if (livre.epub && !livre.pdf) {fermerModale();return OasisEpub.open(livre,jeton,$('#zoneModale'),fermerModale);}
-    if (livre.pdf) return ouvrirLecteurPdf(livre);
+    if (livre.epub && !livre.pdf) {fermerModale();return OasisEpub.open(livre,jeton,$('#zoneModale'),fermerModale,cible?.page?cible.page-1:0);}
+    if (livre.pdf) return ouvrirLecteurPdf(livre, cible);
     let d;
     try { d = await api('/livres/' + id + '/lire'); } catch (err) { return toast(err.message); }
     const html = echap(d.contenu)
@@ -596,6 +605,7 @@
           <div class="corps texte" id="texteLecture">${html}</div>
         </div>
       </div>`;
+    if (cible?.page) requestAnimationFrame(() => { const t = $('#texteLecture'), parties = Math.max(1, Math.ceil(String(d.contenu).length / 2500)), cibleY = (cible.page - 1) / parties; [t, t?.closest('.modale')].forEach(x => { if (x && x.scrollHeight > x.clientHeight) x.scrollTop = cibleY * (x.scrollHeight - x.clientHeight); }); if (cible.extrait) toast('🔎 Passage recherché : partie ' + cible.page); });
     const modaleEl = $('#modaleLecteur');
     // Reprise à la dernière position
     requestAnimationFrame(() => { if (pct > 0 && pct < 100) modaleEl.scrollTop = (modaleEl.scrollHeight - modaleEl.clientHeight) * pct / 100; });
@@ -619,7 +629,7 @@
       if (document.fullscreenElement) document.exitFullscreen();
       else modaleEl.requestFullscreen?.().catch(() => toast('Plein écran non disponible sur ce navigateur.'));
     });
-    const assistanceTexte=OasisLecture.start($('#modaleLecteur'),livre,jeton,()=>$('#texteLecture').innerText);assistanceTexte.ready();modaleEl.addEventListener('scroll',()=>assistanceTexte.progress(pctActuel()));assistanceTexte.progress(pctActuel());api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:pctActuel()})}).catch(()=>{});$('#btnVoix').hidden=true;
+    const partiesTexte=Math.max(1,Math.ceil(String(d.contenu).length/2500)),zoneDefil=()=>[$('#texteLecture'),modaleEl].find(x=>x&&x.scrollHeight>x.clientHeight+4);const slTexte=OasisSurlignage.brancher({livre,unite:'partie',root:()=>$('#texteLecture'),page:debut=>Math.min(Math.max(1,Math.ceil(String(d.contenu).length/2500)),1+Math.floor(debut/Math.max(1,$('#texteLecture').textContent.length)*Math.max(1,Math.ceil(String(d.contenu).length/2500)))),pourcentage:()=>pctActuel()});slTexte.rafraichir();const assistanceTexte=OasisLecture.start($('#modaleLecteur'),livre,jeton,()=>$('#texteLecture').innerText,{unite:'partie',page:()=>{const z=zoneDefil();return z?Math.min(partiesTexte,1+Math.floor(z.scrollTop/Math.max(1,z.scrollHeight-z.clientHeight)*partiesTexte*0.999)):1},aller:n=>{const z=zoneDefil();if(z)z.scrollTop=(n-1)/partiesTexte*(z.scrollHeight-z.clientHeight)}});assistanceTexte.ready();modaleEl.addEventListener('scroll',()=>assistanceTexte.progress(pctActuel()));assistanceTexte.progress(pctActuel());api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:pctActuel()})}).catch(()=>{});$('#btnVoix').hidden=true;
     // Marque-page
     $('#btnSignet').addEventListener('click', async () => {
       try {
@@ -929,7 +939,7 @@
     if(!moi&&e.target.closest('[data-favori],[data-liste],[data-emprunter],[data-reserver],[data-notes-livre],[data-noter],[data-commentaires]')){window.dispatchEvent(new Event('oasis-connexion'));return;}
     if ((el = cible('data-vue'))) return afficherVue(el.dataset.vue);
     if ((el = cible('data-categorie'))) return afficherVue('categorie', el.dataset.categorie);
-    if ((el = cible('data-lire'))) return ouvrirLecteur(el.dataset.lire);
+    if ((el = cible('data-lire'))) return ouvrirLecteur(el.dataset.lire, el.dataset.page ? { page: Number(el.dataset.page), unite: el.dataset.unite, extrait: el.dataset.extrait } : null);
     if ((el = cible('data-emprunter'))) {
       try {
         await api('/emprunts', { method: 'POST', body: JSON.stringify({ livreId: el.dataset.emprunter }) });
@@ -1017,6 +1027,7 @@
     }
     if ((el = cible('data-citer'))) return ouvrirCitations(el.dataset.citer);
     if ((el = cible('data-notes-livre'))) return ouvrirNotes(el.dataset.notesLivre, el.dataset.titreLivre);
+    if ((el = cible('data-filtre-notes'))) { window.__filtreNotes = { id: el.dataset.livreNoteCtx, f: el.dataset.filtreNotes }; return ouvrirNotes(el.dataset.livreNoteCtx, el.dataset.titreCtx); }
     if ((el = cible('data-suppr-note'))) {
       try { await api('/notes/' + el.dataset.supprNote, { method: 'DELETE' }); ouvrirNotes(el.dataset.livreNoteCtx, el.dataset.titreCtx); }
       catch (err) { toast(err.message); }
@@ -1134,6 +1145,10 @@
   // ---------- Notes et marque-pages ----------
   async function ouvrirNotes(livreId, titre) {
     let notes; try { notes = await api('/livres/' + livreId + '/notes'); } catch (err) { return toast(err.message); }
+    const UNITE_SL = { page: 'Page', chapitre: 'Chapitre', partie: 'Partie' };
+    const nbSl = notes.filter(n => n.type === 'surlignage').length;
+    const filtreNotes = window.__filtreNotes?.id === livreId ? window.__filtreNotes.f : '';
+    const visibles = notes.filter(n => !filtreNotes || (filtreNotes === 'surlignage' ? n.type === 'surlignage' : n.type !== 'surlignage'));
     $('#zoneModale').innerHTML = `
       <div class="voile" id="voile">
         <div class="modale" role="dialog" aria-modal="true">
@@ -1147,14 +1162,23 @@
               ${notes.length ? `<button class="btn" id="btnExporterNotes">⬇ Exporter (.txt)</button>` : ''}
             </div>
             <div id="listeNotes">
-              ${notes.length ? notes.map(n => `
+              ${nbSl ? `<div class="sl-filtres" role="group" aria-label="Filtrer">${[['', 'Tout (' + notes.length + ')'], ['surlignage', '🖍️ Surlignages (' + nbSl + ')'], ['note', '🗒️ Notes et marque-pages (' + (notes.length - nbSl) + ')']].map(([k, v]) => `<button class="mini-btn ${k === filtreNotes ? 'bleu' : ''}" data-filtre-notes="${k}" data-livre-note-ctx="${livreId}" data-titre-ctx="${echap(titre)}">${v}</button>`).join('')}</div>` : ''}
+              ${visibles.length ? visibles.map(n => n.type === 'surlignage' ? `
+                <div class="sl-note-carte sl-bord-${n.couleur}">
+                  <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+                    <small style="color:var(--gris)">🖍️ Surlignage · ${UNITE_SL[n.unite] || 'Page'} ${n.page} · ${new Date(n.creeLe).toLocaleDateString('fr-FR')}</small>
+                    <span><button class="mini-btn" data-lire="${livreId}" data-page="${n.page}" data-unite="${n.unite}" data-extrait="${echap(n.texte.slice(0, 200))}">📖 Ouvrir</button> <button class="mini-btn rouge" data-suppr-note="${n.id}" data-livre-note-ctx="${livreId}" data-titre-ctx="${echap(titre)}" aria-label="Supprimer">✕</button></span>
+                  </div>
+                  <blockquote class="sl-citation"><mark class="sl sl-${n.couleur}">${echap(n.texte)}</mark></blockquote>
+                  ${n.commentaire ? `<p class="sl-com-texte">🗒️ ${echap(n.commentaire)}</p>` : ''}
+                </div>` : `
                 <div style="border:1px solid var(--bord);border-radius:10px;padding:10px 13px;margin-bottom:9px">
                   <div style="display:flex;justify-content:space-between;gap:10px">
                     <small style="color:var(--gris)">${n.type === 'signet' ? '🔖 Marque-page' : '🗒️ Note'} · ${new Date(n.creeLe).toLocaleDateString('fr-FR')}</small>
                     <button class="mini-btn rouge" data-suppr-note="${n.id}" data-livre-note-ctx="${livreId}" data-titre-ctx="${echap(titre)}">✕</button>
                   </div>
                   <p style="margin-top:5px">${echap(n.texte)}</p>
-                </div>`).join('') : '<p class="vide">Aucune note pour ce livre. Vos marque-pages du lecteur apparaîtront ici aussi.</p>'}
+                </div>`).join('') : '<p class="vide">Aucune note pour ce livre. Vos marque-pages et vos surlignages du lecteur apparaîtront ici aussi. Pour surligner, sélectionnez un passage dans le lecteur puis choisissez une couleur.</p>'}
             </div>
           </div>
         </div>
@@ -1168,7 +1192,9 @@
       catch (err) { toast(err.message); }
     });
     $('#btnExporterNotes')?.addEventListener('click', () => {
-      const contenu = `Notes — ${titre}\n${'='.repeat(40)}\n\n` + notes.map(n => `[${n.type === 'signet' ? 'Marque-page' : 'Note'} · ${new Date(n.creeLe).toLocaleDateString('fr-FR')}]\n${n.texte}\n`).join('\n');
+      const contenu = `Notes — ${titre}\n${'='.repeat(40)}\n\n` + notes.map(n => n.type === 'surlignage'
+        ? `[Surlignage ${n.couleur} · ${UNITE_SL[n.unite] || 'Page'} ${n.page} · ${new Date(n.creeLe).toLocaleDateString('fr-FR')}]\n« ${n.texte} »${n.commentaire ? '\nNote : ' + n.commentaire : ''}\n`
+        : `[${n.type === 'signet' ? 'Marque-page' : 'Note'} · ${new Date(n.creeLe).toLocaleDateString('fr-FR')}]\n${n.texte}\n`).join('\n');
       const url = URL.createObjectURL(new Blob([contenu], { type: 'text/plain;charset=utf-8' }));
       const el = document.createElement('a'); el.href = url; el.download = `notes-${titre.slice(0, 30)}.txt`; el.click();
       URL.revokeObjectURL(url);
@@ -1203,13 +1229,14 @@
     $('#appli').hidden = false;
     if(!moi){
       $('#btnConnexionPublic').hidden=false;$('#nomProfil').textContent='Visiteur';$('#avatarProfil').textContent='';$('#avatarProfil').hidden=true;$('#lienAdmin').hidden=true;$('#btnDeconnexion').hidden=true;
-      document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=!['accueil','bibliotheque','categories','nouveautes','recommandes','abonnement'].includes(b.dataset.vue));
+      document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=!['accueil','bibliotheque','categories','nouveautes','recommandes','abonnement','don'].includes(b.dataset.vue));
       $('#colonneDroite').hidden=true;$('#btnNotifs').hidden=true;chargerParametres();chargerCategories().then(()=>afficherVue(navigationEcole.vue||'accueil'));return;
     }
-    $('#avatarProfil').hidden=false;$('#btnDeconnexion').hidden=false;$('#btnNotifs').hidden=false;$('#colonneDroite').hidden=false;document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=false);$('#btnConnexionPublic').hidden=true;
+    $('#avatarProfil').hidden=false;$('#btnDeconnexion').hidden=false;$('#btnNotifs').hidden=false;$('#colonneDroite').hidden=false;document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=false);$('#btnConnexionPublic').hidden=true;document.querySelector('.lien-don').hidden=true;
     $('#nomProfil').textContent = moi.nom.split(' ')[0] + ' ' + (moi.nom.split(' ')[1]?.[0] || '') + (moi.nom.split(' ')[1] ? '.' : '');
     $('#avatarProfil').textContent = moi.nom.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
     $('#lienAdmin').hidden = moi.role !== 'bibliothecaire';
+    window.OasisMoi = moi;
     chargerParametres();
     if(moi.ecoleId)api('/ecoles/mon-espace').then(s=>{const lien=$('#lienEcole');lien.textContent='🏫 '+s.ecole.nom}).catch(()=>{});
     majSalutation();

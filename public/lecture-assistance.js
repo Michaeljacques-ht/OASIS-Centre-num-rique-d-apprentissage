@@ -1,7 +1,7 @@
 window.OasisLecture=(()=>{
  let close=()=>{};
- function start(root,livre,token,getText){close();if(!root)return;
- const panel=document.createElement('div');panel.className='lecture-assistance';panel.innerHTML='<button type="button" class="mini-btn bleu" data-listen>🔊 Écouter</button> <button type="button" class="mini-btn" data-pause>Pause / Reprendre</button> <button type="button" class="mini-btn" data-stop>Arrêter</button> <span data-time role="status"></span><small data-voice-state></small>';root.prepend(panel);
+ function start(root,livre,token,getText,position){close();if(!root)return;
+ const panel=document.createElement('div');panel.className='lecture-assistance';panel.innerHTML='<button type="button" class="mini-btn bleu" data-listen>🔊 Écouter</button> <button type="button" class="mini-btn" data-pause>Pause / Reprendre</button> <button type="button" class="mini-btn" data-stop>Arrêter</button> <span data-time role="status"></span><small data-voice-state></small>';root.prepend(panel);window.OasisIA?.attacher(panel,root,livre,position);
  const listen=panel.querySelector('[data-listen]'),state=panel.querySelector('[data-voice-state]'),display=panel.querySelector('[data-time]');let stopped=false,speaking=false,total=0,last=performance.now(),activity=Date.now(),ready=false,confirmed=baseTime(),progress=Number(livre.maProgression?.pourcentage)||0,parts=[],index=0,utterance;
  function baseTime(){return Number(livre.maProgression?.secondesLecture)||0}
  const session=crypto.randomUUID(),base=Number(livre.maProgression?.secondesLecture)||0;

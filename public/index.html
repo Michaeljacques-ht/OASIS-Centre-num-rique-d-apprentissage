@@ -7,7 +7,7 @@
   <link rel="icon" href="/icone-192.png">
   <link rel="apple-touch-icon" href="/icone-192.png">
   <title>OASIS Bibliothèque Numérique</title>
-  <link rel="stylesheet" href="/styles.css?v56">
+  <link rel="stylesheet" href="/styles.css?v59">
   <link rel="manifest" href="/manifest.json">
 </head>
 <body>
@@ -63,7 +63,7 @@
         <button class="nav-item" data-vue="bibliotheque"><span class="ic">📚</span> Bibliothèque</button>
         <button class="nav-item" data-vue="favoris"><span class="ic">❤️</span> Mes Favoris</button>
         <button class="nav-item" data-vue="emprunts"><span class="ic">🔖</span> Mes Emprunts</button>
-        <a class="nav-item" href="/engagement.html?vue=don">💝 Faire un don</a><a class="nav-item" href="/engagement.html?vue=quiz">🏅 Tester vos connaissances</a><button class="nav-item" data-vue="abonnement"><span class="ic">💳</span> Abonnement</button><div class="sep"></div>
+        <button class="nav-item" data-vue="abonnement"><span class="ic">💳</span> Abonnement</button><div class="sep"></div>
         <button class="nav-item" data-vue="categories"><span class="ic">🗂️</span> Catégories</button>
         <button class="nav-item" data-vue="nouveautes"><span class="ic">✨</span> Nouveautés</button>
         <button class="nav-item" data-vue="recommandes"><span class="ic">⭐</span> Recommandés</button>
@@ -73,8 +73,10 @@
         <button class="nav-item" data-vue="multimedia"><span class="ic">🎬</span> Multimédia</button>
         <button class="nav-item" data-vue="collaboration"><span class="ic">👥</span> Collaboration</button>
         <button class="nav-item" data-vue="defis"><span class="ic">🏆</span> Défis de lecture</button>
+        <button class="nav-item" data-vue="quiz"><span class="ic">🧠</span> Quiz de lecture</button>
         <button class="nav-item" data-vue="places"><span class="ic">🪑</span> Places de lecture</button>
         <div class="sep"></div>
+        <button class="nav-item nav-don" data-vue="don"><span class="ic">💝</span> Faire un don</button>
         <a class="nav-item" href="/ecole" id="lienEcole"><span class="ic">🏫</span> Espace établissement</a>
         <a class="nav-item" href="/admin" id="lienAdmin" hidden><span class="ic">🛠️</span> Espace bibliothécaire</a>
         <button class="nav-item" id="btnDeconnexion"><span class="ic">🚪</span> Se déconnecter</button>
@@ -90,6 +92,7 @@
         <div class="droite"><button class="mini-btn bleu" id="btnConnexionPublic">Se connecter</button>
           <button class="lien-entete" id="btnNotifs" style="position:relative">🔔 <span class="txt">Notifications</span><span id="badgeNotifs" class="badge-notif" hidden></span></button>
           <button class="lien-entete" data-vue="collaboration">👥 <span class="txt">Collaboration</span></button>
+          <button class="lien-entete lien-don" data-vue="don">💝 <span class="txt">Faire un don</span></button>
           <button class="lien-entete" id="btnAPropos">ℹ️ <span class="txt">À propos</span></button>
           <div class="profil"><span id="nomProfil"></span><div class="avatar" id="avatarProfil"></div></div>
         </div>
@@ -120,13 +123,19 @@
   </div>
 
   <div id="zoneModale"></div>
-  <script src="/abonnement.js?v56"></script>
+  <script src="/abonnement.js?v59"></script>
+  <script src="/don.js?v59"></script>
+  <script src="/quiz.js?v59"></script>
+  <script src="/recherche-texte.js?v59"></script>
+  <script src="/ia.js?v59"></script>
+  <script src="/suggestions.js?v59"></script>
   <script src="/vendor/jszip/jszip.min.js"></script>
-  <script src="/lecture-assistance.js?v56"></script>
-  <script src="/lecteur-epub.js?v56"></script>
-  <script src="/vignette-video.js?v56"></script>
-  <script src="/navigation-ecole.js?v56"></script>
-  <script src="/profil-abonnement.js?v56"></script>
-<script src="/app.js?v56"></script>
+  <script src="/surlignage.js?v59"></script>
+  <script src="/lecture-assistance.js?v59"></script>
+  <script src="/lecteur-epub.js?v59"></script>
+  <script src="/vignette-video.js?v59"></script>
+  <script src="/navigation-ecole.js?v59"></script>
+  <script src="/profil-abonnement.js?v59"></script>
+<script src="/app.js?v59"></script>
 </body>
 </html>

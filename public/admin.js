@@ -192,6 +192,10 @@
         </tbody></table>` : '<p class="vide">Aucune activité enregistrée pour le moment.</p>'}`;
     },
     abonnementsComptabilite:()=>OasisAdminAbonnements.ouvrir(api),
+    dons:()=>OasisAdminDons.ouvrir(api),
+    quizLecture:()=>OasisAdminQuiz.ouvrir(api),
+    rechercheTexte:()=>OasisAdminRecherche.ouvrir(api),
+    assistantIA:()=>OasisAdminIA.ouvrir(api),
     async parametres() {
       const p = await api('/parametres');
       return `
@@ -305,7 +309,27 @@
     const zone = $('#zoneAdmin');
     zone.innerHTML = '<p class="vide">Chargement…</p>';
     try { zone.innerHTML = await onglets[nom](); brancherBoutons(); }
-    catch (err) { zone.innerHTML = `<div class="erreur">${echap(err.message)}</div>`; }
+    catch (err) {
+      if (err.statut === 404) {
+        let version = 'inconnue'; try { version = (await api('/version')).version || version; } catch {}
+        zone.innerHTML = `<div class="erreur"><b>Cette rubrique n’existe pas sur le serveur en ligne.</b><br>Le serveur répond en version ${echap(version)} alors que cette interface attend la version ${VERSION_INTERFACE}. Redéployez le dossier complet du projet (server.js, modules/, lib/ et public/), puis redémarrez le service.</div>`;
+      } else zone.innerHTML = `<div class="erreur">${echap(err.message)}</div>`;
+    }
+  }
+
+  // Vérifie que le serveur en ligne correspond à cette interface.
+  const VERSION_INTERFACE = '1.12.0';
+  async function verifierVersionServeur() {
+    try {
+      const v = await api('/version');
+      const noms = { abonnements: 'Abonnements', dons: 'Dons', quizLecture: 'Quiz de lecture', rechercheTexte: 'Recherche dans les livres', assistantIA: 'OASIS IA' };
+      const manque = Object.keys(noms).filter(k => !v[k]).map(k => noms[k]);
+      if (v.version === VERSION_INTERFACE && !manque.length) return;
+      const bandeau = document.createElement('div');
+      bandeau.className = 'erreur bandeau-version'; bandeau.setAttribute('role', 'alert');
+      bandeau.innerHTML = `Serveur en ligne : version ${echap(v.version || 'inconnue')} — interface : ${VERSION_INTERFACE}. Certaines rubriques (${echap(manque.join(', ') || 'récentes')}) peuvent afficher « Route introuvable ». Redéployez tout le projet puis redémarrez le service.`;
+      $('#zoneAdmin').before(bandeau);
+    } catch {}
   }
 
   // ---------- Formulaires ----------
@@ -916,6 +940,10 @@
   const ongletsEtat = {};
   function brancherBoutons() {
     OasisAdminAbonnements.brancher();
+    OasisAdminDons.brancher();
+    OasisAdminQuiz.brancher();
+    OasisAdminRecherche.brancher();
+    OasisAdminIA.brancher();
     $('#btnDoublons')?.addEventListener('click',async()=>{try{let groupes;try{groupes=await api('/doublons')}catch(e){if(e.statut===404){let version='inconnue';try{version=(await api('/version')).version||version}catch{}throw new Error('La détection des doublons est absente du serveur déployé (version '+version+'). Mettez à jour server.js, package.json et le dossier modules, puis redéployez sur Render. Vos documents doivent être conservés dans data.')}throw e}if(!Array.isArray(groupes))throw new Error('Réponse de détection invalide. Mettez à jour les fichiers du serveur.');modale(`<h3>Doublons du catalogue et des ressources</h3><p>Vérifiez chaque groupe. La fusion conserve le premier document, ses liens et les fichiers ; le second est retiré du catalogue et archivé.</p>${groupes.map(g=>`<section class="panneau"><b>${echap(g.type)}</b>${g.documents.map((d,i)=>`<p>${echap(d.titre)} — ${echap(d.auteur)} ${echap(d.edition)} ${i?`<button class="mini-btn rouge" data-fusion-type="${g.type}" data-conserve="${g.documents[0].id}" data-retire="${d.id}">Fusionner ce doublon</button>`:' · Conservé'}</p>`).join('')}</section>`).join('')||'<p>Aucun doublon détecté.</p>'}`);document.querySelectorAll('[data-fusion-type]').forEach(b=>b.onclick=async()=>{try{await api('/doublons/fusionner',{method:'POST',body:JSON.stringify({type:b.dataset.fusionType,conserve:b.dataset.conserve,retire:b.dataset.retire})});b.closest('p').remove();toast('Doublon fusionné.');afficherOnglet('catalogue')}catch(e){toast(e.message)}})}catch(e){toast(e.message)}});
 
     const recherche=$('#rechercheCatalogue');
@@ -1074,8 +1102,9 @@
     }
     $('#appli').hidden = false;
     $('#nomProfil').textContent = moi.nom;
+    verifierVersionServeur();
     $('#avatarProfil').textContent = moi.nom.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
     remplirPied();
-    if(moi.adminDelegue){$('#gestionQuizDons').hidden=true;const perm=moi.permissions||[];const ongletsPermis={catalogue:['catalogue','categories'],ressources:['ressources','multimedia'],emprunts:['emprunts']};const permis=perm.flatMap(k=>ongletsPermis[k]||[]);document.querySelectorAll('[data-onglet]').forEach(b=>b.hidden=!permis.includes(b.dataset.onglet));afficherOnglet(permis[0]||'catalogue');if(perm.includes('catalogue'))rafraichirPartages()}else{afficherOnglet('tableau');rafraichirPartages();}
+    if(moi.adminDelegue){const perm=moi.permissions||[];const ongletsPermis={catalogue:['catalogue','categories'],ressources:['ressources','multimedia'],emprunts:['emprunts']};const permis=perm.flatMap(k=>ongletsPermis[k]||[]);document.querySelectorAll('[data-onglet]').forEach(b=>b.hidden=!permis.includes(b.dataset.onglet));afficherOnglet(permis[0]||'catalogue');if(perm.includes('catalogue'))rafraichirPartages()}else{afficherOnglet('tableau');rafraichirPartages();}
   })();
 })();
