@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123e8c">
+  <link rel="icon" href="/icone-192.png">
+  <link rel="apple-touch-icon" href="/icone-192.png">
+  <title>OASIS Bibliothèque Numérique</title>
+  <link rel="stylesheet" href="/styles.css?v60">
+  <link rel="manifest" href="/manifest.json">
+</head>
+<body>
+  <!-- Écran de connexion -->
+  <div id="ecranConnexion" class="ecran-connexion" hidden>
+    <section class="presentation-connexion" aria-label="Découvrir OASIS">
+      <a class="identite-oasis" href="#connexion"><img src="/logo.png" alt=""><span>OASIS<small>BIBLIOTHÈQUE NUMÉRIQUE</small></span></a>
+      <div class="accroche-oasis"><span class="eyebrow">VOTRE ESPACE DE SAVOIR</span><h1>Un monde de ressources.<br><em>Un avenir à construire.</em></h1><p>Lire, explorer et progresser à votre rythme. Retrouvez vos livres, vos ressources pédagogiques et vos contenus multimédias dans un seul espace.</p></div>
+      <img class="visuel-connexion" src="/banniere-oasis.png" alt="La bibliothèque numérique OASIS et ses ressources pour apprenants et enseignants">
+      <div class="atouts-oasis"><article><span>01</span><h3>Explorer</h3><p>Livres numériques, guides et ressources organisés par domaine.</p></article><article><span>02</span><h3>Apprendre</h3><p>Vidéos et documents pour enrichir vos connaissances.</p></article><article><span>03</span><h3>Progresser</h3><p>Favoris, suivi de lecture et défis pour garder votre élan.</p></article></div>
+      <p class="signature-oasis">Apprendre aujourd’hui pour un meilleur demain.</p>
+    </section>
+    <div class="connexion-droite" id="connexion"><div class="boite-connexion">
+      <div class="marque">
+        <span class="eyebrow">BIENVENUE CHEZ OASIS</span>
+        <h2 id="titreConnexion">Votre prochaine découverte commence ici.</h2>
+        <p class="sous" id="sousConnexion">Connectez-vous pour retrouver votre bibliothèque et poursuivre votre parcours d’apprentissage.</p>
+      </div>
+      <div id="msgAuth" role="status" aria-live="polite"></div>
+      <form id="formConnexion">
+        <div id="champsProfil" hidden></div><fieldset id="champNiveau" hidden class="champ"><legend>Votre parcours d’apprentissage</legend><label for="inNiveau">Niveau *</label><select id="inNiveau"><option value="">Choisir votre niveau</option><option value="scolaire">Scolaire</option><option value="universitaire">Universitaire</option><option value="technique_professionnel">Technique et professionnel</option></select><label for="inNiveauDetail">Classe, année ou spécialité (facultatif)</label><input id="inNiveauDetail" maxlength="80" placeholder="Ex. : 9e AF, licence 2, mécanique"><small>Ce niveau nous aide à vous proposer des lectures adaptées.</small></fieldset><div class="champ" id="champNom" hidden>
+          <label for="inNom">Nom complet</label>
+          <input id="inNom" type="text" autocomplete="name" placeholder="Ex. : Jean Baptiste">
+        </div>
+        <div class="champ">
+          <label for="inEmail">Email</label>
+          <input id="inEmail" type="email" autocomplete="email" required placeholder="vous@exemple.ht">
+        </div>
+        <div class="champ">
+          <label for="inMdp">Mot de passe</label>
+          <div class="mot-de-passe"><input id="inMdp" type="password" autocomplete="current-password" required placeholder="Votre mot de passe"><button type="button" id="voirMdp" aria-label="Afficher le mot de passe" aria-pressed="false">Afficher</button></div>
+        </div>
+        <button type="submit" class="btn btn-bleu btn-large" id="btnAuth">Se connecter</button>
+      </form>
+      <p class="bascule-auth">
+        <span id="txtBascule">Pas encore de compte ?</span>
+        <a href="#" id="lienBascule">Créer un compte</a>
+      </p>
+      <button class="mini-btn" onclick="location.href='/'">← Catalogue public</button><p class="connexion-note">Votre espace personnel pour lire, apprendre et partager.</p>
+    </div></div>
+  </div>
+
+  <!-- Application -->
+  <div id="appli" class="app" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="logo">
+        <img src="/logo.png" alt="Logo Oasis" class="logo-img">
+        <div><b id="logoNom">OASIS<br>Bibliothèque</b><small id="logoSous">BIBLIOTHÈQUE NUMÉRIQUE</small></div>
+      </div>
+      <nav class="nav" aria-label="Navigation principale">
+        <div class="nav-groupe">Bibliothèque</div>
+        <button class="nav-item actif" data-vue="accueil"><span class="ic">🏠</span> Accueil</button>
+        <button class="nav-item" data-vue="bibliotheque"><span class="ic">📚</span> Bibliothèque</button>
+        <button class="nav-item" data-vue="favoris"><span class="ic">❤️</span> Mes Favoris</button>
+        <button class="nav-item" data-vue="emprunts"><span class="ic">🔖</span> Mes Emprunts</button>
+        <button class="nav-item" data-vue="abonnement"><span class="ic">💳</span> Abonnement</button><div class="sep"></div>
+        <button class="nav-item" data-vue="categories"><span class="ic">🗂️</span> Catégories</button>
+        <button class="nav-item" data-vue="nouveautes"><span class="ic">✨</span> Nouveautés</button>
+        <button class="nav-item" data-vue="recommandes"><span class="ic">⭐</span> Recommandés</button>
+        <div class="sep"></div>
+        <div class="nav-groupe">Médiathèque & communauté</div>
+        <button class="nav-item" data-vue="ressources"><span class="ic">🔎</span> Ressources</button>
+        <button class="nav-item" data-vue="multimedia"><span class="ic">🎬</span> Multimédia</button>
+        <button class="nav-item" data-vue="collaboration"><span class="ic">👥</span> Collaboration</button>
+        <button class="nav-item" data-vue="defis"><span class="ic">🏆</span> Défis de lecture</button>
+        <button class="nav-item" data-vue="quiz"><span class="ic">🧠</span> Quiz de lecture</button>
+        <button class="nav-item" data-vue="places"><span class="ic">🪑</span> Places de lecture</button>
+        <div class="sep"></div>
+        <button class="nav-item nav-don" data-vue="don"><span class="ic">💝</span> Faire un don</button>
+        <a class="nav-item" href="/ecole" id="lienEcole"><span class="ic">🏫</span> Espace établissement</a>
+        <a class="nav-item" href="/admin" id="lienAdmin" hidden><span class="ic">🛠️</span> Espace bibliothécaire</a>
+        <button class="nav-item" id="btnDeconnexion"><span class="ic">🚪</span> Se déconnecter</button>
+      </nav>
+      <div class="pied">Oasis © 2026<br>Haïti 🇭🇹</div>
+    </aside>
+
+    <div class="principal">
+      <header class="entete">
+        <button class="bouton-menu" id="btnMenu" aria-controls="sidebar" aria-expanded="false" aria-label="Ouvrir le menu">☰</button>
+        <span class="marque-mobile" aria-label="OASIS Bibliothèque Numérique">OASIS</span>
+        <h1 id="titreEntete">Bibliothèque <span>Numérique</span></h1>
+        <div class="droite"><button class="mini-btn bleu" id="btnConnexionPublic">Se connecter</button>
+          <button class="lien-entete" id="btnNotifs" style="position:relative">🔔 <span class="txt">Notifications</span><span id="badgeNotifs" class="badge-notif" hidden></span></button>
+          <button class="lien-entete" data-vue="collaboration">👥 <span class="txt">Collaboration</span></button>
+          <button class="lien-entete lien-don" data-vue="don">💝 <span class="txt">Faire un don</span></button>
+          <button class="lien-entete" id="btnAPropos">ℹ️ <span class="txt">À propos</span></button>
+          <div class="profil"><span id="nomProfil"></span><div class="avatar" id="avatarProfil"></div></div>
+        </div>
+      </header>
+
+      <main class="contenu">
+        <div class="colonne-large">
+          <div class="barre-recherche">
+            <span aria-hidden="true">🔍</span>
+            <input id="inRecherche" type="search" placeholder="Rechercher un livre, un auteur..." aria-label="Rechercher un livre ou un auteur">
+          </div>
+          <div id="zonePrincipale"></div>
+        </div>
+
+        <aside class="colonne-droite" id="colonneDroite">
+          <div class="panneau">
+            <div class="p-titre"><h4>Lectures Populaires</h4><button data-vue="recommandes">Voir Plus</button></div>
+            <div id="zonePopulaires"></div>
+          </div>
+          <div class="panneau">
+            <div class="p-titre"><h4>Ma Liste de Lecture</h4><button data-vue="liste">Voir la Liste</button></div>
+            <div id="zoneListe"></div>
+          </div>
+        </aside>
+      </main>
+      <footer class="pied-page" id="piedPage"></footer>
+    </div>
+  </div>
+
+  <div id="zoneModale"></div>
+  <script src="/abonnement.js?v60"></script>
+  <script src="/don.js?v60"></script>
+  <script src="/quiz.js?v60"></script>
+  <script src="/recherche-texte.js?v60"></script>
+  <script src="/ia.js?v60"></script>
+  <script src="/suggestions.js?v60"></script>
+  <script src="/vendor/jszip/jszip.min.js"></script>
+  <script src="/surlignage.js?v60"></script>
+  <script src="/lecture-assistance.js?v60"></script>
+  <script src="/lecteur-epub.js?v60"></script>
+  <script src="/vignette-video.js?v60"></script>
+  <script src="/navigation-ecole.js?v60"></script>
+  <script src="/profil-abonnement.js?v60"></script>
+<script src="/app.js?v60"></script>
+</body>
+</html>
