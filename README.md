@@ -1,3 +1,5 @@
+Nouveautés 1.12.0 : surlignage en couleurs — voir `SURLIGNAGE.md`. Nouveautés 1.11.0 : assistant OASIS IA — voir `OASIS-IA.md`. Nouveautés 1.10.0 : recherche dans le texte des livres — voir `RECHERCHE-PLEIN-TEXTE.md`. Version 1.9.0 : dons et quiz — voir `DONS-ET-QUIZ.md`.
+
 # Version intégrée OASIS + Diffusion
 
 Consultez `FUSION-OASIS-DIFFUSION.md` pour l’installation, la navigation et les fonctions de la version 1.5.0. Démarrage : `npm start` ou `node server.js`. Vérification : `npm test`. Conservez votre dossier `data` lors de la mise à jour.

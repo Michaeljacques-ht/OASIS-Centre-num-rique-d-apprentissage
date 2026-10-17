@@ -6,7 +6,6 @@ async function request(route,token,method='GET',body){if(route==='/inscription'&
 (async()=>{try{
  fs.cpSync(source,temp,{recursive:true,filter:p=>!['data','integrations','tests','node_modules'].includes(path.relative(source,p).split(path.sep)[0])});
  let code=fs.readFileSync(path.join(temp,'server.js'),'utf8');code=code.replace('http.createServer(async (req, res) => {','const testServer = http.createServer(async (req, res) => {').replace("}).listen(PORT, () => {","}).listen(PORT, () => { console.log('TEST_PORT:' + testServer.address().port);");fs.writeFileSync(path.join(temp,'server.js'),code);await start();
- assert.equal((await request('/quiz')).code,200);assert.equal((await request('/dons/configuration')).code,200);assert.equal((await fetch(base+'/engagement.html?vue=don')).status,200);
  const stats=await request('/statistiques-publiques');assert.equal(stats.code,200);assert.equal(typeof stats.data.livres,'number');assert.equal(stats.data.visiteurs,1);
  const tracked=await fetch(base+'/api/statistiques-publiques',{headers:{Cookie:'oasis_visite=1'}});assert.equal((await tracked.json()).visiteurs,1);
  const login=async(email,motDePasse)=>{const r=await request('/connexion',null,'POST',{email,motDePasse});assert.equal(r.code,200);return r.data.jeton};

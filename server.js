@@ -11,7 +11,9 @@ const url = require('url');
 
 const abonnement = require('./modules/abonnement');
 const tarifs=require('./modules/tarifs');
+const essai=require('./modules/essai'),doublons=require('./modules/doublons');
 const dureeLecture=require('./modules/duree-lecture');
+const rechercheTexte=require('./modules/recherche-texte');
 const ecoles = require('./modules/ecoles');
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
@@ -269,12 +271,12 @@ function vueLivre(l, utilisateur) {
     };
   }
   return {
-    estimationLecture:dureeLecture.estimation(l),dureeLectureMinutes:l.dureeLectureMinutes||'',seuilLecture:l.seuilLecture===undefined?70:l.seuilLecture, accesComplet: abonnement.actif(db, utilisateur), id: l.id, titre: l.titre, auteur: l.auteur, categorie: l.categorie, type: l.type,
+    estimationLecture:dureeLecture.estimation(l),dureeLectureMinutes:l.dureeLectureMinutes||'',seuilLecture:l.seuilLecture===undefined?70:l.seuilLecture, accesComplet: abonnement.actif(db, utilisateur), iaDisponible: require('./modules/ia').disponible(db, l), id: l.id, titre: l.titre, auteur: l.auteur, categorie: l.categorie, type: l.type,
     resume: l.resume, couleur: l.couleur, icone: l.icone, annee: l.annee, isbn: l.isbn,
     note: moyenneNotes(l), nbNotes: l.notes.length, nbLectures: l.nbLectures,
     edition:l.edition||'',editeur: l.editeur || '', langue: l.langue || 'Français', niveau: l.niveau || '', publicCible: l.publicCible || 'tous', motsCles: l.motsCles || '',
     maProgression: utilisateur ? (db.progressions.find(p => p.utilisateurId === utilisateur.id && p.livreId === l.id) || null) : null,
-    epub: !!l.epub, pdf: !!l.pdf, couverture: !!l.couverture,
+    telechargementAutorise:l.telechargementAutorise!==false,epub: !!l.epub, pdf: !!l.pdf, couverture: !!l.couverture,
     versionNumerique, versionPhysique,
     hybride: versionNumerique && versionPhysique,
     disponible: versionNumerique || nbDisponibles > 0,
@@ -346,6 +348,14 @@ async function api(req, res, u) {
   const { pathname, query } = url.parse(req.url, true);
   const seg = pathname.split('/').filter(Boolean); // ['api', ...]
   const utilisateur = authentifier(req);
+  const comptes=require('./modules/administration-comptes');
+  if(req.method!=='GET'&&/^\/api\/(livres|doublons)/.test(pathname))rechercheTexte.planifier(db);
+  if(!comptes.autorise(utilisateur,pathname,req.method))return json(res,403,{erreur:'Cette tâche ne vous a pas été déléguée.'});
+  if(await comptes.route(req,res,{db,utilisateur,json,lireCorps,sauverDB,uid,hashMdp}))return;
+  if(['livres','ressources','medias'].includes(seg[1])&&seg[2]&&seg[3]==='telechargement'&&req.method==='PUT'){
+    if(!utilisateur||utilisateur.role!=='bibliothecaire')return json(res,403,{erreur:'Réservé au bibliothécaire.'});const x=db[seg[1]].find(x=>x.id===seg[2]);if(!x)return json(res,404,{erreur:'Document introuvable.'});const b=await lireCorps(req);if(typeof b.autorise!=='boolean')return json(res,400,{erreur:'Autorisation invalide.'});x.telechargementAutorise=b.autorise;journal('Téléchargement '+(b.autorise?'autorisé':'restreint'),utilisateur,x.titre);sauverDB();return json(res,200,{ok:true,telechargementAutorise:b.autorise});
+  }
+  if(req.method==='GET'&&['livres','medias'].includes(seg[1])&&['pdf','epub','fichier'].includes(seg[3])){const x=db[seg[1]].find(x=>x.id===seg[2]);const tokenUser=query.jeton&&db.utilisateurs.find(u=>u.id===db.sessions[query.jeton]);const lecteur=utilisateur||tokenUser;if(x?.telechargementAutorise===false&&query.lecture!=='1'&&lecteur?.role!=='bibliothecaire')return json(res,403,{erreur:'Téléchargement désactivé. Consultez ce document dans le lecteur OASIS.'});}
   if(pathname==='/api/abonnement/tarifs'&&req.method==='GET')return json(res,200,tarifs.lire(db));
   if (pathname === '/api/ecoles/formules' && req.method === 'GET') return json(res, 200, {formules:tarifs.formules(db),devisAuDela:600});
   if (pathname === '/api/statistiques-publiques' && req.method === 'GET') {
@@ -370,22 +380,47 @@ async function api(req, res, u) {
     });
   }
   if (pathname === '/api/version' && req.method === 'GET') {
-    return json(res, 200, { version: '1.6.9', formulesEtablissements: true, etablissements: true, apercuGratuit: true, abonnements: true });
+    return json(res, 200, { version: require('./package.json').version, detectionDoublons: true, formulesEtablissements: true, etablissements: true, apercuGratuit: true, abonnements: true, dons: true, quizLecture: true, rechercheTexte: true, assistantIA: true });
   }
   if (await ecoles.route(req, res, {db, utilisateur, json, lireCorps, lireBinaire, sauverDB, uid, hashMdp})) return;
   if (await abonnement.route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid})) return;
+  if (await require('./modules/ia').route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
+  if (await require('./modules/suggestions').route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, vueLivre})) return;
+  if (await rechercheTexte.route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
+  if (await require('./modules/dons').route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
+  if (await require('./modules/quiz').route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
   const exigeAuth = () => { if (!utilisateur) { json(res, 401, { erreur: 'Connexion requise.' }); return false; } return true; };
   const exigeBiblio = () => { if (!utilisateur || utilisateur.role !== 'bibliothecaire') { json(res, 403, { erreur: 'Réservé au bibliothécaire.' }); return false; } return true; };
   const m = req.method;
 
+  // Routes administratives explicites avant les routes de contenu.
+  if(pathname==='/api/doublons'&&m==='GET'){if(!exigeBiblio())return;return json(res,200,doublons.groupes(db).filter(g=>!utilisateur.adminDelegue||g.type==='livres'));}
+  if(pathname==='/api/doublons/fusionner'&&m==='POST'){
+    if(!exigeBiblio())return;const {type,conserve,retire}=await lireCorps(req);if(!['livres','ressources','medias'].includes(type))return json(res,400,{erreur:'Type invalide.'});
+    if(utilisateur.adminDelegue&&type!=='livres')return json(res,403,{erreur:'Seule la fusion des livres vous est déléguée.'});
+    const a=db[type].find(x=>x.id===conserve),b=db[type].find(x=>x.id===retire);if(!a||!b||!doublons.meme(a,b,type))return json(res,409,{erreur:'Doublon non confirmé.'});
+    const fichiers=type==='livres'?[[cheminPdf,'pdf'],[cheminEpub,'epub'],[cheminCouv,'couverture']]:[];
+    for(const [chemin,k] of fichiers)if(a[k]&&b[k]&&k!=='couverture'&&fs.existsSync(chemin(a.id))&&fs.existsSync(chemin(b.id))&&!fs.readFileSync(chemin(a.id)).equals(fs.readFileSync(chemin(b.id))))return json(res,409,{erreur:'Fichiers différents : fusion bloquée pour préserver les versions.'});
+    if(type==='medias'&&(a.ext||b.ext))return json(res,409,{erreur:'Médias joints : examinez les fichiers avant une suppression manuelle.'});
+    for(const [chemin,k] of fichiers)if(!a[k]&&b[k]&&fs.existsSync(chemin(b.id))){fs.copyFileSync(chemin(b.id),chemin(a.id));a[k]=true;if(k==='couverture')a.couvertureMime=b.couvertureMime;}
+    try{doublons.fusionner(db,type,conserve,retire);journal('Doublon fusionné',utilisateur,b.titre);sauverDB();return json(res,200,{ok:true})}catch(e){return json(res,409,{erreur:e.message})}
+  }
+  if(seg[1]==='medias'&&seg[2]&&seg[3]==='vignette'){
+    const mo=db.medias.find(x=>x.id===seg[2]);if(!mo||mo.type!=='video')return json(res,404,{erreur:'Vidéo introuvable.'});const file=path.join(DOSSIER_MEDIAS,mo.id+'-vignette.jpg');
+    if(m==='GET'){if(!mo.vignette||!fs.existsSync(file))return json(res,404,{erreur:'Vignette indisponible.'});res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'no-cache'});return fs.createReadStream(file).pipe(res)}
+    if(m==='POST'){if(!exigeBiblio())return;let b;try{b=await lireBinaire(req)}catch(e){return json(res,413,{erreur:e.message})}if(b.length>2*1024*1024||b[0]!==255||b[1]!==216)return json(res,400,{erreur:'Vignette JPEG de 2 Mo maximum requise.'});fs.mkdirSync(DOSSIER_MEDIAS,{recursive:true});fs.writeFileSync(file,b);mo.vignette=true;sauverDB();return json(res,201,{ok:true})}
+  }
+  if(pathname==='/api/admin-abonnements'&&m==='GET'){if(!exigeBiblio())return;return json(res,200,require('./modules/comptabilite').rapport(db));}
+  if(pathname==='/api/admin-abonnements/depenses'&&m==='POST'){if(!exigeBiblio())return;try{const d=require('./modules/comptabilite').depense(await lireCorps(req),uid(),utilisateur.id);db.depensesAbonnement ||= [];db.depensesAbonnement.push(d);journal('Dépense abonnement',utilisateur,d.libelle+' : '+d.montant+' HTG');sauverDB();return json(res,201,d)}catch(e){return json(res,400,{erreur:e.message})}}
   // --- Auth ---
   if (pathname === '/api/inscription' && m === 'POST') {
-    const { nom, email, motDePasse, classe, niveau, niveauDetail } = await lireCorps(req);
+    const { nom, email, motDePasse, classe, niveau, niveauDetail, ...infosProfil } = await lireCorps(req);
     if (niveau !== undefined && !['scolaire','universitaire','technique_professionnel'].includes(niveau)) return json(res,400,{erreur:'Choisissez un niveau valide.'});
     if (!nom || !email || !motDePasse || motDePasse.length < 6) return json(res, 400, { erreur: 'Nom, email et mot de passe (6 caractères min.) requis.' });
     if (db.utilisateurs.some(x => x.email.toLowerCase() === email.toLowerCase())) return json(res, 409, { erreur: 'Un compte existe déjà avec cet email.' });
     const nu = { id: uid(), nom, email, classe: classe || '', niveau: niveau || '', niveauDetail: String(niveauDetail || '').slice(0,80), role: 'apprenant', ...hashMdp(motDePasse), creeLe: maintenant() };
-    db.utilisateurs.push(nu);
+    try{Object.assign(nu,require('./modules/profils-abonnement').profil(infosProfil))}catch(e){return json(res,400,{erreur:e.message})}
+    essai.initialiser(nu);db.utilisateurs.push(nu);
     const jeton = uid() + uid();
     db.sessions[jeton] = nu.id; sauverDB();
     return json(res, 201, { jeton, utilisateur: ecoles.publicUser(nu) });
@@ -472,14 +507,31 @@ async function api(req, res, u) {
   }
   if (seg[1] === 'livres' && seg[2] && seg[3] === 'notes' && m === 'POST') {
     if (!exigeAuth()) return;
-    const { type, texte, pourcentage } = await lireCorps(req);
+    const corpsNote = await lireCorps(req);
+    const { type, texte, pourcentage } = corpsNote;
     if (!db.livres.some(l => l.id === seg[2])) return json(res, 404, { erreur: 'Livre introuvable.' });
+    if (type === 'surlignage') {
+      let sl; try { sl = require('./modules/surlignages').valider(corpsNote); } catch (e) { return json(res, 400, { erreur: e.message }); }
+      if (db.notes.filter(n => n.utilisateurId === utilisateur.id && n.livreId === seg[2] && n.type === 'surlignage').length >= 2000) return json(res, 409, { erreur: 'Limite de 2 000 surlignages atteinte pour ce livre.' });
+      const n = { id: uid(), utilisateurId: utilisateur.id, livreId: seg[2], ...sl, creeLe: maintenant() };
+      db.notes.push(n); sauverDB();
+      return json(res, 201, n);
+    }
     if (!texte || !texte.trim()) return json(res, 400, { erreur: 'Le texte de la note est requis.' });
     const n = { id: uid(), utilisateurId: utilisateur.id, livreId: seg[2],
       type: type === 'signet' ? 'signet' : 'note', texte: texte.trim().slice(0, 2000),
       pourcentage: Number(pourcentage) || null, creeLe: maintenant() };
     db.notes.push(n); sauverDB();
     return json(res, 201, n);
+  }
+  if (seg[1] === 'notes' && seg[2] && m === 'PUT') {
+    if (!exigeAuth()) return;
+    const n = db.notes.find(x => x.id === seg[2] && x.utilisateurId === utilisateur.id);
+    if (!n) return json(res, 404, { erreur: 'Note introuvable.' });
+    try { Object.assign(n, require('./modules/surlignages').modification(n, await lireCorps(req)), { modifieLe: maintenant() }); }
+    catch (e) { return json(res, 400, { erreur: e.message }); }
+    sauverDB();
+    return json(res, 200, n);
   }
   if (seg[1] === 'notes' && seg[2] && m === 'DELETE') {
     if (!exigeAuth()) return;
@@ -493,7 +545,7 @@ async function api(req, res, u) {
   if (pathname === '/api/notifications' && m === 'GET') {
     if (!exigeAuth()) return;
     nettoyerReservations();
-    const notifs = [];
+    const notifs = essai.notification((db.ecoles||[]).find(e=>e.id===utilisateur.ecoleId)||utilisateur);
     db.emprunts.filter(e => e.utilisateurId === utilisateur.id && e.statut === 'en_cours').forEach(e => {
       const l = db.livres.find(x => x.id === e.livreId);
       const retard = joursRetard(e);
@@ -575,7 +627,7 @@ async function api(req, res, u) {
     id: mo.id, type: mo.type, titre: mo.titre, auteur: mo.auteur, categorie: mo.categorie,
     description: mo.description, langue: mo.langue, annee: mo.annee, lieu: mo.lieu, duree: mo.duree,
     motsCles: mo.motsCles, fichier: !!mo.ext, mime: mo.mime || '', taille: mo.taille || 0,
-    nbLectures: mo.nbLectures || 0, creeLe: mo.creeLe,
+    telechargementAutorise:mo.telechargementAutorise!==false,vignette:!!mo.vignette,nbLectures: mo.nbLectures || 0, creeLe: mo.creeLe,
     maPosition: utilisateur ? ((db.progressionsMedias.find(p => p.utilisateurId === utilisateur.id && p.mediaId === mo.id) || {}).secondes || 0) : 0
   });
   if (pathname === '/api/medias' && m === 'GET') {
@@ -586,11 +638,12 @@ async function api(req, res, u) {
       liste = liste.filter(x => [x.titre, x.auteur, x.categorie, x.motsCles, x.lieu, x.description].some(v => (v || '').toLowerCase().includes(q)));
     }
     liste.sort((a, b) => new Date(b.creeLe) - new Date(a.creeLe));
-    return json(res, 200, liste.map(vueMedia));
+    return json(res, 200, liste.sort((a,b)=>a.titre.localeCompare(b.titre,'fr',{sensitivity:'base'})).map(vueMedia));
   }
   if (pathname === '/api/medias' && m === 'POST') {
     if (!exigeBiblio()) return;
     const c = await lireCorps(req);
+    if(doublons.trouver(db.medias,c,'medias'))return json(res,409,{erreur:'Ce média existe déjà.'});
     if (!['audio', 'carte', 'video'].includes(c.type)) return json(res, 400, { erreur: 'Type invalide (audio, carte ou video).' });
     if (!c.titre || !c.titre.trim()) return json(res, 400, { erreur: 'Le titre est requis.' });
     const mo = { id: uid(), type: c.type, titre: c.titre.trim(), auteur: (c.auteur || '').trim(),
@@ -610,7 +663,7 @@ async function api(req, res, u) {
     const ext = (MIMES_MEDIAS[mo.type] || {})[mime];
     if (!ext) return json(res, 400, { erreur: `Format non accepté pour ${mo.type === 'audio' ? 'l\'audiothèque (MP3, OGG, M4A, WAV)' : mo.type === 'video' ? 'la cinémathèque (MP4, WebM)' : 'la cartothèque (PNG, JPEG, PDF)'}.` });
     if (mo.ext && fs.existsSync(cheminMedia(mo))) fs.unlinkSync(cheminMedia(mo));
-    mo.ext = ext; mo.mime = mime;
+    mo.vignette=false;mo.ext = ext; mo.mime = mime;
     try { mo.taille = await recevoirFichier(req, cheminMedia(mo)); }
     catch (err) { mo.ext = ''; mo.mime = ''; return json(res, 413, { erreur: err.message }); }
     sauverDB();
@@ -678,6 +731,7 @@ async function api(req, res, u) {
   if (pathname === '/api/medias' && m === 'POST') {
     if (!exigeBiblio()) return;
     const c = await lireCorps(req);
+    if(doublons.trouver(db.medias,c,'medias'))return json(res,409,{erreur:'Ce média existe déjà.'});
     if (!['audio', 'carte', 'video'].includes(c.type)) return json(res, 400, { erreur: 'Type invalide (audio, carte ou video).' });
     if (!c.titre || !c.titre.trim()) return json(res, 400, { erreur: 'Le titre est requis.' });
     const x = { id: uid(), type: c.type, titre: c.titre.trim(), auteur: (c.auteur || '').trim(),
@@ -1060,11 +1114,12 @@ async function api(req, res, u) {
       liste = liste.filter(r => r.titre.toLowerCase().includes(q) || r.contenu.toLowerCase().includes(q));
     }
     liste.sort((a, b) => a.titre.localeCompare(b.titre, 'fr'));
-    return json(res, 200, liste);
+    return json(res, 200, liste.map(r=>utilisateur?.role==='bibliothecaire'||r.telechargementAutorise!==false?r:{...r,lien:''}));
   }
   if (pathname === '/api/ressources' && m === 'POST') {
     if (!exigeBiblio()) return;
     const { genre, titre, contenu, source, lien, icone } = await lireCorps(req);
+    if(doublons.trouver(db.ressources,{genre,titre,source},'ressources'))return json(res,409,{erreur:'Cette ressource existe déjà.'});
     if (!['dictionnaire', 'encyclopedie', 'base', 'administratif', 'historique', 'officiel'].includes(genre)) return json(res, 400, { erreur: 'Genre invalide.' });
     if (!titre || !contenu) return json(res, 400, { erreur: 'Titre et contenu requis.' });
     if (lien && !/^https?:\/\/.+/.test(lien)) return json(res, 400, { erreur: 'Le lien doit commencer par http:// ou https://' });
@@ -1112,6 +1167,7 @@ async function api(req, res, u) {
     if (m === 'POST') {
       let b; try { b = await lireBinaire(req); } catch(e) { return json(res, 413, {erreur:e.message}); }
       if (!require('./modules/epub-valide')(b)) return json(res,400,{erreur:'Le fichier doit être un EPUB valide (mimetype et META-INF/container.xml).'});
+      const empreinte=crypto.createHash('sha256').update(b).digest('hex');if(db.livres.some(x=>x.id!==l.id&&(x.empreinteEpub===empreinte||x.empreintePdf===empreinte)))return json(res,409,{erreur:'Ce fichier existe déjà dans le catalogue.'});l.empreinteEpub=empreinte;
       fs.mkdirSync(DOSSIER_PDF,{recursive:true}); fs.writeFileSync(cheminEpub(l.id),b);l.epub=true;try{l.nbMotsLecture=dureeLecture.epub(b)}catch(e){console.warn('Estimation EPUB indisponible :',e.message)}recupererCouvertureEpub(l,true);sauverDB();return json(res,201,{ok:true,couverture:!!l.couverture});
     }
     if (m === 'GET') {
@@ -1131,6 +1187,7 @@ async function api(req, res, u) {
     try { donnees = await lireBinaire(req); } catch (err) { return json(res, 413, { erreur: err.message }); }
     if (!donnees.length || donnees.slice(0, 5).toString() !== '%PDF-') return json(res, 400, { erreur: 'Le fichier doit être un PDF valide.' });
     fs.mkdirSync(DOSSIER_PDF, { recursive: true });
+    const empreinte=crypto.createHash('sha256').update(donnees).digest('hex');if(db.livres.some(x=>x.id!==l.id&&(x.empreintePdf===empreinte||x.empreinteEpub===empreinte)))return json(res,409,{erreur:'Ce fichier existe déjà dans le catalogue.'});l.empreintePdf=empreinte;
     fs.writeFileSync(cheminPdf(l.id), donnees);
     try{const pdf=await require('./modules/pdf-lib').PDFDocument.load(donnees,{ignoreEncryption:true});l.nbPagesLecture=pdf.getPageCount()}catch(e){console.warn('Estimation PDF indisponible :',e.message)}
     l.pdf = true; // s'il a aussi des exemplaires en rayon, le livre devient hybride
@@ -1171,6 +1228,7 @@ async function api(req, res, u) {
     else if (query.type === 'physique') liste = liste.filter(l => db.exemplaires.some(e => e.livreId === l.id));
     if (query.tri === 'populaires') liste.sort((a,b) => (moyenneNotes(b)*10 + b.nbLectures/50) - (moyenneNotes(a)*10 + a.nbLectures/50));
     else if (query.tri === 'nouveautes') liste.sort((a,b) => new Date(b.creeLe) - new Date(a.creeLe));
+    else liste.sort((a,b)=>String(a.titre).localeCompare(String(b.titre),'fr',{sensitivity:'base',numeric:true}));
     return json(res, 200, liste.map(l => vueLivre(l, utilisateur)));
   }
   if (seg[1] === 'livres' && seg[2] && seg[3] === 'lire' && m === 'GET') {
@@ -1201,6 +1259,7 @@ async function api(req, res, u) {
     const c = await lireCorps(req);
     if(!dureeLecture.valide(c))return json(res,400,{erreur:'Durée (1 à 100000 minutes) ou seuil (1 à 100 %) invalide.'});
     if(c.publicCible !== undefined && !['tous','scolaire','universitaire','technique_professionnel'].includes(c.publicCible)) return json(res,400,{erreur:'Public cible invalide.'});
+    if(doublons.trouver(db.livres,c,'livres'))return json(res,409,{erreur:'Ce livre existe déjà (titre, auteur et édition, ou ISBN identique).'});
     if (!c.titre || !c.auteur || !c.categorie) return json(res, 400, { erreur: 'Titre, auteur et catégorie requis.' });
     const l = { id: uid(), titre: c.titre, auteur: c.auteur, categorie: c.categorie, type: c.type === 'physique' ? 'physique' : 'numerique',
       resume: c.resume || '', couleur: c.couleur || '#1e4fa3', icone: c.icone || '📘', annee: c.annee || new Date().getFullYear(),
@@ -1227,6 +1286,7 @@ async function api(req, res, u) {
     const c = await lireCorps(req);
     if(!dureeLecture.valide(c))return json(res,400,{erreur:'Durée (1 à 100000 minutes) ou seuil (1 à 100 %) invalide.'});
     if(c.publicCible !== undefined && !['tous','scolaire','universitaire','technique_professionnel'].includes(c.publicCible)) return json(res,400,{erreur:'Public cible invalide.'});
+    if(doublons.trouver(db.livres,{...db.livres[idx],...c},'livres'))return json(res,409,{erreur:'Ces informations correspondent à un livre déjà présent.'});
     if (['titre','auteur','categorie'].some(k => c[k] !== undefined && (typeof c[k] !== 'string' || !c[k].trim()))) return json(res,400,{erreur:'Titre, auteur et catégorie ne doivent pas être vides.'});
     ['titre','auteur','categorie','resume','couleur','icone','annee','isbn','contenu','type','editeur','edition','langue','niveau','publicCible','seuilLecture','motsCles'].forEach(k => { if (c[k] !== undefined) db.livres[idx][k] = c[k]; });
     sauverDB();
@@ -1407,6 +1467,8 @@ function statique(req, res) {
 
 // ---------- Serveur ----------
 chargerDB();
+let essaisAjoutes=false;for(const e of db.ecoles||[])essaisAjoutes=essai.initialiser(e)||essaisAjoutes;for(const u of db.utilisateurs)if(u.role==='apprenant'&&!u.ecoleId)essaisAjoutes=essai.initialiser(u)||essaisAjoutes;if(essaisAjoutes)sauverDB();
+const rappelsEssai=()=>require('./modules/notifications-essai').traiter(db,sauverDB).catch(e=>console.error('Rappels essai :',e.message));setTimeout(rappelsEssai,60000).unref();setInterval(rappelsEssai,3600000).unref();
 http.createServer(async (req, res) => {
   try {
     if (req.url.startsWith('/api/')) await api(req, res);
@@ -1416,6 +1478,8 @@ http.createServer(async (req, res) => {
     json(res, 500, { erreur: 'Erreur interne du serveur.' });
   }
 }).listen(PORT, () => {
+  require('./modules/ia').demarrer({dossier:path.join(__dirname,'data','ia')});
+  rechercheTexte.demarrer(db,{dossier:path.join(__dirname,'data','textes'),cheminPdf,cheminEpub}).catch(e=>console.error('Recherche plein texte indisponible :',e.message));
   console.log('╔══════════════════════════════════════════════════╗');
   console.log('║   Oasis — Centre numérique d\'apprentissage       ║');
   console.log('╚══════════════════════════════════════════════════╝');
