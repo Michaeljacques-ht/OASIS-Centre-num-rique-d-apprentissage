@@ -112,10 +112,11 @@
     : `<p class="vide">Aucun livre trouvé pour le moment.</p>`;
 
   // ---------- Vues ----------
+  const moduleAbsent = f => `<div class="erreur">Cette rubrique n’est pas encore installée sur le serveur (fichier ${f} manquant). L’administrateur doit redéployer le projet complet.</div>`;
   const vues = {
     abonnement: () => OasisAbonnement.render(api, moi),
-    don: () => OasisDon.render(api, moi),
-    quiz: () => OasisQuiz.render(api, moi),
+    don: () => window.OasisDon ? OasisDon.render(api, moi) : moduleAbsent('don.js'),
+    quiz: () => window.OasisQuiz ? OasisQuiz.render(api, moi) : moduleAbsent('quiz.js'),
     espace: async () => `<h2>Mon espace</h2><p>Bienvenue ${echap(moi?.nom || "")}. Retrouvez vos lectures dans la bibliothèque et gérez votre abonnement ci-dessous.</p><button class="btn btn-bleu" data-vue="bibliotheque">Explorer la bibliothèque</button> <button class="mini-btn" data-sg-reactiver>Réactiver les suggestions personnalisées</button>` + await OasisAbonnement.render(api, moi),
     async accueil() {
       const [nouveautes, cats, compteurs, suggestions, continuer] = await Promise.all([
@@ -123,7 +124,7 @@
         chargerCategories(),
         api('/statistiques-publiques').catch(() => null),
         moi?.niveau ? api('/recommandations').catch(()=>null) : null,
-        moi ? OasisSuggestions.continuer(api) : ''
+        moi && window.OasisSuggestions ? OasisSuggestions.continuer(api).catch(() => '') : ''
       ]);
       return `
         <button class="banniere-accueil" data-vue="bibliotheque" aria-label="Accéder à la bibliothèque">
@@ -178,7 +179,7 @@
           <select data-filtre="tri"><option value="">Trier…</option><option value="note" ${f.tri==='note'?'selected':''}>Meilleures notes</option><option value="annee" ${f.tri==='annee'?'selected':''}>Plus récents</option></select>
           ${Object.values(f).some(Boolean) ? '<button class="mini-btn" data-vider-filtres="1">✕ Réinitialiser</button>' : ''}
         </div>
-        ${grille(filtres)}${OasisRechercheTexte.section(q, api)}`;
+        ${grille(filtres)}${window.OasisRechercheTexte ? OasisRechercheTexte.section(q, api) : ''}`;
     },
     async favoris() {
       const livres = await api('/favoris');
@@ -349,7 +350,7 @@
   };
 
   async function afficherVue(nom, param) {
-    OasisQuiz.quitter();
+    window.OasisQuiz?.quitter();
     if(!moi&&!['accueil','bibliotheque','categorie','categories','nouveautes','recommandes','abonnement','don'].includes(nom)){window.dispatchEvent(new Event('oasis-connexion'));return;}
     vueActive = nom;
     document.querySelectorAll('.nav-item[data-vue]').forEach(b => b.classList.toggle('actif', b.dataset.vue === nom));
@@ -357,7 +358,7 @@
     $('#btnMenu').setAttribute('aria-expanded', 'false');
     const zone = $('#zonePrincipale');
     zone.innerHTML = '<p class="vide">Chargement…</p>';
-    try { zone.innerHTML = await (vues[nom] || vues.accueil)(param);OasisVignetteVideo.afficher(zone,jeton,moi?.role==='bibliothecaire'); }
+    try { zone.innerHTML = await (vues[nom] || vues.accueil)(param);window.OasisVignetteVideo?.afficher(zone,jeton,moi?.role==='bibliothecaire'); }
     catch (err) { zone.innerHTML = `<div class="erreur">${echap(err.message)}</div>`; }
   }
 
@@ -447,7 +448,7 @@
                 <small style="font-weight:700;color:var(--encre)">${l.maProgression.termine ? '✅ Lecture terminée' : `📖 Lecture en cours : ${l.maProgression.pourcentage} %`}</small>
                 <div class="barre-progression"><div style="width:${l.maProgression.pourcentage}%"></div></div>
               </div>` : ''}
-            ${OasisSuggestions.aussiLus(l.id, api)}
+            ${window.OasisSuggestions ? OasisSuggestions.aussiLus(l.id, api) : ''}
             ${(l.editeur || l.niveau || l.isbn || l.motsCles) ? `
               <p style="margin-top:12px;font-size:12.5px;color:var(--gris)">
                 ${l.editeur ? 'Éditeur : ' + echap(l.editeur) + ' · ' : ''}${l.langue ? 'Langue : ' + echap(l.langue) + ' · ' : ''}${l.niveau ? 'Niveau : ' + echap(l.niveau) + ' · ' : ''}${l.isbn ? 'ISBN : ' + echap(l.isbn) : ''}
@@ -465,7 +466,7 @@
     $('#voile').addEventListener('click', e => { if (e.target.id === 'voile') fermerModale(); });
   }
   const fermerModale = () => {
-    OasisSurlignage.fermer();
+    window.OasisSurlignage?.fermer();
     window.OasisLecture?.close();
     window.OasisEpub?.close();
     if (nettoyerPdf) { nettoyerPdf(); nettoyerPdf = null; }
@@ -534,7 +535,7 @@
       ${!livre.accesComplet ? '<div class="pdf-abonnement">Aperçu gratuit : cinq pages maximum. <button class="mini-btn bleu" data-abonner>Lire la suite — s’abonner</button></div>' : ''}${cible?.extrait ? `<div class="passage-recherche"><b>🔎 Passage recherché, page ${cible.page}${!livre.accesComplet && cible.page > 5 ? ' (au-delà de l’aperçu gratuit de 5 pages)' : ''} :</b> ${echap(cible.extrait)}</div>` : ''}<p id="pdfEtat" role="status" aria-live="polite">Chargement du document…</p><div class="pdf-pages" id="pdfPages"><div class="pdf-feuille"><canvas id="pdfCanvas" aria-label="Page du document PDF"></canvas><div class="textLayer" id="pdfTexte"></div></div></div></div></div>`;
     let doc=null, renderTask=null, closed=false, page=1, zoom=1, sequence=0;
     const assistance=OasisLecture.start($('#zoneModale .lecteur'),livre,moi?jeton:null,async()=>{if(!doc)return '';const text=await (await doc.getPage(page)).getTextContent();return text.items.map(x=>x.str+(x.hasEOL?'\n':' ')).join('')},{unite:'page',page:()=>page,aller:n=>{if(!doc)return;page=Math.max(1,Math.min(doc.numPages,n));render()}});
-    const slPdf=moi?OasisSurlignage.brancher({livre,unite:'page',root:()=>$('#pdfTexte'),page:()=>page,filtre:n=>n.page===page,pourcentage:()=>doc?Math.round(page/doc.numPages*100):0}):null;
+    const slPdf=moi&&window.OasisSurlignage?OasisSurlignage.brancher({livre,unite:'page',root:()=>$('#pdfTexte'),page:()=>page,filtre:n=>n.page===page,pourcentage:()=>doc?Math.round(page/doc.numPages*100):0}):null;
     nettoyerPdf=()=>{closed=true;sequence++;renderTask?.cancel();doc?.destroy();};
     $('#btnFermer').onclick=fermerModale;
     $('#voile').onclick=e=>{if(e.target.id==='voile')fermerModale()};
@@ -629,7 +630,7 @@
       if (document.fullscreenElement) document.exitFullscreen();
       else modaleEl.requestFullscreen?.().catch(() => toast('Plein écran non disponible sur ce navigateur.'));
     });
-    const partiesTexte=Math.max(1,Math.ceil(String(d.contenu).length/2500)),zoneDefil=()=>[$('#texteLecture'),modaleEl].find(x=>x&&x.scrollHeight>x.clientHeight+4);const slTexte=OasisSurlignage.brancher({livre,unite:'partie',root:()=>$('#texteLecture'),page:debut=>Math.min(Math.max(1,Math.ceil(String(d.contenu).length/2500)),1+Math.floor(debut/Math.max(1,$('#texteLecture').textContent.length)*Math.max(1,Math.ceil(String(d.contenu).length/2500)))),pourcentage:()=>pctActuel()});slTexte.rafraichir();const assistanceTexte=OasisLecture.start($('#modaleLecteur'),livre,jeton,()=>$('#texteLecture').innerText,{unite:'partie',page:()=>{const z=zoneDefil();return z?Math.min(partiesTexte,1+Math.floor(z.scrollTop/Math.max(1,z.scrollHeight-z.clientHeight)*partiesTexte*0.999)):1},aller:n=>{const z=zoneDefil();if(z)z.scrollTop=(n-1)/partiesTexte*(z.scrollHeight-z.clientHeight)}});assistanceTexte.ready();modaleEl.addEventListener('scroll',()=>assistanceTexte.progress(pctActuel()));assistanceTexte.progress(pctActuel());api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:pctActuel()})}).catch(()=>{});$('#btnVoix').hidden=true;
+    const partiesTexte=Math.max(1,Math.ceil(String(d.contenu).length/2500)),zoneDefil=()=>[$('#texteLecture'),modaleEl].find(x=>x&&x.scrollHeight>x.clientHeight+4);const slTexte=(window.OasisSurlignage||{brancher:()=>({rafraichir(){},fermer(){}})}).brancher({livre,unite:'partie',root:()=>$('#texteLecture'),page:debut=>Math.min(Math.max(1,Math.ceil(String(d.contenu).length/2500)),1+Math.floor(debut/Math.max(1,$('#texteLecture').textContent.length)*Math.max(1,Math.ceil(String(d.contenu).length/2500)))),pourcentage:()=>pctActuel()});slTexte.rafraichir();const assistanceTexte=OasisLecture.start($('#modaleLecteur'),livre,jeton,()=>$('#texteLecture').innerText,{unite:'partie',page:()=>{const z=zoneDefil();return z?Math.min(partiesTexte,1+Math.floor(z.scrollTop/Math.max(1,z.scrollHeight-z.clientHeight)*partiesTexte*0.999)):1},aller:n=>{const z=zoneDefil();if(z)z.scrollTop=(n-1)/partiesTexte*(z.scrollHeight-z.clientHeight)}});assistanceTexte.ready();modaleEl.addEventListener('scroll',()=>assistanceTexte.progress(pctActuel()));assistanceTexte.progress(pctActuel());api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:pctActuel()})}).catch(()=>{});$('#btnVoix').hidden=true;
     // Marque-page
     $('#btnSignet').addEventListener('click', async () => {
       try {

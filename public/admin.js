@@ -318,7 +318,7 @@
   }
 
   // Vérifie que le serveur en ligne correspond à cette interface.
-  const VERSION_INTERFACE = '1.12.0';
+  const VERSION_INTERFACE = '1.12.1';
   async function verifierVersionServeur() {
     try {
       const v = await api('/version');
