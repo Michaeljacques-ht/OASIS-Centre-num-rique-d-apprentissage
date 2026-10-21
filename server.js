@@ -350,6 +350,7 @@ async function api(req, res, u) {
   const utilisateur = authentifier(req);
   const comptes=require('./modules/administration-comptes');
   if(req.method!=='GET'&&/^\/api\/(livres|doublons)/.test(pathname))rechercheTexte.planifier(db);
+  if (require('./modules/diagnostic').route(req, res, {utilisateur, json})) return;
   if(!comptes.autorise(utilisateur,pathname,req.method))return json(res,403,{erreur:'Cette tâche ne vous a pas été déléguée.'});
   if(await comptes.route(req,res,{db,utilisateur,json,lireCorps,sauverDB,uid,hashMdp}))return;
   if(['livres','ressources','medias'].includes(seg[1])&&seg[2]&&seg[3]==='telechargement'&&req.method==='PUT'){
@@ -380,7 +381,7 @@ async function api(req, res, u) {
     });
   }
   if (pathname === '/api/version' && req.method === 'GET') {
-    return json(res, 200, { version: require('./package.json').version, detectionDoublons: true, formulesEtablissements: true, etablissements: true, apercuGratuit: true, abonnements: true, dons: true, quizLecture: true, rechercheTexte: true, assistantIA: true });
+    return json(res, 200, { version: require('./package.json').version, detectionDoublons: true, formulesEtablissements: true, etablissements: true, apercuGratuit: true, abonnements: true, dons: true, quizLecture: true, rechercheTexte: true, assistantIA: true, diagnostic: true });
   }
   if (await ecoles.route(req, res, {db, utilisateur, json, lireCorps, lireBinaire, sauverDB, uid, hashMdp})) return;
   if (await abonnement.route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid})) return;
@@ -1478,6 +1479,7 @@ http.createServer(async (req, res) => {
     json(res, 500, { erreur: 'Erreur interne du serveur.' });
   }
 }).listen(PORT, () => {
+  require('./modules/diagnostic').demarrer();
   require('./modules/ia').demarrer({dossier:path.join(__dirname,'data','ia')});
   rechercheTexte.demarrer(db,{dossier:path.join(__dirname,'data','textes'),cheminPdf,cheminEpub}).catch(e=>console.error('Recherche plein texte indisponible :',e.message));
   console.log('╔══════════════════════════════════════════════════╗');

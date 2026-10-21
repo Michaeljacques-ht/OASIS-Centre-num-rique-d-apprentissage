@@ -1,116 +1,33 @@
-Nouveautés 1.12.0 : surlignage en couleurs — voir `SURLIGNAGE.md`. Nouveautés 1.11.0 : assistant OASIS IA — voir `OASIS-IA.md`. Nouveautés 1.10.0 : recherche dans le texte des livres — voir `RECHERCHE-PLEIN-TEXTE.md`. Version 1.9.0 : dons et quiz — voir `DONS-ET-QUIZ.md`.
+# OASIS — Bibliothèque numérique intelligente
 
-# Version intégrée OASIS + Diffusion
+Plateforme de bibliothèque numérique et physique pour les apprenants haïtiens. Node.js pur, sans dépendance npm, base de données JSON, application installable (PWA).
 
-Consultez `FUSION-OASIS-DIFFUSION.md` pour l’installation, la navigation et les fonctions de la version 1.5.0. Démarrage : `npm start` ou `node server.js`. Vérification : `npm test`. Conservez votre dossier `data` lors de la mise à jour.
+- **Mettre à jour le site : lire [`MISE-A-JOUR.md`](MISE-A-JOUR.md).**
+- Démarrage local : `node server.js` → portail http://localhost:3000, espace bibliothécaire http://localhost:3000/admin
+- Vérification : `npm test`
+- Comptes de démonstration (base neuve) : `admin@oasis.ht` / `admin123` · `emma@oasis.ht` / `demo123`
 
-# 📖 Oasis Centre numérique d'apprentissage
+## Fonctions principales et documentation
 
-Plateforme de bibliothèque **numérique et physique** pour les apprenants haïtiens. Node.js pur — **zéro dépendance npm** — base de données JSON, PWA installable.
+| Domaine | Documentation (dossier `docs/`) |
+|---|---|
+| Catalogue, lecteurs PDF / EPUB / texte, emprunts, réservations | `DOCUMENTATION.md`, `VALIDATION-LECTURE.md`, `LECTURE-VOCALE-TEMPS.md` |
+| Abonnements, tarifs, comptabilité (PLOP PLOP) | `TARIFS-ABONNEMENTS.md`, `ABONNEMENTS-COMPTABILITE.md`, `ADMINISTRATEURS-TARIFS-PROFILS.md` |
+| Établissements scolaires | `ETABLISSEMENTS.md`, `NIVEAUX.md` |
+| Dons et quiz de lecture (1.9) | `DONS-ET-QUIZ.md` |
+| Recherche dans le texte des livres (1.10) | `RECHERCHE-PLEIN-TEXTE.md` |
+| Assistant OASIS IA (1.11) | `OASIS-IA.md` |
+| Surlignage en couleurs (1.12) | `SURLIGNAGE.md` |
+| Diagnostic d’installation et mises à jour (1.13) | `../MISE-A-JOUR.md` |
+| Corrections et notes techniques | autres fichiers de `docs/` |
 
-## 🚀 Démarrage
+## Configuration (variables d’environnement sur Render)
 
-```bash
-node server.js
-```
+| Variable | Rôle |
+|---|---|
+| `PLOP_CLIENT_ID`, `PLOP_CLIENT_SECRET` | Paiements PLOP PLOP (abonnements, dons) |
+| `OASIS_IA_CLE` (ou `ANTHROPIC_API_KEY`) | Assistant OASIS IA (facultatif) |
+| `OASIS_IA_MODELE`, `OASIS_IA_FOURNISSEUR`, `OASIS_IA_URL` | Réglages avancés de l’IA (facultatif) |
+| `PORT` | Fourni par Render |
 
-- Portail apprenant : http://localhost:3000
-- Espace bibliothécaire : http://localhost:3000/admin
-
-**Comptes de démonstration**
-| Rôle | Email | Mot de passe |
-|---|---|---|
-| Bibliothécaire | admin@oasis.ht | admin123 |
-| Apprenant | emma@oasis.ht | demo123 |
-
-La base `data/db.json` est créée automatiquement au premier lancement avec un catalogue de démonstration (13 titres dont *Gouverneurs de la Rosée* de Jacques Roumain). Supprimez ce fichier pour repartir de zéro.
-
-## ✨ Fonctionnalités
-
-### Portail apprenant (conforme à la maquette)
-- Accueil avec bannière « Découvrez un Monde de Savoirs ! », Nouveautés, Catégories populaires
-- Panneaux latéraux **Lectures Populaires** et **Ma Liste de Lecture**
-- Recherche instantanée (titre, auteur, catégorie)
-- **E-books** : lecture en ligne dans un lecteur intégré (contenu Markdown)
-- **Livres physiques** : emprunt en un clic si un exemplaire est disponible (14 jours)
-- Favoris ❤️, liste de lecture 📋, notation ⭐ (moyenne sur 5)
-- Mes Emprunts : suivi des échéances, alerte de retard, prolongation +7 jours (2 max)
-- Inscription libre des apprenants, sessions par jeton, mots de passe hachés (scrypt)
-
-### Espace bibliothécaire (gestion physique)
-- **Tableau de bord** : titres, exemplaires disponibles, emprunts en cours, retards à relancer
-- **Emprunts & retours** : enregistrement au guichet au nom d'un membre, retour (l'exemplaire revient en rayon), prolongation, historique
-- **Catalogue** : ajout/suppression de livres (physiques ou e-books avec contenu), gestion des **exemplaires** par cote et état (neuf/bon/usé)
-- **Membres** : inscription et suivi des emprunts actifs
-- Règles métier : 5 emprunts actifs max par membre, cote unique, suppression bloquée si emprunt en cours
-
-
-### Nouvelles fonctionnalités (v2)
-- **Titres hybrides** : un même livre peut être en rayon ET en version numérique ; les deux disponibilités sont affichées et liées (si tous les exemplaires sont sortis, la version numérique reste signalée comme accessible).
-- **Réservation de livres** : file d'attente quand tous les exemplaires sont empruntés ; à chaque retour, le premier de la file est servi (exemplaire mis de côté 3 jours, remise au guichet par le bibliothécaire, expiration automatique).
-- **Places de lecture** : réservation d'une place assise en salle par date et créneau (12 places, 4 créneaux), gestion et annulation côté bibliothécaire.
-- **Ressources documentaires** : dictionnaire, encyclopédie et bases de données consultables par les apprenants, alimentées par le bibliothécaire.
-- **Couvertures réelles** : la première page du PDF devient automatiquement la couverture affichée (générée à l'envoi du PDF via pdf.js, repli sur la couverture stylisée hors ligne).
-- **Formulaire complet** : type Physique / E-book / Hybride, nombre d'exemplaires à cotes automatiques, fichier PDF joint directement.
-
-### Technique
-- Serveur HTTP natif Node.js (≥ 16), API REST en français
-- PWA : `manifest.json` + service worker (cache statique, installable sur mobile)
-- Interface responsive (mobile → menu latéral coulissant)
-- Prêt pour déploiement sur **Render** : `node server.js`, port via `process.env.PORT`
-
-## 📂 Structure
-
-```
-oasis-centre-numerique/
-├── server.js          # Serveur + API REST + base JSON
-├── data/db.json       # Base de données (créée au 1er lancement)
-└── public/
-    ├── index.html     # Portail apprenant
-    ├── app.js
-    ├── admin.html     # Espace bibliothécaire
-    ├── admin.js
-    ├── styles.css
-    ├── manifest.json  # PWA
-    ├── sw.js          # Service worker
-    └── icone.svg
-```
-
-## 🔌 API principale
-
-| Méthode | Route | Description |
-|---|---|---|
-| POST | /api/inscription, /api/connexion | Authentification |
-| GET | /api/livres?q=&categorie=&tri= | Catalogue (recherche, filtres) |
-| GET | /api/livres/:id/lire | Lecture d'un e-book |
-| POST | /api/livres/:id/note | Noter (1–5 étoiles) |
-| POST | /api/emprunts | Emprunter (guichet : + membreId) |
-| PUT | /api/emprunts/:id/retour | Enregistrer un retour |
-| PUT | /api/emprunts/:id/prolonger | Prolonger +7 jours |
-| POST | /api/livres/:id/exemplaires | Ajouter un exemplaire (cote) |
-| GET | /api/stats, /api/membres | Gestion (bibliothécaire) |
-
----
-Oasis Centre numérique d'apprentissage © 2026 — Haïti 🇭🇹
-
-## 🔄 Mise à jour depuis « EDUCA Bibliothèque Numérique »
-
-Le projet s'appelle désormais **Oasis Centre numérique d'apprentissage**. Pour mettre à jour une installation existante sans perdre de données :
-
-1. Arrêtez le serveur (Ctrl+C).
-2. Copiez le dossier `data/` de l'ancien dossier `educa-bibliotheque` dans le nouveau dossier `oasis-centre-numerique`.
-3. Lancez `node server.js` depuis le nouveau dossier.
-
-Au premier démarrage, la migration automatique remplace le nom, le slogan, le pied de page et le texte « À propos » **uniquement s'ils étaient restés aux valeurs EDUCA par défaut** (vos personnalisations sont conservées). Les comptes de démonstration deviennent `admin@oasis.ht` et `emma@oasis.ht` (mots de passe inchangés). Tous les livres, emprunts, réservations, groupes et fichiers sont conservés.
-
-
-## Interface OASIS — édition 14
-Connexion inspirée d’EDUCA : panneau bleu nuit, accents orange, formulaire blanc. Bannière fournie intégrée à la connexion et à l’accueil, cliquable vers le catalogue. Thème harmonisé pour le portail et l’administration, adaptations mobiles, affichage/masquage du mot de passe.
-
-Installation : remplacer les fichiers du projet, conserver le dossier `data` et les fichiers téléversés existants. Redémarrer avec `node server.js`, puis recharger la page. Les données personnelles ne sont pas incluses dans ce ZIP.
-
-Vérification : syntaxe JavaScript, connexion apprenant/bibliothécaire, routes catalogue et statistiques, fichiers statiques. La vérification visuelle automatisée n’a pas pu être exécutée dans cet environnement.
-
-
-## Catalogue — version 17
-Tableau compact, bouton Ajouter orange, modification des métadonnées. Import PDF ou EPUB depuis Ajouter un livre ; bouton Joindre EPUB sur les documents existants. EPUB stockés dans data/pdfs, téléchargement authentifié pour lecture dans une application EPUB. Conserver le dossier data lors de la mise à jour.
+Données : `data/db.json`, `data/pdfs/`, `data/textes/`, `data/ia/` — **à garder sur le disque persistant Render, jamais sur GitHub.**
