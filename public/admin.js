@@ -318,17 +318,24 @@
   }
 
   // Vérifie que le serveur en ligne correspond à cette interface.
-  const VERSION_INTERFACE = '1.12.1';
+  const VERSION_INTERFACE = '1.13.0';
   async function verifierVersionServeur() {
+    const bandeau = (html) => { const b = document.createElement('div'); b.className = 'erreur bandeau-version'; b.setAttribute('role', 'alert'); b.innerHTML = html; $('#zoneAdmin').before(b); };
+    const liste = (titre, l, aide) => l.length ? `<details><summary><b>${l.length} ${titre}</b> — ${aide}</summary><ul class="diag-liste">${l.slice(0, 200).map(f => `<li><code>${echap(f)}</code></li>`).join('')}${l.length > 200 ? `<li>… et ${l.length - 200} autres</li>` : ''}</ul></details>` : '';
     try {
+      let d = null; try { d = await api('/diagnostic'); } catch {}
+      if (d?.manifeste) {
+        if (d.complet && !d.enTrop.length && d.version === VERSION_INTERFACE) return;
+        bandeau(`<b>${d.complet ? 'Installation complète' : 'Installation incomplète'} — version ${echap(d.version)}${d.version !== VERSION_INTERFACE ? ` (interface : ${VERSION_INTERFACE})` : ''}.</b> ${d.complet ? '' : 'Renvoyez sur GitHub les fichiers ci-dessous, au même emplacement, puis redéployez.'}
+          ${liste('fichier(s) manquant(s)', d.manquants, 'à envoyer sur GitHub')}${liste('fichier(s) à une autre version', d.differents, 'à remplacer')}${liste('élément(s) en trop à la racine', d.enTrop, 'probablement envoyés au mauvais endroit : à supprimer de GitHub')}
+          <p style="margin-top:6px">Mode d’emploi : <code>MISE-A-JOUR.md</code> à la racine du projet.</p>`);
+        return;
+      }
       const v = await api('/version');
       const noms = { abonnements: 'Abonnements', dons: 'Dons', quizLecture: 'Quiz de lecture', rechercheTexte: 'Recherche dans les livres', assistantIA: 'OASIS IA' };
       const manque = Object.keys(noms).filter(k => !v[k]).map(k => noms[k]);
       if (v.version === VERSION_INTERFACE && !manque.length) return;
-      const bandeau = document.createElement('div');
-      bandeau.className = 'erreur bandeau-version'; bandeau.setAttribute('role', 'alert');
-      bandeau.innerHTML = `Serveur en ligne : version ${echap(v.version || 'inconnue')} — interface : ${VERSION_INTERFACE}. Certaines rubriques (${echap(manque.join(', ') || 'récentes')}) peuvent afficher « Route introuvable ». Redéployez tout le projet puis redémarrez le service.`;
-      $('#zoneAdmin').before(bandeau);
+      bandeau(`Serveur en ligne : version ${echap(v.version || 'inconnue')} — interface : ${VERSION_INTERFACE}. Certaines rubriques (${echap(manque.join(', ') || 'récentes')}) peuvent afficher « Route introuvable ». Le serveur (server.js, modules/, package.json) n’a pas été mis à jour : suivez <code>MISE-A-JOUR.md</code>.`);
     } catch {}
   }
 
