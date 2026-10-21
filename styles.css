@@ -619,3 +619,4 @@ mark.sl-com{border-bottom:2px dotted #7a5a00}
 .sl-bord-vert{border-left-color:#7fd08b}.sl-bord-bleu{border-left-color:#7fb5f5}.sl-bord-rose{border-left-color:#f59cc2}.sl-bord-orange{border-left-color:#f7ae62}
 .sl-citation{margin:7px 0 0;font-style:italic;line-height:1.6}.sl-citation mark{padding:1px 3px}
 .sl-com-texte{margin-top:6px;font-size:13.5px}
+.diag-liste{margin:6px 0 0 18px;font-weight:400;max-height:220px;overflow:auto}.bandeau-version details{margin-top:6px}.bandeau-version summary{cursor:pointer}
