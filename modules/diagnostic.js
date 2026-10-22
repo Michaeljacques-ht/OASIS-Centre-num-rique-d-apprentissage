@@ -19,7 +19,7 @@ const crypto = require('crypto');
 const { principal } = require('./administration-comptes');
 
 const RACINE = path.join(__dirname, '..');
-const RACINE_PERMISE = new Set(['data', 'node_modules', '.git', '.gitignore', 'manifeste.json', '.render', 'render.yaml', '.DS_Store']);
+const RACINE_PERMISE = new Set(['data', 'node_modules', '.git', '.gitignore', 'manifeste.json', '.render', 'render.yaml', '.DS_Store', 'yarn.lock', 'package-lock.json']);
 let resultat = null;
 
 function analyser(racine = RACINE) {

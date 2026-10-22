@@ -24,7 +24,18 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const { principal } = require('./administration-comptes');
 
-const LIMITES = { pagesPdf: 2000, caracteresPage: 20000, caracteresTotal: 12e6, taillePartie: 2500, cacheDocs: 12 };
+const LIMITES = { pagesPdf: 1500, caracteresPage: 20000, caracteresTotal: 4e6, taillePartie: 2500, cacheDocs: 4,
+  tailleFichier: 60 * 1024 * 1024,   // au-delà : fichier non indexé (protège la mémoire du serveur)
+  motsParDoc: 20000,                 // vocabulaire indexé par livre (les mots les plus fréquents)
+  seuilRares: 8000,                  // au-delà de ce vocabulaire, les mots vus une seule fois sont ignorés (bruit OCR)
+  memoire: 0.70 };                   // part du tas mémoire au-delà de laquelle l'indexation se met en pause
+const v8 = require('v8');
+/** Vrai si la mémoire est assez libre pour continuer à indexer. */
+function memoireDisponible() {
+  try { const h = v8.getHeapStatistics(); return h.used_heap_size < h.heap_size_limit * LIMITES.memoire; } catch { return true; }
+}
+let pauseMemoire = false;
+const desactivee = () => /^(0|non|off|false)$/i.test(String(process.env.OASIS_RECHERCHE_TEXTE || ''));
 const VERSION_EXTRACTION = 1;
 const MOTS_VIDES = new Set(('le la les l un une des du de d et ou a au aux en dans sur pour par avec sans ce ces cet cette se sa son ses qui que quoi dont est sont ete etre il elle ils elles on nous vous je tu y ne pas plus ' +
   'the of and or to in on for is are an be by with as at it this that from ' +
@@ -34,7 +45,9 @@ const MOTS_VIDES = new Set(('le la les l un une des du de d et ou a au aux en da
 let cfg = null;               // { dossier, cheminPdf, cheminEpub }
 const docs = new Map();       // id → { num, id, signature, unite, nbPages, etat, erreur, extraitLe, sansTexte }
 const parNum = [];            // num → id
-const index = new Map();      // mot → number[] (numéros de documents)
+const index = new Map();      // mot → chaîne compacte : un caractère par livre (code = numéro du livre)
+// Une chaîne prend 2 octets par livre, contre 8 pour un tableau : indispensable avec plus de 1 000 livres.
+function* numeros(l) { if (l) for (let i = 0; i < l.length; i++) yield l.charCodeAt(i); }
 const cache = new Map();      // id → { pages, norm } (LRU)
 let file = [], enCours = null, minuteur = null, pret = false;
 
@@ -122,7 +135,7 @@ async function textePdf(buffer) {
   }
   let doc;
   try {
-    doc = await pdfjs.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, disableFontFace: true, useSystemFonts: false, verbosity: 0 }).promise;
+    doc = await pdfjs.getDocument({ data: new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.length), isEvalSupported: false, disableFontFace: true, useSystemFonts: false, verbosity: 0 }).promise;
   } catch (e) {
     throw Error(/password/i.test(e.name + e.message) ? 'PDF protégé par mot de passe.' : 'PDF illisible : ' + e.message);
   }
@@ -156,17 +169,26 @@ function indexer(id, pages) {
   let d = docs.get(id);
   let num = d?.num;
   if (num === undefined) { num = parNum.length; parNum.push(id); }
-  const vus = new Set();
-  for (const p of pages) for (const m of mots(norm(p))) if (m.length > 1 && !MOTS_VIDES.has(m)) vus.add(m);
-  for (const m of vus) { let l = index.get(m); if (!l) index.set(m, l = []); l.push(num); }
+  const freq = new Map();
+  for (const p of pages) for (const m of mots(norm(p))) {
+    if (m.length < 2 || m.length > 24 || MOTS_VIDES.has(m) || (m.length > 4 && /\d/.test(m))) continue;
+    freq.set(m, (freq.get(m) || 0) + 1);
+  }
+  let retenus = [...freq];
+  if (retenus.length > LIMITES.seuilRares) retenus = retenus.filter(([, n]) => n > 1);
+  if (retenus.length > LIMITES.motsParDoc) retenus = retenus.sort((a, b) => b[1] - a[1]).slice(0, LIMITES.motsParDoc);
+  const c = String.fromCharCode(num);
+  // JSON.parse(JSON.stringify(…)) produit une chaîne « à plat » (sans chaînage interne de V8) : 3 à 4 fois moins de mémoire
+  for (const [m] of retenus) index.set(m, JSON.parse(JSON.stringify((index.get(m) || '') + c)));
   return num;
 }
 function retirerDeIndex(id) {
   const d = docs.get(id);
   if (!d || !d.indexe) return;
+  const c = String.fromCharCode(d.num);
   for (const [m, l] of index) {
-    const i = l.indexOf(d.num);
-    if (i >= 0) { l.splice(i, 1); if (!l.length) index.delete(m); }
+    const i = l.indexOf(c);
+    if (i >= 0) { const r = l.slice(0, i) + l.slice(i + 1); if (r) index.set(m, JSON.parse(JSON.stringify(r))); else index.delete(m); }
   }
   d.indexe = false;
   cache.delete(id);
@@ -190,6 +212,8 @@ async function extraire(db, id) {
   if (!src) return supprimer(id);
   let pages = [], erreur = null;
   try {
+    const taille = fs.statSync(src.type === 'pdf' ? cfg.cheminPdf(id) : src.type === 'epub' ? cfg.cheminEpub(id) : __filename).size;
+    if (src.type !== 'texte' && taille > LIMITES.tailleFichier) throw Error(`Fichier trop volumineux pour l’indexation (${Math.round(taille / 1048576)} Mo, maximum ${LIMITES.tailleFichier / 1048576} Mo).`);
     if (src.type === 'pdf') pages = await textePdf(await fs.promises.readFile(cfg.cheminPdf(id)));
     else if (src.type === 'epub') pages = texteEpub(await fs.promises.readFile(cfg.cheminEpub(id)));
     else pages = String(l.contenu).match(new RegExp(`[\\s\\S]{1,${LIMITES.taillePartie}}`, 'g')) || [];
@@ -224,12 +248,36 @@ function synchroniser(db) {
   }
   traiter(db);
 }
+const fichierEnCours = () => path.join(cfg.dossier, '_en-cours.txt');
 async function traiter(db) {
   if (enCours || !file.length) return;
+  if (!memoireDisponible()) {
+    if (!pauseMemoire) console.warn('Indexation en pause : mémoire du serveur presque pleine. Reprise automatique plus tard.');
+    pauseMemoire = true;
+    setTimeout(() => traiter(db), 60000).unref?.();
+    return;
+  }
+  pauseMemoire = false;
   enCours = file.shift();
+  // marqueur : si le serveur tombe pendant ce livre, il ne sera pas retenté au redémarrage
+  try { fs.writeFileSync(fichierEnCours(), enCours); } catch {}
   try { await extraire(db, enCours); }
   catch (e) { console.warn('Indexation impossible :', enCours, e.message); }
-  finally { enCours = null; setImmediate(() => traiter(db)); }
+  finally {
+    try { fs.unlinkSync(fichierEnCours()); } catch {}
+    enCours = null; setTimeout(() => traiter(db), 200).unref?.();
+  }
+}
+/** Le serveur s'est arrêté pendant l'indexation d'un livre : on le marque en erreur pour ne pas boucler. */
+function abandonnerLivreBloquant(db) {
+  let id;
+  try { id = fs.readFileSync(fichierEnCours(), 'utf8').trim(); fs.unlinkSync(fichierEnCours()); } catch { return; }
+  const l = (db.livres || []).find(x => x.id === id), src = l && source(l);
+  if (!src) return;
+  const donnees = { version: VERSION_EXTRACTION, id, signature: src.signature, unite: src.unite, type: src.type, pages: [],
+    erreur: 'Indexation abandonnée : ce fichier a arrêté le serveur (trop lourd). Utilisez « Réindexer » pour réessayer.', sansTexte: false, extraitLe: new Date().toISOString() };
+  try { fs.writeFileSync(fichierTexte(id), JSON.stringify(donnees)); } catch {}
+  console.warn('Indexation abandonnée pour le livre', id, '(le serveur s’était arrêté pendant son traitement).');
 }
 /** À appeler après toute modification du catalogue : regroupe les appels. */
 function planifier(db, delai = 3000) {
@@ -240,9 +288,12 @@ function planifier(db, delai = 3000) {
 
 async function demarrer(db, options) {
   cfg = options;
+  if (desactivee()) { console.log('Recherche plein texte désactivée (OASIS_RECHERCHE_TEXTE=off).'); return; }
   fs.mkdirSync(cfg.dossier, { recursive: true });
+  abandonnerLivreBloquant(db);
   const fichiers = (await fs.promises.readdir(cfg.dossier)).filter(f => f.endsWith('.json'));
   for (const f of fichiers) {
+    if (!memoireDisponible()) { console.warn('Chargement de l’index interrompu : mémoire insuffisante.'); break; }
     try {
       const d = JSON.parse(await fs.promises.readFile(path.join(cfg.dossier, f), 'utf8'));
       if (d && d.id && Array.isArray(d.pages)) enregistrerDoc(d.id, d);
@@ -325,8 +376,8 @@ function rechercher(q, { maxLivres = 30, maxPagesParLivre = 3 } = {}) {
   let candidats = null;
   for (const t of tousTermes) {
     const nums = new Set();
-    if (t.length >= 3) { for (const [m, l] of index) if (m.startsWith(t)) for (const n of l) nums.add(n); }
-    else for (const n of index.get(t) || []) nums.add(n);
+    if (t.length >= 3) { for (const [m, l] of index) if (m.startsWith(t)) for (const n of numeros(l)) nums.add(n); }
+    else for (const n of numeros(index.get(t))) nums.add(n);
     candidats = candidats ? new Set([...candidats].filter(n => nums.has(n))) : nums;
     if (!candidats.size) break;
   }
@@ -363,7 +414,7 @@ function rechercher(q, { maxLivres = 30, maxPagesParLivre = 3 } = {}) {
 function etat() {
   const liste = [...docs.values()];
   return { indexes: liste.filter(d => d.indexe).length, erreurs: liste.filter(d => d.erreur).length,
-    sansTexte: liste.filter(d => d.sansTexte).length, enAttente: file.length + (enCours ? 1 : 0), mots: index.size, pret };
+    sansTexte: liste.filter(d => d.sansTexte).length, enAttente: file.length + (enCours ? 1 : 0), mots: index.size, pret, pauseMemoire, desactivee: desactivee() };
 }
 
 /* ---------- Relevé des recherches sans résultat ---------- */
@@ -467,8 +518,8 @@ function rechercherLarge(question, { maxLivres = 6, pagesParLivre = 2, ids = nul
   const scores = new Map();
   for (const t of termes) {
     const vus = new Set();
-    if (t.length >= 4) { for (const [m, l] of index) if (m.startsWith(t)) for (const n of l) vus.add(n); }
-    else for (const n of index.get(t) || []) vus.add(n);
+    if (t.length >= 4) { for (const [m, l] of index) if (m.startsWith(t)) for (const n of numeros(l)) vus.add(n); }
+    else for (const n of numeros(index.get(t))) vus.add(n);
     for (const n of vus) scores.set(n, (scores.get(n) || 0) + 1);
   }
   const minimum = termes.length >= 3 ? 2 : 1;

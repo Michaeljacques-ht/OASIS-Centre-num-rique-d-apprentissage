@@ -212,6 +212,15 @@ let calculDureeQueue=Promise.resolve();
 function calculerDuree(l){const run=async()=>{if(l.contenu||l.nbMotsLecture||l.nbPagesLecture)return;try{if(l.pdf&&fs.existsSync(cheminPdf(l.id))){const data=await fs.promises.readFile(cheminPdf(l.id));const pdf=await require('./modules/pdf-lib').PDFDocument.load(data,{ignoreEncryption:true});l.nbPagesLecture=pdf.getPageCount();sauverDB()}else if(l.epub&&fs.existsSync(cheminEpub(l.id))){l.nbMotsLecture=dureeLecture.epub(await fs.promises.readFile(cheminEpub(l.id)));sauverDB()}}catch(e){console.warn('Calcul durée indisponible :',l.id,e.message)}};const result=calculDureeQueue.then(run);calculDureeQueue=result.catch(()=>{});return result}
 const DOSSIER_COUV = path.join(__dirname, 'data', 'couvertures');
 const cheminCouv = livreId => path.join(DOSSIER_COUV, livreId + '.png');
+/** Compare deux fichiers sans les charger en mémoire (taille, puis empreinte en flux) :
+    évite qu'une fusion de doublons sur de gros PDF fasse tomber le serveur. */
+async function fichiersIdentiques(p1, p2) {
+  const [s1, s2] = await Promise.all([fs.promises.stat(p1), fs.promises.stat(p2)]);
+  if (s1.size !== s2.size) return false;
+  const empreinte = p => new Promise((ok, ko) => { const h = require('crypto').createHash('sha1'); fs.createReadStream(p).on('error', ko).on('data', d => h.update(d)).on('end', () => ok(h.digest('hex'))); });
+  const [h1, h2] = await Promise.all([empreinte(p1), empreinte(p2)]);
+  return h1 === h2;
+}
 const DOSSIER_RES_IMG = path.join(__dirname, 'data', 'ressources-img');
 const cheminResImg = resId => path.join(DOSSIER_RES_IMG, resId + '.png');
 const DOSSIER_MEDIAS = path.join(__dirname, 'data', 'medias');
@@ -401,7 +410,7 @@ async function api(req, res, u) {
     if(utilisateur.adminDelegue&&type!=='livres')return json(res,403,{erreur:'Seule la fusion des livres vous est déléguée.'});
     const a=db[type].find(x=>x.id===conserve),b=db[type].find(x=>x.id===retire);if(!a||!b||!doublons.meme(a,b,type))return json(res,409,{erreur:'Doublon non confirmé.'});
     const fichiers=type==='livres'?[[cheminPdf,'pdf'],[cheminEpub,'epub'],[cheminCouv,'couverture']]:[];
-    for(const [chemin,k] of fichiers)if(a[k]&&b[k]&&k!=='couverture'&&fs.existsSync(chemin(a.id))&&fs.existsSync(chemin(b.id))&&!fs.readFileSync(chemin(a.id)).equals(fs.readFileSync(chemin(b.id))))return json(res,409,{erreur:'Fichiers différents : fusion bloquée pour préserver les versions.'});
+    for(const [chemin,k] of fichiers)if(a[k]&&b[k]&&k!=='couverture'&&fs.existsSync(chemin(a.id))&&fs.existsSync(chemin(b.id))&&!(await fichiersIdentiques(chemin(a.id),chemin(b.id))))return json(res,409,{erreur:'Fichiers différents : fusion bloquée pour préserver les versions.'});
     if(type==='medias'&&(a.ext||b.ext))return json(res,409,{erreur:'Médias joints : examinez les fichiers avant une suppression manuelle.'});
     for(const [chemin,k] of fichiers)if(!a[k]&&b[k]&&fs.existsSync(chemin(b.id))){fs.copyFileSync(chemin(b.id),chemin(a.id));a[k]=true;if(k==='couverture')a.couvertureMime=b.couvertureMime;}
     try{doublons.fusionner(db,type,conserve,retire);journal('Doublon fusionné',utilisateur,b.titre);sauverDB();return json(res,200,{ok:true})}catch(e){return json(res,409,{erreur:e.message})}
