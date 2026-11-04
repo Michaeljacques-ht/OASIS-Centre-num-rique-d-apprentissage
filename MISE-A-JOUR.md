@@ -98,3 +98,9 @@ Sur Render : **Events** → choisissez un déploiement réussi plus ancien → *
 - Accueil et tableau de bord : seuls les livres affichés sont téléchargés (4 Ko au lieu de 3 Mo).
 - Couvertures : nouvelles couvertures en JPEG, vignettes légères pour les listes, conservées 30 jours par le navigateur. Après le déploiement, cliquez une fois sur « ⚡ Alléger les couvertures » dans le Catalogue et laissez la fenêtre ouverte jusqu'à la fin.
 
+## Version 1.14.2 — Beaucoup plus d'utilisateurs simultanés
+
+- Le catalogue commun à tous les lecteurs est préparé une fois puis réutilisé (30 secondes, ou jusqu'à la prochaine modification) : seuls les champs personnels (favori, progression, réservation) sont calculés pour chaque lecteur.
+- Bibliothèque, Catégories et Nouveautés : le serveur n'envoie que la page de 50 livres affichée, avec les filtres, au lieu des 3 300 livres.
+- Aucun réglage à faire : déployez simplement cette version.
+

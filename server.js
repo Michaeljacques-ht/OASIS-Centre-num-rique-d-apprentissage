@@ -278,39 +278,79 @@ function recupererCouvertureEpub(l, force=false) {
   couverturesEpubVerifiees.add(l.id);
   try {const c=require('./modules/epub-couverture')(fs.readFileSync(cheminEpub(l.id)));if(c){fs.mkdirSync(DOSSIER_COUV,{recursive:true});fs.writeFileSync(cheminCouv(l.id),c.data);l.couverture=true;l.couvertureMime=c.mime;l.couvertureMaj=Date.now();if(l.vignette){fs.rm(cheminVignette(l.id),{force:true},()=>{});l.vignette=false}sauverDB();}}catch{}
 }
-function vueLivre(l, utilisateur) {
+/* ---------- Vues du catalogue ----------
+   La partie commune à tous les lecteurs est préparée une fois puis réutilisée (cache de 30 s, vidé à chaque
+   modification du catalogue). Seuls les champs personnels (progression, favori, réservation…) sont ajoutés à la demande. */
+function vueBaseLivre(l, nbExemplaires, nbDisponibles, nbReservations) {
   recupererCouvertureEpub(l);
-  const ex = db.exemplaires.filter(e => e.livreId === l.id);
-  const versionNumerique = !!(l.contenu || l.pdf || l.epub);          // lisible en ligne
-  const versionPhysique = ex.length > 0;                     // présent en rayon
-  const nbDisponibles = ex.filter(e => e.statut === 'disponible').length;
-  const resasActives = db.reservations
-    .filter(r => r.livreId === l.id && (r.statut === 'en_attente' || r.statut === 'prete'))
-    .sort((a, b) => new Date(a.creeLe) - new Date(b.creeLe));
-  let maReservation = null;
-  if (utilisateur) {
-    const r = resasActives.find(x => x.utilisateurId === utilisateur.id);
-    if (r) maReservation = {
-      id: r.id, statut: r.statut, echeanceRetrait: r.echeanceRetrait || null,
-      position: r.statut === 'prete' ? 0 : resasActives.filter(x => x.statut === 'en_attente' && new Date(x.creeLe) <= new Date(r.creeLe)).length
-    };
-  }
+  const versionNumerique = !!(l.contenu || l.pdf || l.epub), versionPhysique = nbExemplaires > 0;
   return {
-    estimationLecture:dureeLecture.estimation(l),dureeLectureMinutes:l.dureeLectureMinutes||'',seuilLecture:l.seuilLecture===undefined?70:l.seuilLecture, accesComplet: abonnement.actif(db, utilisateur), iaDisponible: require('./modules/ia').disponible(db, l), id: l.id, titre: l.titre, auteur: l.auteur, categorie: l.categorie, type: l.type,
+    estimationLecture: dureeLecture.estimation(l), dureeLectureMinutes: l.dureeLectureMinutes || '', seuilLecture: l.seuilLecture === undefined ? 70 : l.seuilLecture,
+    iaDisponible: require('./modules/ia').disponible(db, l), id: l.id, titre: l.titre, auteur: l.auteur, categorie: l.categorie, type: l.type,
     resume: l.resume, couleur: l.couleur, icone: l.icone, annee: l.annee, isbn: l.isbn,
     note: moyenneNotes(l), nbNotes: l.notes.length, nbLectures: l.nbLectures,
-    edition:l.edition||'',editeur: l.editeur || '', langue: l.langue || 'Français', niveau: l.niveau || '', publicCible: l.publicCible || 'tous', motsCles: l.motsCles || '',
-    maProgression: utilisateur ? (db.progressions.find(p => p.utilisateurId === utilisateur.id && p.livreId === l.id) || null) : null,
-    telechargementAutorise:l.telechargementAutorise!==false,epub: !!l.epub, pdf: !!l.pdf, couverture: !!l.couverture, vignette: !!l.vignette, couvertureV: l.couvertureMaj || 1,
-    versionNumerique, versionPhysique,
-    hybride: versionNumerique && versionPhysique,
+    edition: l.edition || '', editeur: l.editeur || '', langue: l.langue || 'Français', niveau: l.niveau || '', publicCible: l.publicCible || 'tous', motsCles: l.motsCles || '',
+    telechargementAutorise: l.telechargementAutorise !== false, epub: !!l.epub, pdf: !!l.pdf, couverture: !!l.couverture, vignette: !!l.vignette, couvertureV: l.couvertureMaj || 1,
+    versionNumerique, versionPhysique, hybride: versionNumerique && versionPhysique,
     disponible: versionNumerique || nbDisponibles > 0,
-    nbExemplaires: ex.length, nbDisponibles,
-    nbReservations: resasActives.length, maReservation,
-    favori: utilisateur ? db.favoris.some(f => f.utilisateurId === utilisateur.id && f.livreId === l.id) : false,
-    dansListe: utilisateur ? db.listeLecture.some(f => f.utilisateurId === utilisateur.id && f.livreId === l.id) : false,
+    nbExemplaires, nbDisponibles, nbReservations,
     creeLe: l.creeLe
   };
+}
+/** Contexte personnel d'un utilisateur, calculé une fois par requête. */
+function contextePersonnel(utilisateur) {
+  if (!utilisateur) return { acces: false, prog: new Map(), fav: new Set(), liste: new Set(), resas: new Map() };
+  const uid = utilisateur.id;
+  return {
+    acces: abonnement.actif(db, utilisateur),
+    prog: new Map(db.progressions.filter(p => p.utilisateurId === uid).map(p => [p.livreId, p])),
+    fav: new Set(db.favoris.filter(f => f.utilisateurId === uid).map(f => f.livreId)),
+    liste: new Set(db.listeLecture.filter(f => f.utilisateurId === uid).map(f => f.livreId)),
+    resas: new Map(db.reservations.filter(r => r.utilisateurId === uid && (r.statut === 'en_attente' || r.statut === 'prete')).map(r => [r.livreId, r]))
+  };
+}
+function personnaliser(base, ctx) {
+  let maReservation = null; const r = ctx.resas.get(base.id);
+  if (r) maReservation = {
+    id: r.id, statut: r.statut, echeanceRetrait: r.echeanceRetrait || null,
+    position: r.statut === 'prete' ? 0 : db.reservations.filter(x => x.livreId === base.id && x.statut === 'en_attente' && new Date(x.creeLe) <= new Date(r.creeLe)).length
+  };
+  return { ...base, accesComplet: ctx.acces, maProgression: ctx.prog.get(base.id) || null, maReservation, favori: ctx.fav.has(base.id), dansListe: ctx.liste.has(base.id) };
+}
+function vueLivre(l, utilisateur) {
+  const ex = db.exemplaires.filter(e => e.livreId === l.id);
+  const nbResas = db.reservations.filter(r => r.livreId === l.id && (r.statut === 'en_attente' || r.statut === 'prete')).length;
+  return personnaliser(vueBaseLivre(l, ex.length, ex.filter(e => e.statut === 'disponible').length, nbResas), contextePersonnel(utilisateur));
+}
+let versionCatalogue = 0, cacheCatalogue = null;
+const DUREE_CACHE_CATALOGUE = 30000;
+const invaliderCatalogue = () => { versionCatalogue++; };
+function catalogue() {
+  if (cacheCatalogue && cacheCatalogue.version === versionCatalogue && Date.now() - cacheCatalogue.quand < DUREE_CACHE_CATALOGUE) return cacheCatalogue;
+  const ex = new Map(), resas = new Map();
+  for (const e of db.exemplaires) { const c = ex.get(e.livreId) || [0, 0]; c[0]++; if (e.statut === 'disponible') c[1]++; ex.set(e.livreId, c); }
+  for (const r of db.reservations) if (r.statut === 'en_attente' || r.statut === 'prete') resas.set(r.livreId, (resas.get(r.livreId) || 0) + 1);
+  const entrees = db.livres.map(l => {
+    const c = ex.get(l.id) || [0, 0];
+    return { l, vue: vueBaseLivre(l, c[0], c[1], resas.get(l.id) || 0),
+      texte: [l.titre, l.auteur, l.categorie, l.isbn, l.editeur, l.langue, l.niveau, l.motsCles, l.resume].map(x => (x || '').toLowerCase()).join('\n'),
+      date: new Date(l.creeLe).getTime() || 0, pop: moyenneNotes(l) * 10 + (l.nbLectures || 0) / 50 };
+  });
+  cacheCatalogue = { version: versionCatalogue, quand: Date.now(), entrees, tris: {} };
+  return cacheCatalogue;
+}
+function catalogueTrie(tri) {
+  const c = catalogue();
+  if (!c.tris[tri]) {
+    const t = c.entrees.slice();
+    if (tri === 'populaires') t.sort((a, b) => b.pop - a.pop);
+    else if (tri === 'nouveautes') t.sort((a, b) => b.date - a.date);
+    else if (tri === 'note') t.sort((a, b) => b.vue.note - a.vue.note);
+    else if (tri === 'annee') t.sort((a, b) => (b.vue.annee || 0) - (a.vue.annee || 0));
+    else { const col = new Intl.Collator('fr', { sensitivity: 'base', numeric: true }); t.sort((a, b) => col.compare(String(a.l.titre), String(b.l.titre))); }
+    c.tris[tri] = t;
+  }
+  return c.tris[tri];
 }
 function joursRetard(emprunt) {
   if (emprunt.statut !== 'en_cours') return 0;
@@ -375,6 +415,7 @@ async function api(req, res, u) {
   const utilisateur = authentifier(req);
   const comptes=require('./modules/administration-comptes');
   if(req.method!=='GET'&&/^\/api\/(livres|doublons)/.test(pathname))rechercheTexte.planifier(db);
+  if(req.method!=='GET'&&!/\/(progression|temps-lecture|notes|surlignages)(\/|$)|^\/api\/(connexion|deconnexion|statistiques|commentaires|groupes|messages|ia|recherche|quiz|dons)/.test(pathname))invaliderCatalogue();
   if (require('./modules/diagnostic').route(req, res, {utilisateur, json})) return;
   if(!comptes.autorise(utilisateur,pathname,req.method))return json(res,403,{erreur:'Cette tâche ne vous a pas été déléguée.'});
   if(await comptes.route(req,res,{db,utilisateur,json,lireCorps,sauverDB,uid,hashMdp}))return;
@@ -1331,20 +1372,29 @@ async function api(req, res, u) {
 
   // --- Livres ---
   if (pathname === '/api/livres' && m === 'GET') {
-    let liste = db.livres.slice();
-    if (query.q) {
-      const q = query.q.toLowerCase();
-      liste = liste.filter(l => [l.titre, l.auteur, l.categorie, l.isbn, l.editeur, l.langue, l.niveau, l.motsCles, l.resume].some(x => (x || '').toLowerCase().includes(q)));
+    let liste = catalogueTrie(['populaires', 'nouveautes', 'note', 'annee'].includes(query.tri) ? query.tri : 'titre');
+    if (query.q) { const q = String(query.q).toLowerCase(); liste = liste.filter(e => e.texte.includes(q)); }
+    const ctx = contextePersonnel(utilisateur);
+    const filtrer = (l, sauf) => l.filter(e =>
+      (sauf === 'categorie' || !query.categorie || e.vue.categorie === query.categorie) &&
+      (sauf === 'langue' || !query.langue || e.vue.langue === query.langue) &&
+      (sauf === 'niveau' || !query.niveau || e.vue.niveau === query.niveau) &&
+      (!query.type || (query.type === 'hybride' ? e.vue.hybride : query.type === 'numerique' ? e.vue.versionNumerique : e.vue.versionPhysique)));
+    if (query.format === 'page') {
+      // Une page de résultats + les valeurs possibles des filtres : quelques Ko au lieu de tout le catalogue
+      const distincts = cle => [...new Set(liste.map(e => e.vue[cle]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'fr'));
+      const filtres = filtrer(liste);
+      const parPage = Math.min(Math.max(parseInt(query.parPage, 10) || 50, 1), 10000);
+      const pages = Math.max(1, Math.ceil(filtres.length / parPage));
+      const page = Math.min(Math.max(parseInt(query.page, 10) || 0, 0), pages - 1);
+      return json(res, 200, { total: filtres.length, page, pages, parPage,
+        livres: filtres.slice(page * parPage, (page + 1) * parPage).map(e => personnaliser(e.vue, ctx)),
+        facettes: { categorie: distincts('categorie'), langue: distincts('langue'), niveau: distincts('niveau') } });
     }
-    if (query.categorie) liste = liste.filter(l => l.categorie === query.categorie);
-    if (query.type === 'numerique') liste = liste.filter(l => l.contenu || l.pdf || l.epub);
-    else if (query.type === 'physique') liste = liste.filter(l => db.exemplaires.some(e => e.livreId === l.id));
-    if (query.tri === 'populaires') liste.sort((a,b) => (moyenneNotes(b)*10 + b.nbLectures/50) - (moyenneNotes(a)*10 + a.nbLectures/50));
-    else if (query.tri === 'nouveautes') liste.sort((a,b) => new Date(b.creeLe) - new Date(a.creeLe));
-    else liste.sort((a,b)=>String(a.titre).localeCompare(String(b.titre),'fr',{sensitivity:'base',numeric:true}));
+    liste = filtrer(liste);
     const limite = parseInt(query.limite, 10);
     if (limite > 0) liste = liste.slice(0, limite);
-    return json(res, 200, liste.map(l => vueLivre(l, utilisateur)));
+    return json(res, 200, liste.map(e => personnaliser(e.vue, ctx)));
   }
   if (seg[1] === 'livres' && seg[2] && seg[3] === 'lire' && m === 'GET') {
     if (!exigeAuth()) return;

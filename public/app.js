@@ -121,6 +121,21 @@
     const barre = OasisPagination.barre(cle, d, p.etat);
     return `${barre}<div class="${p.classe}">${d.elements.map(p.rendre).join('')}</div>${barre ? barre.replace('class="pagination"', 'class="pagination pagination-bas"') : ''}`;
   }
+  // Pages servies par le serveur (bibliothèque, catégories, nouveautés) : seuls 50 livres sont téléchargés
+  const etatsPages = {};
+  function etatPage(vue, param) {
+    param = param || '';
+    const e = etatsPages[vue];
+    if (!e || e.param !== param) etatsPages[vue] = { param, page: 0, tout: false };
+    return etatsPages[vue];
+  }
+  function grilleServeur(r, vue) {
+    if (!r.total) return `<p class="vide">Aucun livre trouvé pour le moment.</p>`;
+    const etat = etatsPages[vue];
+    const d = { total: r.total, page: r.page, pages: r.pages, debut: r.page * r.parPage + 1, fin: Math.min(r.total, (r.page + 1) * r.parPage) };
+    const barre = OasisPagination.barre('serveur:' + vue, d, etat);
+    return `${barre}<div class="grille-livres">${r.livres.map(carteLivre).join('')}</div>${barre ? barre.replace('class="pagination"', 'class="pagination pagination-bas"') : ''}`;
+  }
   const grille = livres => livres.length
     ? livres.length > OasisPagination.TAILLE ? paginer(livres, carteLivre, 'grille-livres') : `<div class="grille-livres">${livres.map(carteLivre).join('')}</div>`
     : `<p class="vide">Aucun livre trouvé pour le moment.</p>`;
@@ -172,17 +187,15 @@
         </div>`;
     },
     async bibliotheque(q) {
-      let livres = await api('/livres' + (q ? '?q=' + encodeURIComponent(q) : ''));
-      catalogueCache = livres;
       const f = filtresBiblio;
-      const distincts = cle => [...new Set(catalogueCache.map(l => l[cle]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'fr'));
-      let filtres = livres.filter(l =>
-        (!f.categorie || l.categorie === f.categorie) &&
-        (!f.langue || l.langue === f.langue) &&
-        (!f.niveau || l.niveau === f.niveau) &&
-        (!f.type || (f.type === 'hybride' ? l.hybride : f.type === 'numerique' ? l.versionNumerique : l.versionPhysique)));
-      if (f.tri === 'note') filtres.sort((a, b) => b.note - a.note);
-      else if (f.tri === 'annee') filtres.sort((a, b) => b.annee - a.annee);
+      const etat = etatPage('bibliotheque', q);
+      const params = new URLSearchParams({ format: 'page', page: etat.page, parPage: etat.tout ? 10000 : OasisPagination.TAILLE });
+      if (q) params.set('q', q);
+      for (const k of ['categorie', 'langue', 'niveau', 'type', 'tri']) if (f[k]) params.set(k, f[k]);
+      const r = await api('/livres?' + params);
+      etat.page = r.page;
+      const distincts = cle => r.facettes[cle] || [];
+      const filtres = { length: r.total };
       const sel = (id, libelle, options, val) => `<select data-filtre="${id}"><option value="">${libelle}</option>${options.map(o => `<option ${o === val ? 'selected' : ''} value="${echap(String(o))}">${echap(String(o))}</option>`).join('')}</select>`;
       return `<div class="section-titre"><h3>${q ? `Résultats pour « ${echap(q)} »` : 'Toute la Bibliothèque'}</h3><span style="color:var(--gris);font-size:13px">${filtres.length} ouvrage${filtres.length>1?'s':''}</span></div>
         <div class="filtres-biblio">
@@ -193,7 +206,7 @@
           <select data-filtre="tri"><option value="">Trier…</option><option value="note" ${f.tri==='note'?'selected':''}>Meilleures notes</option><option value="annee" ${f.tri==='annee'?'selected':''}>Plus récents</option></select>
           ${Object.values(f).some(Boolean) ? '<button class="mini-btn" data-vider-filtres="1">✕ Réinitialiser</button>' : ''}
         </div>
-        ${grille(filtres)}${window.OasisRechercheTexte ? OasisRechercheTexte.section(q, api) : ''}`;
+        ${grilleServeur(r, 'bibliotheque')}${window.OasisRechercheTexte ? OasisRechercheTexte.section(q, api) : ''}`;
     },
     async favoris() {
       const livres = await api('/favoris');
@@ -331,12 +344,16 @@
         </div>`;
     },
     async categorie(nom) {
-      const livres = await api('/livres?categorie=' + encodeURIComponent(nom));
-      return `<div class="section-titre"><h3>${iconeCat(nom)} ${echap(nom)}</h3><button data-vue="categories">‹ Toutes les catégories</button></div>${grille(livres)}`;
+      const etat = etatPage('categorie', nom);
+      const r = await api('/livres?' + new URLSearchParams({ format: 'page', categorie: nom, page: etat.page, parPage: etat.tout ? 10000 : OasisPagination.TAILLE }));
+      etat.page = r.page;
+      return `<div class="section-titre"><h3>${iconeCat(nom)} ${echap(nom)}</h3><span style="color:var(--gris);font-size:13px">${r.total} ouvrage${r.total > 1 ? 's' : ''}</span><button data-vue="categories">‹ Toutes les catégories</button></div>${grilleServeur(r, 'categorie')}`;
     },
     async nouveautes() {
-      const livres = await api('/livres?tri=nouveautes');
-      return `<div class="section-titre"><h3>✨ Nouveautés</h3></div>${grille(livres)}`;
+      const etat = etatPage('nouveautes', '');
+      const r = await api('/livres?' + new URLSearchParams({ format: 'page', tri: 'nouveautes', page: etat.page, parPage: etat.tout ? 10000 : OasisPagination.TAILLE }));
+      etat.page = r.page;
+      return `<div class="section-titre"><h3>✨ Nouveautés</h3></div>${grilleServeur(r, 'nouveautes')}`;
     },
     async recommandes() {
       const r = await api('/recommandations');
@@ -529,7 +546,6 @@
   let minuteurPosition = null;
   let dateplaceActive = null;
   let parametres = {};
-  let catalogueCache = [];
   let filtresBiblio = { categorie: '', langue: '', niveau: '', type: '', tri: '' };
   let syntheseVocale = null;
   function majSalutation() {
@@ -985,7 +1001,7 @@
     const cible = t => e.target.closest(`[${t}]`);
     let el;
     if(!moi&&e.target.closest('[data-favori],[data-liste],[data-emprunter],[data-reserver],[data-notes-livre],[data-noter],[data-commentaires]')){window.dispatchEvent(new Event('oasis-connexion'));return;}
-    if ((el = cible('data-vue'))) return afficherVue(el.dataset.vue);
+    if ((el = cible('data-vue'))) { delete etatsPages[el.dataset.vue]; return afficherVue(el.dataset.vue); }
     if ((el = cible('data-categorie'))) return afficherVue('categorie', el.dataset.categorie);
     if ((el = cible('data-lire'))) return ouvrirLecteur(el.dataset.lire, el.dataset.page ? { page: Number(el.dataset.page), unite: el.dataset.unite, extrait: el.dataset.extrait } : null);
     if ((el = cible('data-emprunter'))) {
@@ -1046,6 +1062,14 @@
       catch (err) { toast(err.message); }
       return;
     }
+    if ((el = cible('data-pagination')) && el.dataset.pagination.startsWith('serveur:')) {
+      if (el.disabled) return;
+      const vue = el.dataset.pagination.slice(8), etat = etatsPages[vue]; if (!etat) return;
+      Object.assign(etat, OasisPagination.appliquer(el.dataset.paginationAction, etat), { param: etat.param });
+      await afficherVue(vue, etat.param || undefined);
+      $('#zonePrincipale').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     if ((el = cible('data-pagination'))) {
       const p = listesPaginees[el.dataset.pagination]; if (!p || el.disabled) return;
       p.etat = OasisPagination.appliquer(el.dataset.paginationAction, p.etat);
@@ -1104,7 +1128,7 @@
       return;
     }
     if ((el = cible('data-vider-filtres'))) {
-      filtresBiblio = { categorie: '', langue: '', niveau: '', type: '', tri: '' };
+      filtresBiblio = { categorie: '', langue: '', niveau: '', type: '', tri: '' }; if (etatsPages.bibliotheque) etatsPages.bibliotheque.page = 0;
       return (afficherVue('bibliotheque', $('#inRecherche').value.trim()));
     }
     if ((el = cible('data-onglet-media'))) return afficherVue('multimedia', el.dataset.ongletMedia);
@@ -1136,7 +1160,7 @@
   document.addEventListener('change', e => {
     if (e.target.id === 'inDatePlace') afficherVue('places', e.target.value);
     const f = e.target.closest('[data-filtre]');
-    if (f) { filtresBiblio[f.dataset.filtre] = f.value; (afficherVue('bibliotheque', $('#inRecherche').value.trim())); }
+    if (f) { filtresBiblio[f.dataset.filtre] = f.value; if (etatsPages.bibliotheque) etatsPages.bibliotheque.page = 0; (afficherVue('bibliotheque', $('#inRecherche').value.trim())); }
     const fr = e.target.closest('[data-filtre-res]');
     if (fr) { filtresRessources[fr.dataset.filtreRes] = fr.value; afficherVue('ressources', document.querySelector('.puce-filtre.actif[data-genre-res]')?.dataset.genreRes || undefined); }
   });

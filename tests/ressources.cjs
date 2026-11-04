@@ -92,6 +92,19 @@ const jetonDe = async (email, motDePasse) => (await api('/connexion', null, 'POS
     await api('/livres/' + livre.id + '/couverture', adm, 'POST', jpeg, 'image/jpeg');   // nouvelle couverture : vignette périmée retirée
     assert.equal((await api('/livres/' + livre.id, adm)).data.vignette, false);
 
+    // 1.14.2 : pages servies par le serveur, cache commun et invalidation immédiate
+    const tous = (await api('/livres', null)).data;
+    const pg = (await api('/livres?format=page&parPage=2&page=1', null)).data;
+    assert.equal(pg.total, tous.length); assert.equal(pg.livres.length, 2); assert.equal(pg.livres[0].id, tous[2].id); assert.ok(pg.facettes.categorie.length);
+    const cat = tous[0].categorie;
+    assert.equal((await api('/livres?format=page&categorie=' + encodeURIComponent(cat), null)).data.total, tous.filter(l => l.categorie === cat).length);
+    const cible = tous[0];
+    assert.equal((await api('/livres/' + cible.id, adm, 'PUT', { titre: 'Titre changé 1.14.2' })).code, 200);
+    assert.ok((await api('/livres?format=page&q=' + encodeURIComponent('changé 1.14.2'), null)).data.livres.some(l => l.id === cible.id));   // visible tout de suite
+    await api('/favoris/' + cible.id, lecteur, 'POST');
+    const fav = id => api('/livres?format=page&q=' + encodeURIComponent('changé 1.14.2'), id).then(r => r.data.livres[0].favori);
+    assert.equal(await fav(lecteur), true); assert.equal(await fav(adm), false); assert.equal(await fav(null), false);
+
     console.log('Ressources 1.14 : documents PDF et EPUB, catégorie, lecture, plages, restriction, suppression ; limite du catalogue, vignettes et cache des couvertures vérifiés.');
   } catch (e) { console.error(e); process.exitCode = 1; }
   finally { if (server && server.exitCode === null) { const fin = new Promise(r => server.once('exit', r)); server.kill(); await fin; } fs.rmSync(temp, { recursive: true, force: true, maxRetries: 5 }); }
