@@ -93,7 +93,7 @@ function flushDB(){
 function sauverDB() {
   ecritureEnAttente=true;
   if(minuteurSauvegarde)return;
-  minuteurSauvegarde=setTimeout(()=>{minuteurSauvegarde=null;try{flushDB()}catch(err){console.error('SAUVEGARDE ÉCHOUÉE (données en mémoire conservées) :',err);}},50);
+  minuteurSauvegarde=setTimeout(()=>{minuteurSauvegarde=null;try{flushDB()}catch(err){console.error('SAUVEGARDE ÉCHOUÉE (données en mémoire conservées) :',err);}},2000);  // regroupe les modifications : une écriture toutes les 2 s au plus
 }
 process.on('SIGTERM',()=>{try{flushDB();process.exitCode=0}catch(err){console.error('Sauvegarde avant arrêt impossible :',err);process.exitCode=1}process.exit(process.exitCode)});
 process.on('SIGINT',()=>{try{flushDB();process.exit(0)}catch(err){console.error(err);process.exit(1)}});
@@ -216,6 +216,7 @@ let calculDureeQueue=Promise.resolve();
 function calculerDuree(l){const run=async()=>{if(l.contenu||l.nbMotsLecture||l.nbPagesLecture)return;try{if(l.pdf&&fs.existsSync(cheminPdf(l.id))){const data=await fs.promises.readFile(cheminPdf(l.id));const pdf=await require('./modules/pdf-lib').PDFDocument.load(data,{ignoreEncryption:true});l.nbPagesLecture=pdf.getPageCount();sauverDB()}else if(l.epub&&fs.existsSync(cheminEpub(l.id))){l.nbMotsLecture=dureeLecture.epub(await fs.promises.readFile(cheminEpub(l.id)));sauverDB()}}catch(e){console.warn('Calcul durée indisponible :',l.id,e.message)}};const result=calculDureeQueue.then(run);calculDureeQueue=result.catch(()=>{});return result}
 const DOSSIER_COUV = path.join(__dirname, 'data', 'couvertures');
 const cheminCouv = livreId => path.join(DOSSIER_COUV, livreId + '.png');
+const cheminVignette = livreId => path.join(DOSSIER_COUV, livreId + '-vignette.jpg');
 /** Compare deux fichiers sans les charger en mémoire (taille, puis empreinte en flux) :
     évite qu'une fusion de doublons sur de gros PDF fasse tomber le serveur. */
 async function fichiersIdentiques(p1, p2) {
@@ -275,7 +276,7 @@ const couverturesEpubVerifiees = new Set();
 function recupererCouvertureEpub(l, force=false) {
   if(!l.epub || (!force && (l.couverture || couverturesEpubVerifiees.has(l.id))))return;
   couverturesEpubVerifiees.add(l.id);
-  try {const c=require('./modules/epub-couverture')(fs.readFileSync(cheminEpub(l.id)));if(c){fs.mkdirSync(DOSSIER_COUV,{recursive:true});fs.writeFileSync(cheminCouv(l.id),c.data);l.couverture=true;l.couvertureMime=c.mime;sauverDB();}}catch{}
+  try {const c=require('./modules/epub-couverture')(fs.readFileSync(cheminEpub(l.id)));if(c){fs.mkdirSync(DOSSIER_COUV,{recursive:true});fs.writeFileSync(cheminCouv(l.id),c.data);l.couverture=true;l.couvertureMime=c.mime;l.couvertureMaj=Date.now();if(l.vignette){fs.rm(cheminVignette(l.id),{force:true},()=>{});l.vignette=false}sauverDB();}}catch{}
 }
 function vueLivre(l, utilisateur) {
   recupererCouvertureEpub(l);
@@ -300,7 +301,7 @@ function vueLivre(l, utilisateur) {
     note: moyenneNotes(l), nbNotes: l.notes.length, nbLectures: l.nbLectures,
     edition:l.edition||'',editeur: l.editeur || '', langue: l.langue || 'Français', niveau: l.niveau || '', publicCible: l.publicCible || 'tous', motsCles: l.motsCles || '',
     maProgression: utilisateur ? (db.progressions.find(p => p.utilisateurId === utilisateur.id && p.livreId === l.id) || null) : null,
-    telechargementAutorise:l.telechargementAutorise!==false,epub: !!l.epub, pdf: !!l.pdf, couverture: !!l.couverture,
+    telechargementAutorise:l.telechargementAutorise!==false,epub: !!l.epub, pdf: !!l.pdf, couverture: !!l.couverture, vignette: !!l.vignette, couvertureV: l.couvertureMaj || 1,
     versionNumerique, versionPhysique,
     hybride: versionNumerique && versionPhysique,
     disponible: versionNumerique || nbDisponibles > 0,
@@ -427,7 +428,7 @@ async function api(req, res, u) {
     const fichiers=type==='livres'?[[cheminPdf,'pdf'],[cheminEpub,'epub'],[cheminCouv,'couverture']]:[];
     for(const [chemin,k] of fichiers)if(a[k]&&b[k]&&k!=='couverture'&&fs.existsSync(chemin(a.id))&&fs.existsSync(chemin(b.id))&&!(await fichiersIdentiques(chemin(a.id),chemin(b.id))))return json(res,409,{erreur:'Fichiers différents : fusion bloquée pour préserver les versions.'});
     if(type==='medias'&&(a.ext||b.ext))return json(res,409,{erreur:'Médias joints : examinez les fichiers avant une suppression manuelle.'});
-    for(const [chemin,k] of fichiers)if(!a[k]&&b[k]&&fs.existsSync(chemin(b.id))){fs.copyFileSync(chemin(b.id),chemin(a.id));a[k]=true;if(k==='couverture')a.couvertureMime=b.couvertureMime;}
+    for(const [chemin,k] of fichiers)if(!a[k]&&b[k]&&fs.existsSync(chemin(b.id))){fs.copyFileSync(chemin(b.id),chemin(a.id));a[k]=true;if(k==='couverture'){a.couvertureMime=b.couvertureMime;a.couvertureMaj=Date.now();a.vignette=false;}}
     try{doublons.fusionner(db,type,conserve,retire);journal('Doublon fusionné',utilisateur,b.titre);sauverDB();return json(res,200,{ok:true})}catch(e){return json(res,409,{erreur:e.message})}
   }
   if(seg[1]==='medias'&&seg[2]&&seg[3]==='vignette'){
@@ -1237,16 +1238,38 @@ async function api(req, res, u) {
     const jpg = donnees.length > 3 && donnees[0] === 0xFF && donnees[1] === 0xD8;
     if ((!png && !jpg) || donnees.length > 3e6) return json(res, 400, { erreur: 'Image PNG ou JPEG requise (3 Mo max).' });
     fs.mkdirSync(DOSSIER_COUV, { recursive: true });
-    fs.writeFileSync(cheminCouv(l.id), donnees);l.couvertureMime="image/png";
-    l.couverture = true; sauverDB();
+    fs.writeFileSync(cheminCouv(l.id), donnees); l.couvertureMime = jpg ? 'image/jpeg' : 'image/png';
+    l.couverture = true; l.couvertureMaj = Date.now();
+    if (l.vignette) { fs.rm(cheminVignette(l.id), { force: true }, () => {}); l.vignette = false; }
+    sauverDB();
     return json(res, 201, { ok: true });
   }
   if (seg[1] === 'livres' && seg[2] && seg[3] === 'couverture' && m === 'GET') {
     const l = db.livres.find(x => x.id === seg[2]);
     if(l)recupererCouvertureEpub(l);
     if (!l || !l.couverture || !fs.existsSync(cheminCouv(l.id))) return json(res, 404, { erreur: 'Pas de couverture.' });
-    res.writeHead(200, { 'Content-Type': l.couvertureMime || 'image/png', 'Cache-Control': 'public, max-age=300' });
+    // URL versionnée (?v=…) : l'image ne change jamais à cette adresse, le navigateur la garde 30 jours
+    const cache = query.v ? 'public, max-age=2592000, immutable' : 'public, max-age=300';
+    if (query.taille === 'vignette' && l.vignette && fs.existsSync(cheminVignette(l.id))) {
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': cache });
+      return fs.createReadStream(cheminVignette(l.id)).pipe(res);
+    }
+    res.writeHead(200, { 'Content-Type': l.couvertureMime || 'image/png', 'Cache-Control': cache });
     return fs.createReadStream(cheminCouv(l.id)).pipe(res);
+  }
+  // Vignette légère (JPEG, calculée par le navigateur du bibliothécaire) pour les listes et grilles
+  if (seg[1] === 'livres' && seg[2] && seg[3] === 'vignette' && m === 'POST') {
+    if (!exigeBiblio()) return;
+    const l = db.livres.find(x => x.id === seg[2]);
+    if (!l) return json(res, 404, { erreur: 'Livre introuvable.' });
+    if (!l.couverture) return json(res, 400, { erreur: 'Ce livre n’a pas de couverture.' });
+    let donnees;
+    try { donnees = await lireBinaire(req); } catch (err) { return json(res, 413, { erreur: err.message }); }
+    if (!(donnees.length > 3 && donnees[0] === 0xFF && donnees[1] === 0xD8) || donnees.length > 150000) return json(res, 400, { erreur: 'Vignette JPEG requise (150 Ko max).' });
+    fs.mkdirSync(DOSSIER_COUV, { recursive: true });
+    fs.writeFileSync(cheminVignette(l.id), donnees);
+    l.vignette = true; l.couvertureMaj = l.couvertureMaj || Date.now(); sauverDB();
+    return json(res, 201, { ok: true, taille: donnees.length });
   }
 
   // EPUB : téléchargement authentifié, validation ZIP sans extraction.
@@ -1319,6 +1342,8 @@ async function api(req, res, u) {
     if (query.tri === 'populaires') liste.sort((a,b) => (moyenneNotes(b)*10 + b.nbLectures/50) - (moyenneNotes(a)*10 + a.nbLectures/50));
     else if (query.tri === 'nouveautes') liste.sort((a,b) => new Date(b.creeLe) - new Date(a.creeLe));
     else liste.sort((a,b)=>String(a.titre).localeCompare(String(b.titre),'fr',{sensitivity:'base',numeric:true}));
+    const limite = parseInt(query.limite, 10);
+    if (limite > 0) liste = liste.slice(0, limite);
     return json(res, 200, liste.map(l => vueLivre(l, utilisateur)));
   }
   if (seg[1] === 'livres' && seg[2] && seg[3] === 'lire' && m === 'GET') {
@@ -1371,6 +1396,7 @@ async function api(req, res, u) {
       if (fs.existsSync(cheminEpub(seg[2]))) fs.unlinkSync(cheminEpub(seg[2]));
       if (fs.existsSync(cheminPdf(seg[2]))) fs.unlinkSync(cheminPdf(seg[2]));
       if (fs.existsSync(cheminCouv(seg[2]))) fs.unlinkSync(cheminCouv(seg[2]));
+      if (fs.existsSync(cheminVignette(seg[2]))) fs.unlinkSync(cheminVignette(seg[2]));
       sauverDB();
       return json(res, 200, { ok: true });
     }

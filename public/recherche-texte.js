@@ -18,7 +18,7 @@ window.OasisRechercheTexte = (() => {
 
   function couverture(l) {
     return l.couverture
-      ? `<div class="rt-couv"><img src="/api/livres/${encodeURIComponent(l.id)}/couverture" alt="" loading="lazy"></div>`
+      ? `<div class="rt-couv"><img src="/api/livres/${encodeURIComponent(l.id)}/couverture${l.couvertureV ? `?v=${l.couvertureV}${l.vignette ? '&taille=vignette' : ''}` : ''}" alt="" loading="lazy"></div>`
       : `<div class="rt-couv" style="background:linear-gradient(150deg, ${E(l.couleur || '#1e4fa3')}, #10243e)">${E(l.icone || '📘')}</div>`;
   }
 

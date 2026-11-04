@@ -92,3 +92,9 @@ Sur Render : **Events** → choisissez un déploiement réussi plus ancien → *
 - Ressources : un document PDF ou EPUB (100 Mo max) peut être joint à chaque ressource, avec une catégorie (thème). Les fichiers sont rangés dans `data/ressources-docs/`.
 - Lecteurs : ressources regroupées par section ou par catégorie, avec « Consulter le PDF » / « Lire l’EPUB ».
 
+## Version 1.14.1 — Site plus rapide
+
+- Base de données : une écriture toutes les 2 secondes au plus, JSON compact, copies de secours une fois par heure (sauvegarde environ 13 fois plus rapide ; le serveur ne se fige plus à chaque page lue).
+- Accueil et tableau de bord : seuls les livres affichés sont téléchargés (4 Ko au lieu de 3 Mo).
+- Couvertures : nouvelles couvertures en JPEG, vignettes légères pour les listes, conservées 30 jours par le navigateur. Après le déploiement, cliquez une fois sur « ⚡ Alléger les couvertures » dans le Catalogue et laissez la fenêtre ouverte jusqu'à la fin.
+

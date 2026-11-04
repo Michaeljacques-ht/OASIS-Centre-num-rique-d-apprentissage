@@ -89,11 +89,12 @@
   }
 
   // ---------- Rendu des livres ----------
+  const urlCouv = (l, petite) => `/api/livres/${encodeURIComponent(l.id)}/couverture${l.couvertureV ? `?v=${l.couvertureV}${petite && l.vignette ? '&taille=vignette' : ''}` : ''}`;
   const badgeType = l => l.hybride ? '📕+💻 Hybride' : l.versionNumerique ? '💻 E-book' : '📕 Physique';
   const carteLivre = l => `
     <button class="carte-livre" data-livre="${l.id}">
       ${l.couverture
-        ? `<div class="couverture couverture-img"><img src="/api/livres/${l.id}/couverture" alt="Couverture de ${echap(l.titre)}" loading="lazy"><span class="badge-type">${badgeType(l)}</span></div>`
+        ? `<div class="couverture couverture-img"><img src="${urlCouv(l, true)}" alt="Couverture de ${echap(l.titre)}" loading="lazy" decoding="async"><span class="badge-type">${badgeType(l)}</span></div>`
         : `<div class="couverture" style="background:linear-gradient(150deg, ${l.couleur}, ${l.couleur}cc 60%, #10243e)">
             <span class="badge-type">${badgeType(l)}</span>
             <div class="titre-couv">${echap(l.titre)}</div>
@@ -133,7 +134,7 @@
     espace: async () => `<h2>Mon espace</h2><p>Bienvenue ${echap(moi?.nom || "")}. Retrouvez vos lectures dans la bibliothèque et gérez votre abonnement ci-dessous.</p><button class="btn btn-bleu" data-vue="bibliotheque">Explorer la bibliothèque</button> <button class="mini-btn" data-sg-reactiver>Réactiver les suggestions personnalisées</button>` + await OasisAbonnement.render(api, moi),
     async accueil() {
       const [nouveautes, cats, compteurs, suggestions, continuer] = await Promise.all([
-        api('/livres?tri=nouveautes'),
+        api('/livres?tri=nouveautes&limite=4'),
         chargerCategories(),
         api('/statistiques-publiques').catch(() => null),
         moi?.niveau ? api('/recommandations').catch(()=>null) : null,
@@ -384,11 +385,11 @@
 
   // ---------- Panneaux latéraux ----------
   const miniatureLivre = l => l.couverture
-    ? `<div class="mini-couv couverture-img"><img src="/api/livres/${encodeURIComponent(l.id)}/couverture" alt="Couverture de ${echap(l.titre)}" loading="lazy"></div>`
+    ? `<div class="mini-couv couverture-img"><img src="${urlCouv(l, true)}" alt="Couverture de ${echap(l.titre)}" loading="lazy" decoding="async"></div>`
     : `<div class="mini-couv" style="background:linear-gradient(150deg, ${l.couleur}, #10243e)">${l.icone || '📘'}</div>`;
   async function rafraichirPanneaux() {
     try {
-      const [pop, liste, histo] = await Promise.all([api('/livres?tri=populaires'), api('/liste'), api('/historique')]);
+      const [pop, liste, histo] = await Promise.all([api('/livres?tri=populaires&limite=4'), api('/liste'), api('/historique')]);
       const enCours = histo.filter(h => !h.termine && h.pourcentage > 0 && h.pourcentage < 100).slice(0, 3);
       let zoneReprise = document.getElementById('zoneReprise');
       if (!zoneReprise && enCours.length) {
@@ -438,7 +439,7 @@
         <div class="modale" role="dialog" aria-modal="true" aria-label="${echap(l.titre)}">
           <div class="modale-entete">
             ${l.couverture
-              ? `<div class="modale-couv couverture-img"><img src="/api/livres/${l.id}/couverture" alt=""></div>`
+              ? `<div class="modale-couv couverture-img"><img src="${urlCouv(l, false)}" alt=""></div>`
               : `<div class="modale-couv" style="background:linear-gradient(150deg, ${l.couleur}, #10243e)">${l.icone}</div>`}
             <div style="flex:1">
               <h3>${echap(l.titre)}</h3>

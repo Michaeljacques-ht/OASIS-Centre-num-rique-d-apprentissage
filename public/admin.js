@@ -39,7 +39,7 @@
   const onglets = {
     administrationComptes:()=>OasisAdminComptes.ouvrir(api),
     async tableau() {
-      const [s, emprunts, tousLivres, devis] = await Promise.all([api('/stats'), api('/emprunts?statut=en_cours'), api('/livres?tri=populaires'), api('/ecoles/devis-admin')]);
+      const [s, emprunts, tousLivres, devis] = await Promise.all([api('/stats'), api('/emprunts?statut=en_cours'), api('/livres?tri=populaires&limite=5'), api('/ecoles/devis-admin')]);
       const s2 = { topLivres: tousLivres.slice(0, 5) };
       const retards = emprunts.filter(e => e.joursRetard > 0);
       return `
@@ -90,6 +90,7 @@
         <div class="section-titre catalogue-entete"><h3>📚 Catalogue <span class="compteur-titre">${livres.length} titres</span></h3>
           <span class="barre-boutons">
             <button class="btn" id="btnDoublons">Détecter les doublons</button><button class="btn" id="btnCategories">🗂️ Catégories</button>
+            ${livres.some(l => l.couverture && !l.vignette) ? `<button class="btn" id="btnAllegerCouv" title="Créer des vignettes légères pour accélérer l'affichage">⚡ Alléger les couvertures (${livres.filter(l => l.couverture && !l.vignette).length})</button>` : ''}
             <button class="btn" id="btnImporterPdf">📚 Importer des PDF</button>
             <button class="btn" id="btnImporter">📥 Importer (CSV / JSON)</button>
             <button class="btn btn-ajouter-livre" id="btnNouveauLivre">+ Ajouter un livre</button>
@@ -315,7 +316,7 @@
   }
 
   // Vérifie que le serveur en ligne correspond à cette interface.
-  const VERSION_INTERFACE = '1.14.0';
+  const VERSION_INTERFACE = '1.14.1';
   async function verifierVersionServeur() {
     const bandeau = (html) => { const b = document.createElement('div'); b.className = 'erreur bandeau-version'; b.setAttribute('role', 'alert'); b.innerHTML = html; $('#zoneAdmin').before(b); };
     const liste = (titre, l, aide) => l.length ? `<details><summary><b>${l.length} ${titre}</b> — ${aide}</summary><ul class="diag-liste">${l.slice(0, 200).map(f => `<li><code>${echap(f)}</code></li>`).join('')}${l.length > 200 ? `<li>… et ${l.length - 200} autres</li>` : ''}</ul></details>` : '';
@@ -480,16 +481,51 @@
       const canvas = document.createElement('canvas');
       canvas.width = vp.width; canvas.height = vp.height;
       await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
-      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.82));   // JPEG : 5 à 8 fois plus léger que PNG
       const rep = await fetch('/api/livres/' + livreId + '/couverture', {
-        method: 'POST', headers: { 'Content-Type': 'image/png', Authorization: 'Bearer ' + jeton }, body: blob
+        method: 'POST', headers: { 'Content-Type': 'image/jpeg', Authorization: 'Bearer ' + jeton }, body: blob
       });
       if (!rep.ok) throw new Error('envoi refusé');
+      await envoyerVignette(livreId, canvas).catch(() => {});
       return true;
     } catch (err) {
       toast('PDF attaché, mais couverture non générée (connexion Internet requise pour pdf.js).');
       return false;
     }
+  }
+
+  /* ---------- Vignettes légères des couvertures (listes et grilles) ---------- */
+  async function envoyerVignette(livreId, source) {
+    const largeur = Math.min(300, source.width || 300), hauteur = Math.round((source.height || 400) * largeur / (source.width || 300));
+    const c = document.createElement('canvas'); c.width = largeur; c.height = hauteur;
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, largeur, hauteur); ctx.drawImage(source, 0, 0, largeur, hauteur);
+    let blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.72));
+    if (blob.size > 140000) blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.6));
+    const rep = await fetch('/api/livres/' + livreId + '/vignette', { method: 'POST', headers: { 'Content-Type': 'image/jpeg', Authorization: 'Bearer ' + jeton }, body: blob });
+    if (!rep.ok) throw new Error((await rep.json().catch(() => ({}))).erreur || 'Vignette refusée.');
+  }
+  async function vignettePourLivre(l) {
+    const rep = await fetch('/api/livres/' + l.id + '/couverture', { cache: 'no-store' });
+    if (!rep.ok) throw new Error('Couverture introuvable.');
+    const image = await createImageBitmap(await rep.blob());
+    try { await envoyerVignette(l.id, image); } finally { image.close?.(); }
+  }
+  async function allegerCouvertures() {
+    const aFaire = catalogueLivres.filter(l => l.couverture && !l.vignette);
+    if (!aFaire.length) return toast('Toutes les couvertures sont déjà allégées.');
+    modale(`<h3>⚡ Alléger les couvertures</h3><p>Création de vignettes légères (environ 20 Ko au lieu de 280 Ko) pour ${aFaire.length} couverture(s). Les listes du site s'afficheront beaucoup plus vite. Gardez cette fenêtre ouverte.</p>
+      <div class="progression-envoi" id="progVignettes"><div><span></span></div><small>Préparation…</small></div><p id="bilanVignettes" class="compte-resultats"></p><div class="pied-form"><button class="btn" id="arreterVignettes">Arrêter</button></div>`);
+    let fait = 0, ko = 0, arret = false;
+    $('#arreterVignettes').onclick = () => { arret = true; };
+    const barre = $('#progVignettes');
+    const suivant = () => aFaire.shift();
+    const travailleur = async () => { for (let l = suivant(); l && !arret; l = suivant()) {
+      try { await vignettePourLivre(l); l.vignette = true; fait++; } catch { ko++; }
+      const total = fait + ko + aFaire.length, pc = Math.round((fait + ko) / total * 100);
+      if (barre.isConnected) { barre.querySelector('span').style.width = pc + '%'; barre.querySelector('small').textContent = `${fait + ko} / ${total} — ${pc} %`; }
+    } };
+    await Promise.all([travailleur(), travailleur(), travailleur()]);
+    if ($('#bilanVignettes')) { $('#bilanVignettes').textContent = `${fait} vignette(s) créée(s)${ko ? `, ${ko} échec(s)` : ''}${arret ? ' — arrêté' : ''}.`; $('#arreterVignettes').textContent = 'Fermer'; $('#arreterVignettes').onclick = () => { fermerModale(); afficherOnglet('catalogue'); }; }
   }
 
   async function envoyerEpub(id, fichier) {
@@ -945,7 +981,7 @@
   const pagesEtat = {};   // état de pagination par liste : { page, tout }
   const sansAuteur = a => !a || /^(auteur à préciser|anonyme|inconnu|unknown|x)$/i.test(String(a).trim());
   const vignetteLivre = l => l.couverture
-    ? `<span class="vignette"><img src="/api/livres/${l.id}/couverture" alt="" loading="lazy"></span>`
+    ? `<span class="vignette"><img src="/api/livres/${l.id}/couverture?v=${l.couvertureV || 1}${l.vignette ? '&taille=vignette' : ''}" alt="" loading="lazy" decoding="async"></span>`
     : `<span class="vignette vignette-icone" style="--c:${echap(l.couleur || '#1e4fa3')}">${echap(l.icone || '📘')}</span>`;
   const puceCategorie = nom => `<span class="puce-cat" style="--c:${echap(couleursCategories[nom] || '#64748b')}">${echap(nom || '—')}</span>`;
   const formatLivre = l => l.hybride ? '<span class="puce puce-bleu">📕+💻 Hybride</span>' : l.versionNumerique ? '<span class="puce puce-bleu">💻 E-book</span>' : l.versionPhysique ? '<span class="puce">📕 Physique</span>' : '<span class="puce puce-gris">— aucune</span>';
@@ -1141,6 +1177,7 @@
       rendreCatalogue();
     }
     if ($('#ressourcesListe')) brancherRessources();
+    $('#btnAllegerCouv')?.addEventListener('click', allegerCouvertures);
 
     $('#btnNouvelEmprunt')?.addEventListener('click', formEmpruntGuichet);
     document.querySelectorAll('[data-modifier-livre]').forEach(b=>b.addEventListener('click',()=>modifierLivre(b.dataset.modifierLivre).catch(e=>toast(e.message))));

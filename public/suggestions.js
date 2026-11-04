@@ -2,7 +2,7 @@
 window.OasisSuggestions = (() => {
   const E = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const couv = l => l.couverture
-    ? `<span class="sg-couv"><img src="/api/livres/${encodeURIComponent(l.id)}/couverture" alt="" loading="lazy"></span>`
+    ? `<span class="sg-couv"><img src="/api/livres/${encodeURIComponent(l.id)}/couverture${l.couvertureV ? `?v=${l.couvertureV}${l.vignette ? '&taille=vignette' : ''}` : ''}" alt="" loading="lazy"></span>`
     : `<span class="sg-couv" style="background:linear-gradient(150deg, ${E(l.couleur || '#1e4fa3')}, #10243e)">${E(l.icone || '📘')}</span>`;
 
   async function continuer(api) {

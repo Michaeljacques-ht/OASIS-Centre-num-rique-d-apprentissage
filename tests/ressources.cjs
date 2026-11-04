@@ -74,7 +74,25 @@ const jetonDe = async (email, motDePasse) => (await api('/connexion', null, 'POS
     assert.equal((await api('/ressources/' + r.id, adm, 'DELETE')).code, 200);
     assert.deepEqual(fs.readdirSync(dossier), []);
 
-    console.log('Ressources 1.14.0 : documents PDF et EPUB, catégorie, lecture, plages, restriction, retrait et suppression vérifiés.');
+    // 1.14.1 : limite du catalogue, couverture JPEG, vignette et cache long
+    assert.equal((await api('/livres?tri=nouveautes&limite=3', null)).data.length, 3);
+    const livre = (await api('/livres?limite=1', adm)).data[0];
+    const jpeg = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(200)]);
+    assert.equal((await api('/livres/' + livre.id + '/vignette', adm, 'POST', jpeg, 'image/jpeg')).code, 400);   // pas encore de couverture
+    assert.equal((await api('/livres/' + livre.id + '/couverture', adm, 'POST', jpeg, 'image/jpeg')).code, 201);
+    assert.equal((await api('/livres/' + livre.id + '/vignette', lecteur, 'POST', jpeg, 'image/jpeg')).code, 403);
+    assert.equal((await api('/livres/' + livre.id + '/vignette', adm, 'POST', Buffer.from('png?'), 'image/jpeg')).code, 400);
+    const petite = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE1]), Buffer.alloc(50)]);
+    assert.equal((await api('/livres/' + livre.id + '/vignette', adm, 'POST', petite, 'image/jpeg')).code, 201);
+    const vue = (await api('/livres/' + livre.id, adm)).data;
+    assert.equal(vue.vignette, true); assert.ok(vue.couvertureV > 1);
+    const v = await api('/livres/' + livre.id + '/couverture?v=' + vue.couvertureV + '&taille=vignette', null);
+    assert.deepEqual(v.data, petite); assert.match(v.headers.get('cache-control'), /max-age=2592000/);
+    assert.deepEqual((await api('/livres/' + livre.id + '/couverture?v=' + vue.couvertureV, null)).data, jpeg);
+    await api('/livres/' + livre.id + '/couverture', adm, 'POST', jpeg, 'image/jpeg');   // nouvelle couverture : vignette périmée retirée
+    assert.equal((await api('/livres/' + livre.id, adm)).data.vignette, false);
+
+    console.log('Ressources 1.14 : documents PDF et EPUB, catégorie, lecture, plages, restriction, suppression ; limite du catalogue, vignettes et cache des couvertures vérifiés.');
   } catch (e) { console.error(e); process.exitCode = 1; }
   finally { if (server && server.exitCode === null) { const fin = new Promise(r => server.once('exit', r)); server.kill(); await fin; } fs.rmSync(temp, { recursive: true, force: true, maxRetries: 5 }); }
 })();
