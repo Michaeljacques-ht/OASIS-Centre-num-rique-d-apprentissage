@@ -80,36 +80,30 @@
         ${historique.length ? tableEmprunts(historique) : '<p class="vide">Aucun retour enregistré.</p>'}`;
     },
     async catalogue() {
-      const [livres] = await Promise.all([api('/livres'), chargerCategories()]);
+      const [livres, cats] = await Promise.all([api('/livres'), chargerCategories()]);
+      catalogueLivres = livres;
+      couleursCategories = Object.fromEntries((cats || []).map(c => [c.nom, c.couleur]));
+      const parCat = {}; for (const l of livres) parCat[l.categorie] = (parCat[l.categorie] || 0) + 1;
+      const options = Object.keys(parCat).sort((a, b) => a.localeCompare(b, 'fr')).map(c => `<option value="${echap(c)}" ${c === filtresCatalogue.categorie ? 'selected' : ''}>${echap(c)} (${parCat[c]})</option>`).join('');
+      const etat = (v, t) => `<option value="${v}" ${filtresCatalogue.etat === v ? 'selected' : ''}>${t}</option>`;
       return `
-        <div class="section-titre catalogue-entete"><h3>📚 Catalogue (${livres.length} titres)</h3>
-          <span style="display:flex;gap:8px;flex-wrap:wrap">
+        <div class="section-titre catalogue-entete"><h3>📚 Catalogue <span class="compteur-titre">${livres.length} titres</span></h3>
+          <span class="barre-boutons">
             <button class="btn" id="btnDoublons">Détecter les doublons</button><button class="btn" id="btnCategories">🗂️ Catégories</button>
             <button class="btn" id="btnImporterPdf">📚 Importer des PDF</button>
             <button class="btn" id="btnImporter">📥 Importer (CSV / JSON)</button>
             <button class="btn btn-ajouter-livre" id="btnNouveauLivre">+ Ajouter un livre</button>
             <button class="btn btn-bleu" id="btnNouveauEpub">+ Ajouter EPUB</button>
           </span></div>
-        <div class="catalogue-recherche"><div class="champ"><label for="rechercheCatalogue">Rechercher dans le catalogue</label><input id="rechercheCatalogue" type="search" placeholder="Titre, auteur, catégorie, ISBN…" autocomplete="off" aria-controls="catalogueLignes"></div><button class="btn" id="effacerRechercheCatalogue">Effacer</button><p id="resultatsCatalogue" role="status" aria-live="polite"></p></div>
-        <div class="catalogue-table-scroll" role="region" aria-label="Catalogue des livres" tabindex="0"><table class="table-catalogue"><thead><tr><th>Titre</th><th>Auteur</th><th>Catégorie</th><th>Versions</th><th>Disponibilité</th><th>Actions</th></tr></thead><tbody id="catalogueLignes">
-        ${livres.map(l => `<tr data-catalogue-recherche="${echap([l.titre,l.auteur,l.categorie,l.isbn,l.editeur,l.niveau,l.motsCles].filter(Boolean).join(' '))}">
-          <td>${l.icone} <b>${echap(l.titre)}</b></td>
-          <td>${echap(l.auteur)}</td>
-          <td>${echap(l.categorie)}</td>
-          <td>${l.hybride ? '<b style="color:var(--bleu)">📕+💻 Hybride</b>' : l.versionNumerique ? '💻 E-book' : l.versionPhysique ? '📕 Physique' : '<span style="color:var(--gris)">— aucune</span>'}</td>
-          <td><div class="catalogue-disponibilite">
-            ${l.versionNumerique ? '<span class="pastille num">💻 En ligne</span>' : ''}
-            ${l.versionPhysique ? `<span class="pastille ${l.nbDisponibles > 0 ? 'dispo' : 'indispo'}">📕 ${l.nbDisponibles}/${l.nbExemplaires} en rayon</span>` : ''}
-            ${!l.versionNumerique && !l.versionPhysique ? '<span class="pastille indispo">Incomplet</span>' : ''}
-          </div></td>
-          <td><div class="catalogue-actions">
-            <button class="mini-btn bleu" data-modifier-livre="${l.id}">Modifier</button>
-            <button class="mini-btn" data-exemplaires="${l.id}" data-titre="${echap(l.titre)}">📕 Exemplaires${l.nbExemplaires ? ` (${l.nbExemplaires})` : ''}</button>
-            <button class="mini-btn" data-pdf="${l.id}" data-titre="${echap(l.titre)}" data-deja="${l.pdf ? '1' : ''}">${l.pdf ? '📄 PDF ✓' : '📄 Joindre PDF'}</button>
-            <button class="mini-btn" data-download-type="livres" data-download-id="${l.id}" data-download-etat="${l.telechargementAutorise!==false}">${l.telechargementAutorise===false?'🔒 Autoriser téléchargement':'Restreindre téléchargement'}</button><button class="mini-btn rouge" data-supprimer="${l.id}">Supprimer</button>
-          </div></td>
-        </tr>`).join('')}
-        </tbody></table></div><p class="vide" id="catalogueAucunResultat" hidden>Aucun document ne correspond à votre recherche.</p>`;
+        <div class="barre-filtres">
+          <label class="recherche-moderne"><span aria-hidden="true">🔍</span><input id="rechercheCatalogue" type="search" placeholder="Rechercher un titre, un auteur, une catégorie, un ISBN…" autocomplete="off" aria-label="Rechercher dans le catalogue" aria-controls="catalogueLignes"></label>
+          <select id="filtreCategorieCatalogue" aria-label="Filtrer par catégorie"><option value="">Toutes les catégories</option>${options}</select>
+          <select id="filtreEtatCatalogue" aria-label="Filtrer par état">${etat('', 'Tous les documents')}${etat('numerique', '💻 E-books')}${etat('physique', '📕 Physiques')}${etat('hybride', '📕+💻 Hybrides')}${etat('incomplet', '⚠️ Incomplets')}${etat('sans-auteur', '✍️ Auteur à préciser')}${etat('restreint', '🔒 Téléchargement restreint')}</select>
+        </div>
+        <div class="barre-resultats"><p id="resultatsCatalogue" class="compte-resultats" role="status" aria-live="polite"></p><div id="paginationHaut"></div></div>
+        <div class="tableau-moderne" role="region" aria-label="Catalogue des livres" tabindex="0"><table class="table-moderne table-catalogue2"><thead><tr><th>Document</th><th>Catégorie</th><th>Format</th><th>Disponibilité</th><th class="col-actions">Actions</th></tr></thead><tbody id="catalogueLignes"></tbody></table></div>
+        <p class="vide" id="catalogueAucunResultat" hidden>Aucun document ne correspond à votre recherche.</p>
+        <div id="paginationBas" class="pagination-bas"></div>`;
     },
     async reservations() {
       const toutes = await api('/reservations');
@@ -152,36 +146,39 @@
           </tbody></table>` : '<p class="vide">Aucune réservation de place ce jour-là.</p>'}`;
     },
     async ressources() {
-      const liste = await api('/ressources');
-      const NOMS = { dictionnaire: '📖 Dictionnaire', encyclopedie: '🌍 Encyclopédie', base: '🗄️ Base de données', administratif: '📋 Doc. administratif', officiel: '🏛️ Doc. officiel', historique: '📜 Doc. historique' };
+      const [liste, cats] = await Promise.all([api('/ressources'), chargerCategories()]);
+      ressourcesCache = liste;
+      couleursCategories = Object.fromEntries((cats || []).map(c => [c.nom, c.couleur]));
+      const optGenres = GENRES_RES.map(([g, n]) => `<option value="${g}">${n}</option>`).join('');
+      const optThemes = listeCategories.slice().sort((x, y) => x.localeCompare(y, 'fr')).map(c => `<option value="${echap(c)}">${echap(c)}</option>`).join('');
       return `
-        <div class="section-titre"><h3>🔎 Ressources documentaires (${liste.length})</h3></div>
-        <div class="panneau ressources-formulaire" style="margin-bottom:18px">
-          <h4 style="margin-bottom:10px;color:var(--encre)">Ajouter une entrée</h4>
+        <div class="section-titre"><h3>🔎 Ressources documentaires <span class="compteur-titre">${liste.length}</span></h3>
+          <button class="btn btn-bleu" id="btnBasculerFormRessource" aria-expanded="false" aria-controls="formRessource">+ Ajouter une ressource</button></div>
+        <section class="carte-formulaire ressources-formulaire" id="formRessource" hidden>
+          <header><h4>Nouvelle ressource</h4><p>Une fiche (définition, article, description) et, si vous le souhaitez, un document PDF ou EPUB que les lecteurs pourront consulter.</p></header>
           <div id="msgRessource"></div>
-          <div class="admin-form-grid">
-            <div class="champ"><label for="rGenre">Section</label>
-              <select id="rGenre"><option value="dictionnaire">📖 Dictionnaire</option><option value="encyclopedie">🌍 Encyclopédie</option><option value="base">🗄️ Base de données</option><option value="officiel">🏛️ Document officiel</option><option value="administratif">📋 Document administratif</option><option value="historique">📜 Document historique</option></select></div>
-            <div class="champ"><label for="rTitre">Titre / mot / nom *</label><input id="rTitre" placeholder="Ex. : Konbit, Jacques Roumain, Catalogue Éduca…"></div>
-          </div>
-          <div class="champ"><label for="rContenu">Définition / article / description *</label><textarea id="rContenu" rows="4"></textarea></div>
-          <div class="admin-form-grid">
+          <div class="grille-form">
+            <div class="champ"><label for="rGenre">Section</label><select id="rGenre">${optGenres}</select></div>
+            <div class="champ"><label for="rTheme">Catégorie (thème)</label><select id="rTheme"><option value="">— Aucune —</option>${optThemes}</select></div>
+            <div class="champ large"><label for="rTitre">Titre / mot / nom *</label><input id="rTitre" placeholder="Ex. : Konbit, Jacques Roumain, Catalogue Éduca…"></div>
+            <div class="champ large"><label for="rContenu">Définition / article / description <span id="rContenuAide">*</span></label><textarea id="rContenu" rows="4" placeholder="Quelques lignes pour présenter la ressource…"></textarea></div>
+            <div class="champ large"><label for="rDocument">Document PDF ou EPUB (optionnel, 100 Mo max)</label>
+              <label class="zone-depot" id="zoneDepot"><input id="rDocument" type="file" accept=".pdf,.epub,application/pdf,application/epub+zip"><span class="zone-depot-icone" aria-hidden="true">📄</span><span id="zoneDepotTexte"><b>Choisir un fichier</b> ou le glisser ici</span></label></div>
             <div class="champ"><label for="rSource">Source (optionnel)</label><input id="rSource" placeholder="Ex. : Collection Oasis, MENFP…"></div>
-            <div class="champ"><label for="rLien">Lien de la ressource (optionnel)</label><input id="rLien" type="url" placeholder="https://exemple.ht/ressource"></div>
-          </div>
-          <div class="admin-form-grid">
+            <div class="champ"><label for="rLien">Lien externe (optionnel)</label><input id="rLien" type="url" placeholder="https://exemple.ht/ressource"></div>
             <div class="champ"><label for="rIcone">Icône (emoji)</label><input id="rIcone" maxlength="8" placeholder="Ex. : 🇭🇹 📖 🧪"></div>
             <div class="champ"><label for="rImage">…ou image (PNG/JPEG, 3 Mo max)</label><input id="rImage" type="file" accept="image/png,image/jpeg"></div>
           </div>
-          <button class="btn btn-bleu" id="btnAjouterRessource">Ajouter la ressource</button>
+          <div class="progression-envoi" id="progressionRessource" hidden><div><span></span></div><small>Envoi du document…</small></div>
+          <div class="pied-form"><button class="btn" id="btnAnnulerRessource" type="button">Annuler</button><button class="btn btn-bleu" id="btnAjouterRessource">Ajouter la ressource</button></div>
+        </section>
+        <div class="barre-filtres">
+          <label class="recherche-moderne"><span aria-hidden="true">🔍</span><input id="rechercheRessources" type="search" placeholder="Rechercher une ressource…" autocomplete="off" aria-label="Rechercher une ressource" value="${echap(filtresRessources.q)}"></label>
         </div>
-        <table class="table-ressources"><thead><tr><th>Section</th><th>Titre</th><th>Contenu</th><th></th></tr></thead><tbody>
-        ${liste.map(r => `<tr>
-          <td data-label="Section">${NOMS[r.genre] || echap(r.genre)}</td><td data-label="Titre">${r.image ? `<img src="/api/ressources/${r.id}/image" alt="" style="width:28px;height:28px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:6px">` : r.icone ? r.icone + ' ' : ''}<b>${echap(r.titre)}</b>${r.lien ? ` <a href="${echap(r.lien)}" target="_blank" rel="noopener" title="${echap(r.lien)}">🔗</a>` : ''}</td>
-          <td data-label="Description">${echap(r.contenu.slice(0, 120))}${r.contenu.length > 120 ? '…' : ''}</td>
-          <td class="ressource-actions"><button class="mini-btn" data-download-type="ressources" data-download-id="${r.id}" data-download-etat="${r.telechargementAutorise!==false}">${r.telechargementAutorise===false?'🔒 Autoriser téléchargement':'Restreindre téléchargement'}</button><button class="mini-btn rouge" data-suppr-ressource="${r.id}">Supprimer</button></td>
-        </tr>`).join('')}
-        </tbody></table>`;
+        <div class="puces-filtre" id="filtreGenresRessources" role="group" aria-label="Sections"></div>
+        <div class="barre-resultats"><p id="resultatsRessources" class="compte-resultats" role="status" aria-live="polite"></p><div id="paginationRessHaut"></div></div>
+        <div class="liste-ressources" id="ressourcesListe"></div>
+        <div id="paginationRessBas" class="pagination-bas"></div>`;
     },
     async journalActivites() {
       const j = await api('/journal');
@@ -318,7 +315,7 @@
   }
 
   // Vérifie que le serveur en ligne correspond à cette interface.
-  const VERSION_INTERFACE = '1.13.0';
+  const VERSION_INTERFACE = '1.14.0';
   async function verifierVersionServeur() {
     const bandeau = (html) => { const b = document.createElement('div'); b.className = 'erreur bandeau-version'; b.setAttribute('role', 'alert'); b.innerHTML = html; $('#zoneAdmin').before(b); };
     const liste = (titre, l, aide) => l.length ? `<details><summary><b>${l.length} ${titre}</b> — ${aide}</summary><ul class="diag-liste">${l.slice(0, 200).map(f => `<li><code>${echap(f)}</code></li>`).join('')}${l.length > 200 ? `<li>… et ${l.length - 200} autres</li>` : ''}</ul></details>` : '';
@@ -470,13 +467,13 @@
       if (!window.pdfjsLib) {
         await new Promise((res, rej) => {
           const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          s.src = '/vendor/pdfjs/pdf.min.js';
           s.onload = res; s.onerror = () => rej(new Error('pdf.js inaccessible'));
           document.head.appendChild(s);
         });
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
       }
-      const doc = await window.pdfjsLib.getDocument({ data: await fichierPdf.arrayBuffer() }).promise;
+      const doc = await window.pdfjsLib.getDocument({ data: await fichierPdf.arrayBuffer(), isEvalSupported: false }).promise;   // CVE-2024-4367
       const page = await doc.getPage(1);
       const base = page.getViewport({ scale: 1 });
       const vp = page.getViewport({ scale: Math.min(2, 460 / base.width) });
@@ -927,7 +924,7 @@
       <div class="champ"><label for="fEmail">Email *</label><input id="fEmail" type="email" placeholder="membre@exemple.ht"></div>
       <div class="admin-form-grid">
         <div class="champ"><label for="fClasse">Classe</label><input id="fClasse" placeholder="Ex. : NS4"></div>
-        <div class="champ"><label for="fMdp">Mot de passe initial</label><input id="fMdp" value="oasis123"></div>
+        <div class="champ"><label for="fMdp">Mot de passe initial</label><input id="fMdp" type="text" minlength="8" required autocomplete="new-password" placeholder="8 caractères minimum"></div>
       </div>
       <div class="rangee-boutons">
         <button class="btn btn-bleu" id="btnValiderMembre">Inscrire</button>
@@ -943,6 +940,187 @@
 
   // ---------- Branchement des boutons dynamiques ----------
   let rechercheCatalogue = "";
+  let catalogueLivres = [], couleursCategories = {};
+  const filtresCatalogue = { categorie: '', etat: '' };
+  const pagesEtat = {};   // état de pagination par liste : { page, tout }
+  const sansAuteur = a => !a || /^(auteur à préciser|anonyme|inconnu|unknown|x)$/i.test(String(a).trim());
+  const vignetteLivre = l => l.couverture
+    ? `<span class="vignette"><img src="/api/livres/${l.id}/couverture" alt="" loading="lazy"></span>`
+    : `<span class="vignette vignette-icone" style="--c:${echap(l.couleur || '#1e4fa3')}">${echap(l.icone || '📘')}</span>`;
+  const puceCategorie = nom => `<span class="puce-cat" style="--c:${echap(couleursCategories[nom] || '#64748b')}">${echap(nom || '—')}</span>`;
+  const formatLivre = l => l.hybride ? '<span class="puce puce-bleu">📕+💻 Hybride</span>' : l.versionNumerique ? '<span class="puce puce-bleu">💻 E-book</span>' : l.versionPhysique ? '<span class="puce">📕 Physique</span>' : '<span class="puce puce-gris">— aucune</span>';
+  const ligneCatalogue = l => `<tr>
+      <td><div class="doc-cellule">${vignetteLivre(l)}<div class="doc-texte"><b class="doc-titre">${echap(l.titre)}</b><span class="doc-auteur ${sansAuteur(l.auteur) ? 'a-preciser' : ''}">${echap(l.auteur || 'Auteur à préciser')}</span>${l.isbn || l.annee ? `<span class="doc-meta">${[l.isbn ? 'ISBN ' + echap(l.isbn) : '', l.annee ? echap(l.annee) : ''].filter(Boolean).join(' · ')}</span>` : ''}</div></div></td>
+      <td data-label="Catégorie">${puceCategorie(l.categorie)}</td>
+      <td data-label="Format">${formatLivre(l)}</td>
+      <td data-label="Disponibilité"><div class="puces">
+        ${l.versionNumerique ? '<span class="puce puce-vert">● En ligne</span>' : ''}
+        ${l.versionPhysique ? `<span class="puce ${l.nbDisponibles > 0 ? 'puce-vert' : 'puce-rouge'}">📕 ${l.nbDisponibles}/${l.nbExemplaires} en rayon</span>` : ''}
+        ${!l.versionNumerique && !l.versionPhysique ? '<span class="puce puce-rouge">⚠️ Incomplet</span>' : ''}
+      </div></td>
+      <td class="col-actions"><div class="actions-ligne">
+        <button class="btn-action principal" data-cat-action="modifier" data-id="${l.id}">✏️ Modifier</button>
+        <button class="btn-action" data-cat-action="exemplaires" data-id="${l.id}" data-titre="${echap(l.titre)}" title="Gérer les exemplaires physiques">📕 Exemplaires${l.nbExemplaires ? ` <span class="compte">${l.nbExemplaires}</span>` : ''}</button>
+        <button class="btn-action ${l.pdf ? 'ok' : ''}" data-cat-action="pdf" data-id="${l.id}" data-titre="${echap(l.titre)}" data-deja="${l.pdf ? '1' : ''}" title="${l.pdf ? 'Remplacer le PDF' : 'Joindre un PDF'}">${l.pdf ? '📄 PDF ✓' : '📄 Joindre PDF'}</button>
+        <button class="btn-action ${l.telechargementAutorise === false ? 'attention' : ''}" data-download-type="livres" data-download-id="${l.id}" data-download-etat="${l.telechargementAutorise !== false}" title="${l.telechargementAutorise === false ? 'Téléchargement restreint : cliquer pour autoriser' : 'Téléchargement autorisé : cliquer pour restreindre'}">${l.telechargementAutorise === false ? '🔒 Restreint' : '🔓 Libre'}</button>
+        <button class="btn-action danger" data-cat-action="supprimer" data-id="${l.id}" title="Supprimer ce livre" aria-label="Supprimer ${echap(l.titre)}">🗑️</button>
+      </div></td>
+    </tr>`;
+  function rendreCatalogue() {
+    const corps = $('#catalogueLignes'); if (!corps) return;
+    const mots = normaliserRecherche(rechercheCatalogue).trim().split(/\s+/).filter(Boolean);
+    const f = filtresCatalogue;
+    const liste = catalogueLivres.filter(l => {
+      if (f.categorie && l.categorie !== f.categorie) return false;
+      if (f.etat === 'numerique' && !l.versionNumerique) return false;
+      if (f.etat === 'physique' && !l.versionPhysique) return false;
+      if (f.etat === 'hybride' && !l.hybride) return false;
+      if (f.etat === 'incomplet' && (l.versionNumerique || l.versionPhysique)) return false;
+      if (f.etat === 'sans-auteur' && !sansAuteur(l.auteur)) return false;
+      if (f.etat === 'restreint' && l.telechargementAutorise !== false) return false;
+      if (!mots.length) return true;
+      const texte = normaliserRecherche([l.titre, l.auteur, l.categorie, l.isbn, l.editeur, l.niveau, l.motsCles].filter(Boolean).join(' '));
+      return mots.every(m => texte.includes(m));
+    });
+    const etat = pagesEtat.catalogue || {};
+    const d = OasisPagination.decouper(liste, etat);
+    pagesEtat.catalogue = { ...etat, page: d.page };
+    corps.innerHTML = d.elements.map(ligneCatalogue).join('');
+    $('#resultatsCatalogue').textContent = liste.length === catalogueLivres.length ? `${liste.length} document(s)` : `${liste.length} document(s) trouvé(s) sur ${catalogueLivres.length}`;
+    $('#catalogueAucunResultat').hidden = liste.length !== 0;
+    const barre = OasisPagination.barre('catalogue', d, pagesEtat.catalogue);
+    $('#paginationHaut').innerHTML = barre; $('#paginationBas').innerHTML = barre;
+  }
+  const rendusPagines = { catalogue: rendreCatalogue, ressources: () => rendreRessources() };
+  /* ---------- Ressources documentaires ---------- */
+  const GENRES_RES = [['dictionnaire', '📖 Dictionnaire'], ['encyclopedie', '🌍 Encyclopédie'], ['base', '🗄️ Base de données'], ['officiel', '🏛️ Document officiel'], ['administratif', '📋 Document administratif'], ['historique', '📜 Document historique']];
+  const NOMS_RES = Object.fromEntries(GENRES_RES);
+  let ressourcesCache = [];
+  const filtresRessources = { q: '', genre: '' };
+  const tailleLisible = o => !o ? '' : o < 1048576 ? Math.max(1, Math.round(o / 1024)) + ' Ko' : (o / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+  const vignetteRessource = r => r.image
+    ? `<span class="vignette vignette-carree"><img src="/api/ressources/${r.id}/image" alt="" loading="lazy"></span>`
+    : `<span class="vignette vignette-carree vignette-icone" style="--c:#1e4fa3">${echap(r.icone || (NOMS_RES[r.genre] || '🗄️').split(' ')[0])}</span>`;
+  const carteRessource = r => `<article class="carte-ressource">
+      ${vignetteRessource(r)}
+      <div class="carte-ressource-corps">
+        <div class="puces"><span class="puce puce-bleu">${NOMS_RES[r.genre] || echap(r.genre)}</span>${r.categorie ? puceCategorie(r.categorie) : ''}${r.fichier ? `<span class="puce puce-vert">${r.fichier === 'epub' ? '📗 EPUB' : '📄 PDF'} · ${tailleLisible(r.tailleFichier)}</span>` : ''}${r.telechargementAutorise === false ? '<span class="puce puce-orange">🔒 Restreint</span>' : ''}</div>
+        <h4>${echap(r.titre)}</h4>
+        ${r.source ? `<p class="carte-ressource-source">${echap(r.source)}</p>` : ''}
+        <p class="carte-ressource-texte">${echap(r.contenu.slice(0, 180))}${r.contenu.length > 180 ? '…' : ''}</p>
+        <div class="actions-ligne">
+          ${r.fichier ? `<button class="btn-action principal" data-res-action="ouvrir" data-id="${r.id}">👁️ Consulter</button>` : ''}
+          <button class="btn-action" data-res-action="joindre" data-id="${r.id}">${r.fichier ? '🔁 Remplacer le document' : '📎 Joindre PDF / EPUB'}</button>
+          ${r.fichier ? `<button class="btn-action" data-res-action="retirer" data-id="${r.id}">✖ Retirer le document</button>` : ''}
+          ${r.lien ? `<a class="btn-action" href="${echap(r.lien)}" target="_blank" rel="noopener">🔗 Lien</a>` : ''}
+          <button class="btn-action ${r.telechargementAutorise === false ? 'attention' : ''}" data-download-type="ressources" data-download-id="${r.id}" data-download-etat="${r.telechargementAutorise !== false}">${r.telechargementAutorise === false ? '🔒 Restreint' : '🔓 Libre'}</button>
+          <button class="btn-action danger" data-res-action="supprimer" data-id="${r.id}" aria-label="Supprimer ${echap(r.titre)}" title="Supprimer">🗑️</button>
+        </div>
+        <div class="progression-envoi" data-progression="${r.id}" hidden><div><span></span></div><small>Envoi du document…</small></div>
+      </div>
+    </article>`;
+  function rendreRessources() {
+    const zone = $('#ressourcesListe'); if (!zone) return;
+    const mots = normaliserRecherche(filtresRessources.q).trim().split(/\s+/).filter(Boolean);
+    const base = ressourcesCache.filter(r => !mots.length || mots.every(m => normaliserRecherche([r.titre, r.contenu, r.source, r.categorie].join(' ')).includes(m)));
+    const compte = g => base.filter(r => !g || r.genre === g).length;
+    $('#filtreGenresRessources').innerHTML = [['', 'Toutes'], ...GENRES_RES].map(([g, n]) => `<button type="button" class="puce-filtre ${filtresRessources.genre === g ? 'actif' : ''}" data-filtre-genre="${g}" aria-pressed="${filtresRessources.genre === g}">${n} <span>${compte(g)}</span></button>`).join('');
+    const liste = base.filter(r => !filtresRessources.genre || r.genre === filtresRessources.genre);
+    const etat = pagesEtat.ressources || {};
+    const d = OasisPagination.decouper(liste, etat);
+    pagesEtat.ressources = { ...etat, page: d.page };
+    zone.innerHTML = d.elements.map(carteRessource).join('') || '<p class="vide">Aucune ressource ne correspond.</p>';
+    $('#resultatsRessources').textContent = `${liste.length} ressource(s)`;
+    const barre = OasisPagination.barre('ressources', d, pagesEtat.ressources);
+    $('#paginationRessHaut').innerHTML = barre; $('#paginationRessBas').innerHTML = barre;
+  }
+  function envoyerDocumentRessource(id, fichier, barre) {
+    return new Promise((ok, ko) => {
+      const ext = /\.epub$/i.test(fichier.name) ? 'epub' : /\.pdf$/i.test(fichier.name) ? 'pdf' : '';
+      if (!ext) return ko(new Error('Choisissez un fichier PDF ou EPUB.'));
+      if (fichier.size > 100 * 1024 * 1024) return ko(new Error('Document trop volumineux (100 Mo max).'));
+      const x = new XMLHttpRequest();
+      x.open('POST', '/api/ressources/' + encodeURIComponent(id) + '/fichier?nom=' + encodeURIComponent(fichier.name));
+      x.setRequestHeader('Authorization', 'Bearer ' + jeton);
+      x.setRequestHeader('Content-Type', ext === 'pdf' ? 'application/pdf' : 'application/epub+zip');
+      if (barre) { barre.hidden = false; x.upload.onprogress = e => { if (e.lengthComputable) { const pc = Math.round(e.loaded / e.total * 100); barre.querySelector('span').style.width = pc + '%'; barre.querySelector('small').textContent = 'Envoi du document… ' + pc + ' %'; } }; }
+      x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText); } catch {} if (barre) barre.hidden = true; x.status < 300 ? ok(d) : ko(new Error(d.erreur || 'Document refusé.')); };
+      x.onerror = () => { if (barre) barre.hidden = true; ko(new Error('Connexion interrompue pendant l’envoi.')); };
+      x.send(fichier);
+    });
+  }
+  async function ouvrirDocumentRessource(r) {
+    if (r.fichier === 'epub' && window.OasisEpub) return OasisEpub.open({ id: r.id, titre: r.titre, urlEpub: '/api/ressources/' + r.id + '/fichier?lecture=1' }, jeton, $('#zoneModale'), fermerModale);
+    const fenetre = window.open('', '_blank');
+    try {
+      const rep = await fetch('/api/ressources/' + r.id + '/fichier?lecture=1', { headers: { Authorization: 'Bearer ' + jeton } });
+      if (!rep.ok) throw new Error((await rep.json().catch(() => ({}))).erreur || 'Document indisponible.');
+      const url = URL.createObjectURL(await rep.blob());
+      if (fenetre) fenetre.location = url; else window.location = url;
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) { fenetre?.close(); toast(err.message); }
+  }
+  function brancherRessources() {
+    const form = $('#formRessource'), bascule = $('#btnBasculerFormRessource');
+    const ouvrirForm = v => { form.hidden = !v; bascule.setAttribute('aria-expanded', String(v)); if (v) $('#rTitre').focus(); };
+    bascule.onclick = () => ouvrirForm(form.hidden);
+    $('#btnAnnulerRessource').onclick = () => ouvrirForm(false);
+    const doc = $('#rDocument'), depot = $('#zoneDepot');
+    const majDepot = () => { const f = doc.files[0]; $('#zoneDepotTexte').innerHTML = f ? `<b>${echap(f.name)}</b> · ${tailleLisible(f.size)}` : '<b>Choisir un fichier</b> ou le glisser ici'; depot.classList.toggle('rempli', !!f); $('#rContenuAide').textContent = f ? '(optionnel avec un document)' : '*'; };
+    doc.onchange = majDepot;
+    depot.ondragover = e => { e.preventDefault(); depot.classList.add('survol'); };
+    depot.ondragleave = () => depot.classList.remove('survol');
+    depot.ondrop = e => { e.preventDefault(); depot.classList.remove('survol'); if (e.dataTransfer.files.length) { doc.files = e.dataTransfer.files; majDepot(); } };
+    $('#btnAjouterRessource').onclick = async () => {
+      const bouton = $('#btnAjouterRessource'); const fichier = doc.files[0];
+      $('#msgRessource').innerHTML = '';
+      let contenu = $('#rContenu').value.trim();
+      if (!contenu && fichier) contenu = (/\.epub$/i.test(fichier.name) ? 'Document EPUB' : 'Document PDF') + ' à consulter en ligne.';
+      bouton.disabled = true;
+      try {
+        const r = await api('/ressources', { method: 'POST', body: JSON.stringify({
+          genre: $('#rGenre').value, titre: $('#rTitre').value.trim(), contenu, categorie: $('#rTheme').value,
+          source: $('#rSource').value.trim(), lien: $('#rLien').value.trim(), icone: $('#rIcone').value.trim()
+        }) });
+        const img = $('#rImage')?.files[0];
+        if (img) {
+          if (img.size > 3 * 1024 * 1024) throw new Error('Ressource créée, mais image trop volumineuse (3 Mo max).');
+          const rep = await fetch('/api/ressources/' + r.id + '/image', { method: 'POST', headers: { 'Content-Type': img.type, Authorization: 'Bearer ' + jeton }, body: img });
+          if (!rep.ok) { const d = await rep.json().catch(() => ({})); throw new Error(d.erreur || 'Ressource créée, mais image refusée.'); }
+        }
+        if (fichier) { try { await envoyerDocumentRessource(r.id, fichier, $('#progressionRessource')); } catch (e) { throw new Error('Ressource créée, mais le document a été refusé : ' + e.message); } }
+        toast('Ressource ajoutée.'); afficherOnglet('ressources');
+      } catch (err) { $('#msgRessource').innerHTML = `<div class="erreur">${echap(err.message)}</div>`; bouton.disabled = false; }
+    };
+    let minuteur;
+    $('#rechercheRessources').oninput = e => { clearTimeout(minuteur); minuteur = setTimeout(() => { filtresRessources.q = e.target.value; pagesEtat.ressources = { page: 0 }; rendreRessources(); }, 150); };
+    $('#filtreGenresRessources').onclick = e => { const b = e.target.closest('[data-filtre-genre]'); if (!b) return; filtresRessources.genre = b.dataset.filtreGenre; pagesEtat.ressources = { page: 0 }; rendreRessources(); };
+    $('#ressourcesListe').onclick = async e => {
+      const b = e.target.closest('[data-res-action]'); if (!b) return;
+      const r = ressourcesCache.find(x => x.id === b.dataset.id); if (!r) return;
+      const action = b.dataset.resAction;
+      if (action === 'ouvrir') return ouvrirDocumentRessource(r);
+      if (action === 'joindre') {
+        const choix = Object.assign(document.createElement('input'), { type: 'file', accept: '.pdf,.epub,application/pdf,application/epub+zip' });
+        choix.onchange = async () => {
+          const f = choix.files[0]; if (!f) return;
+          try { await envoyerDocumentRessource(r.id, f, document.querySelector(`[data-progression="${r.id}"]`)); toast('Document joint à la ressource.'); afficherOnglet('ressources'); }
+          catch (err) { toast(err.message); }
+        };
+        return choix.click();
+      }
+      if (action === 'retirer') {
+        if (!confirm('Retirer le document joint à « ' + r.titre + ' » ? La fiche est conservée.')) return;
+        try { await api('/ressources/' + r.id + '/fichier', { method: 'DELETE' }); toast('Document retiré.'); afficherOnglet('ressources'); } catch (err) { toast(err.message); }
+        return;
+      }
+      if (action === 'supprimer') {
+        if (!confirm('Supprimer la ressource « ' + r.titre + ' » et son document ?')) return;
+        try { await api('/ressources/' + r.id, { method: 'DELETE' }); toast('Ressource supprimée.'); afficherOnglet('ressources'); } catch (err) { toast(err.message); }
+      }
+    };
+    rendreRessources();
+  }
   const normaliserRecherche=s=>String(s||" ").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const ongletsEtat = {};
   function brancherBoutons() {
@@ -953,8 +1131,16 @@
     OasisAdminIA.brancher();
     $('#btnDoublons')?.addEventListener('click',async()=>{try{let groupes;try{groupes=await api('/doublons')}catch(e){if(e.statut===404){let version='inconnue';try{version=(await api('/version')).version||version}catch{}throw new Error('La détection des doublons est absente du serveur déployé (version '+version+'). Mettez à jour server.js, package.json et le dossier modules, puis redéployez sur Render. Vos documents doivent être conservés dans data.')}throw e}if(!Array.isArray(groupes))throw new Error('Réponse de détection invalide. Mettez à jour les fichiers du serveur.');modale(`<h3>Doublons du catalogue et des ressources</h3><p>Vérifiez chaque groupe. La fusion conserve le premier document, ses liens et les fichiers ; le second est retiré du catalogue et archivé.</p>${groupes.map(g=>`<section class="panneau"><b>${echap(g.type)}</b>${g.documents.map((d,i)=>`<p>${echap(d.titre)} — ${echap(d.auteur)} ${echap(d.edition)} ${i?`<button class="mini-btn rouge" data-fusion-type="${g.type}" data-conserve="${g.documents[0].id}" data-retire="${d.id}">Fusionner ce doublon</button>`:' · Conservé'}</p>`).join('')}</section>`).join('')||'<p>Aucun doublon détecté.</p>'}`);document.querySelectorAll('[data-fusion-type]').forEach(b=>b.onclick=async()=>{try{await api('/doublons/fusionner',{method:'POST',body:JSON.stringify({type:b.dataset.fusionType,conserve:b.dataset.conserve,retire:b.dataset.retire})});b.closest('p').remove();toast('Doublon fusionné.');afficherOnglet('catalogue')}catch(e){toast(e.message)}})}catch(e){toast(e.message)}});
 
-    const recherche=$('#rechercheCatalogue');
-    if(recherche){recherche.value=rechercheCatalogue;const filtrer=()=>{rechercheCatalogue=recherche.value;const mots=normaliserRecherche(rechercheCatalogue).trim().split(/\s+/).filter(Boolean);const lignes=[...document.querySelectorAll('[data-catalogue-recherche]')];let total=0;for(const ligne of lignes){const texte=normaliserRecherche(ligne.dataset.catalogueRecherche);ligne.hidden=!mots.every(m=>texte.includes(m));if(!ligne.hidden)total++}$('#resultatsCatalogue').textContent=total+' document(s) affiché(s) sur '+lignes.length;$('#catalogueAucunResultat').hidden=total!==0;};recherche.addEventListener('input',filtrer);$('#effacerRechercheCatalogue').onclick=()=>{recherche.value='';filtrer();recherche.focus()};filtrer();}
+    const recherche = $('#rechercheCatalogue');
+    if (recherche) {
+      recherche.value = rechercheCatalogue;
+      let minuteur;
+      recherche.addEventListener('input', () => { clearTimeout(minuteur); minuteur = setTimeout(() => { rechercheCatalogue = recherche.value; pagesEtat.catalogue = { page: 0 }; rendreCatalogue(); }, 150); });
+      $('#filtreCategorieCatalogue').onchange = e => { filtresCatalogue.categorie = e.target.value; pagesEtat.catalogue = { page: 0 }; rendreCatalogue(); };
+      $('#filtreEtatCatalogue').onchange = e => { filtresCatalogue.etat = e.target.value; pagesEtat.catalogue = { page: 0 }; rendreCatalogue(); };
+      rendreCatalogue();
+    }
+    if ($('#ressourcesListe')) brancherRessources();
 
     $('#btnNouvelEmprunt')?.addEventListener('click', formEmpruntGuichet);
     document.querySelectorAll('[data-modifier-livre]').forEach(b=>b.addEventListener('click',()=>modifierLivre(b.dataset.modifierLivre).catch(e=>toast(e.message))));
@@ -1019,28 +1205,6 @@
       } catch (err) { $('#msgParam').innerHTML = `<div class="erreur">${echap(err.message)}</div>`; }
     });
     $('#fDatePlaces')?.addEventListener('change', e => { ongletsEtat.datePlaces = e.target.value; afficherOnglet('places'); });
-    $('#btnAjouterRessource')?.addEventListener('click', async () => {
-      try {
-        const r = await api('/ressources', { method: 'POST', body: JSON.stringify({
-          genre: $('#rGenre').value, titre: $('#rTitre').value.trim(),
-          contenu: $('#rContenu').value.trim(), source: $('#rSource').value.trim(),
-          lien: $('#rLien').value.trim(), icone: $('#rIcone').value.trim()
-        }) });
-        const img = $('#rImage')?.files[0];
-        if (img) {
-          if (img.size > 3 * 1024 * 1024) throw new Error('Ressource créée, mais image trop volumineuse (3 Mo max).');
-          const rep = await fetch('/api/ressources/' + r.id + '/image', {
-            method: 'POST', headers: { 'Content-Type': img.type, Authorization: 'Bearer ' + jeton }, body: img
-          });
-          if (!rep.ok) { const d = await rep.json().catch(() => ({})); throw new Error(d.erreur || 'Ressource créée, mais image refusée.'); }
-        }
-        toast('Ressource ajoutée.'); afficherOnglet('ressources');
-      } catch (err) { $('#msgRessource').innerHTML = `<div class="erreur">${echap(err.message)}</div>`; }
-    });
-    document.querySelectorAll('[data-suppr-ressource]').forEach(b => b.addEventListener('click', async () => {
-      try { await api('/ressources/' + b.dataset.supprRessource, { method: 'DELETE' }); toast('Ressource supprimée.'); afficherOnglet('ressources'); }
-      catch (err) { toast(err.message); }
-    }));
     document.querySelectorAll('[data-remettre]').forEach(b => b.addEventListener('click', async () => {
       try { await api('/reservations/' + b.dataset.remettre + '/remettre', { method: 'PUT' }); toast('Emprunt créé — le livre est remis au membre.'); afficherOnglet('reservations'); }
       catch (err) { toast(err.message); }
@@ -1072,7 +1236,28 @@
   }
 
   document.addEventListener('click', async e => {
-    const restriction=e.target.closest('[data-download-id]');if(restriction){restriction.disabled=true;try{await api('/'+restriction.dataset.downloadType+'/'+restriction.dataset.downloadId+'/telechargement',{method:'PUT',body:JSON.stringify({autorise:restriction.dataset.downloadEtat!=='true'})});await afficherOnglet(ongletActif)}catch(err){toast(err.message);restriction.disabled=false}return;}
+    const pag = e.target.closest('[data-pagination]');
+    if (pag && !pag.disabled) {
+      const cle = pag.dataset.pagination;
+      pagesEtat[cle] = OasisPagination.appliquer(pag.dataset.paginationAction, pagesEtat[cle]);
+      rendusPagines[cle]?.();
+      (document.getElementById(cle === 'catalogue' ? 'catalogueLignes' : 'ressourcesListe')?.closest('section, .tableau-moderne, .liste-ressources') || $('#zoneAdmin')).scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    const act = e.target.closest('[data-cat-action]');
+    if (act) {
+      const { catAction, id, titre } = act.dataset;
+      if (catAction === 'modifier') return modifierLivre(id).catch(err => toast(err.message));
+      if (catAction === 'exemplaires') return gererExemplaires(id, titre);
+      if (catAction === 'pdf') return formPdf(id, titre, !!act.dataset.deja);
+      if (catAction === 'supprimer') {
+        if (!confirm('Supprimer ce livre et tous ses exemplaires ?')) return;
+        try { await api('/livres/' + id, { method: 'DELETE' }); toast('Livre supprimé du catalogue.'); afficherOnglet('catalogue'); }
+        catch (err) { toast(err.message); }
+        return;
+      }
+    }
+    const restriction=e.target.closest('[data-download-id]');if(restriction){restriction.disabled=true;try{const r=await api('/'+restriction.dataset.downloadType+'/'+restriction.dataset.downloadId+'/telechargement',{method:'PUT',body:JSON.stringify({autorise:restriction.dataset.downloadEtat!=='true'})});const cache=restriction.dataset.downloadType==='livres'&&ongletActif==='catalogue'?catalogueLivres:restriction.dataset.downloadType==='ressources'&&ongletActif==='ressources'?ressourcesCache:null;const x=cache?.find(d=>d.id===restriction.dataset.downloadId);if(x){x.telechargementAutorise=r.telechargementAutorise;rendusPagines[ongletActif]();toast(r.telechargementAutorise?'Téléchargement autorisé.':'Téléchargement restreint.')}else await afficherOnglet(ongletActif)}catch(err){toast(err.message);restriction.disabled=false}return;}
 
     const el = e.target.closest('[data-onglet]');
     if (el) afficherOnglet(el.dataset.onglet);

@@ -23,6 +23,25 @@ Mettre à jour = **envoyer les fichiers sur GitHub, au bon endroit**, puis **red
 
 **Jamais sur GitHub : le dossier `data/`** (livres, membres, PDF). Il vit sur le disque persistant de Render.
 
+## Méthode la plus simple : `envoyer.bat` (Windows)
+
+Le fichier `envoyer.bat`, à la racine du projet, envoie tout le dossier sur GitHub en un double-clic, sans limite de 100 fichiers.
+
+**Une seule fois :** installez **Git pour Windows** (https://git-scm.com/download/win, en gardant les choix proposés).
+Si Node.js est installé, le manifeste est aussi recalculé automatiquement.
+
+**À chaque mise à jour :**
+1. Décompressez la version **complète** (`oasis-<version>-complet.zip`) dans un dossier de votre ordinateur,
+   ou mettez à jour votre dossier habituel avec les fichiers livrés.
+2. Double-cliquez sur `envoyer.bat`.
+3. La première fois : indiquez votre nom et votre email, puis connectez-vous à GitHub dans la fenêtre qui s'ouvre.
+4. Le script affiche ce qui va changer (ajouts, modifications, suppressions) et demande **O** pour confirmer.
+5. Sur Render : le site se met à jour seul si le déploiement automatique est actif, sinon **Manual Deploy → Deploy latest commit**.
+
+Le dossier de votre ordinateur devient la référence : un fichier absent de ce dossier est retiré de GitHub.
+Le script vous prévient si plus de 10 fichiers seraient supprimés — répondez **N** si votre dossier n'est pas complet.
+Le dossier `data/` n'est jamais envoyé.
+
 ## Mise à jour normale (paquet de mise à jour)
 
 Chaque nouvelle version vous est livrée sous la forme d’un paquet `oasis-<version>-mise-a-jour.zip`.
@@ -65,3 +84,11 @@ Sur Render : **Events** → choisissez un déploiement réussi plus ancien → *
 - `https://…onrender.com/api/version` : numéro de version du serveur.
 - Espace bibliothécaire : bandeau de diagnostic (fichiers manquants, différents ou en trop).
 - Sur votre ordinateur, avec Node.js : `npm test` vérifie tout le système ; `npm run manifeste` régénère `manifeste.json` après une modification.
+
+## Version 1.14.0 — Pagination, ressources PDF/EPUB et nouveau design
+
+- Catalogue (administration) et bibliothèque (lecteurs) : affichage par groupes de 50 avec « 50 précéd. », « 50 suiv. » et « Tout afficher ».
+- Catalogue : recherche, filtres par catégorie et par état (incomplets, auteur à préciser, téléchargement restreint), tableau redessiné avec couvertures.
+- Ressources : un document PDF ou EPUB (100 Mo max) peut être joint à chaque ressource, avec une catégorie (thème). Les fichiers sont rangés dans `data/ressources-docs/`.
+- Lecteurs : ressources regroupées par section ou par catégorie, avec « Consulter le PDF » / « Lire l’EPUB ».
+

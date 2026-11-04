@@ -107,8 +107,21 @@
       </div>
     </button>`;
 
+  // Listes paginées par groupes de 50 (grilles de livres, sections de ressources)
+  let listesPaginees = {}, compteurListes = 0;
+  function paginer(liste, rendre, classe) {
+    const cle = 'p' + (++compteurListes);
+    listesPaginees[cle] = { liste, rendre, classe, etat: { page: 0 } };
+    return `<div class="liste-paginee" data-liste-paginee="${cle}">${rendreListePaginee(cle)}</div>`;
+  }
+  function rendreListePaginee(cle) {
+    const p = listesPaginees[cle];
+    const d = OasisPagination.decouper(p.liste, p.etat); p.etat.page = d.page;
+    const barre = OasisPagination.barre(cle, d, p.etat);
+    return `${barre}<div class="${p.classe}">${d.elements.map(p.rendre).join('')}</div>${barre ? barre.replace('class="pagination"', 'class="pagination pagination-bas"') : ''}`;
+  }
   const grille = livres => livres.length
-    ? `<div class="grille-livres">${livres.map(carteLivre).join('')}</div>`
+    ? livres.length > OasisPagination.TAILLE ? paginer(livres, carteLivre, 'grille-livres') : `<div class="grille-livres">${livres.map(carteLivre).join('')}</div>`
     : `<p class="vide">Aucun livre trouvé pour le moment.</p>`;
 
   // ---------- Vues ----------
@@ -213,22 +226,29 @@
         </tbody></table>` : '<p class="vide">Aucun emprunt pour l\'instant.</p>'}`;
     },
     async ressources(genre) {
-      const liste = await api('/ressources' + (genre ? '?genre=' + genre : ''));
+      const liste = await api('/ressources');
       cacheRessources = liste;
-      const GENRES = [['', 'Tout'], ['dictionnaire', '📖 Dictionnaire'], ['encyclopedie', '🌍 Encyclopédie'], ['base', '🗄️ Bases de données'], ['administratif', '📋 Administratifs'], ['historique', '📜 Historiques']];
-      const NOMS = { dictionnaire: '📖 Dictionnaire', encyclopedie: '🌍 Encyclopédie', base: '🗄️ Base de données', administratif: '📋 Document administratif', historique: '📜 Document historique' };
-      return `<div class="section-titre"><h3>🔎 Ressources documentaires</h3></div>
-        <div class="onglets">${GENRES.map(([g, n]) => `<button class="onglet ${g === (genre || '') ? 'actif' : ''}" data-genre-res="${g}">${n}</button>`).join('')}</div>
-        ${liste.length ? liste.map(r => `
-          <button class="ligne-populaire" data-ressource="${r.id}" style="align-items:flex-start">
-            ${r.image
-              ? `<div class="mini-couv couverture-img" style="height:46px"><img src="/api/ressources/${r.id}/image" alt="" loading="lazy"></div>`
-              : `<div class="mini-couv" style="background:linear-gradient(150deg, var(--bleu), #10243e);height:46px">${r.icone || (r.genre === 'dictionnaire' ? '📖' : r.genre === 'encyclopedie' ? '🌍' : '🗄️')}</div>`}
-            <div><b>${echap(r.titre)}${r.lien ? ' 🔗' : ''}</b>
-              <span class="auteur">${NOMS[r.genre]}${r.source ? ' · ' + echap(r.source) : ''}</span><br>
-              <span style="font-size:12.5px;color:var(--gris)">${echap(r.contenu.slice(0, 110))}${r.contenu.length > 110 ? '…' : ''}</span>
-            </div>
-          </button>`).join('') : '<p class="vide">Aucune ressource dans cette section. Utilisez la barre de recherche ou choisissez une autre section.</p>'}`;
+      const f = filtresRessources;
+      const themes = [...new Set(liste.map(r => r.categorie).filter(Boolean))].sort((x, y) => x.localeCompare(y, 'fr'));
+      if (f.theme && !themes.includes(f.theme)) f.theme = '';
+      const mots = f.q.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).filter(Boolean);
+      const sansAccent = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const visibles = liste.filter(r => (!genre || r.genre === genre) && (!f.theme || r.categorie === f.theme) && mots.every(m => sansAccent([r.titre, r.contenu, r.source, r.categorie].join(' ')).includes(m)));
+      const compte = g => liste.filter(r => !g || r.genre === g).length;
+      const groupes = f.regrouper === 'theme'
+        ? [...themes.filter(t => visibles.some(r => r.categorie === t)).map(t => [t, `${iconeCat(t)} ${echap(t)}`, visibles.filter(r => r.categorie === t)]), ...(visibles.some(r => !r.categorie) ? [['', '🗂️ Autres ressources', visibles.filter(r => !r.categorie)]] : [])]
+        : GENRES_RES.filter(([g]) => visibles.some(r => r.genre === g)).map(([g, n]) => [g, n, visibles.filter(r => r.genre === g)]);
+      return `<div class="section-titre"><h3>🔎 Ressources documentaires</h3><span style="color:var(--gris);font-size:13px">${visibles.length} ressource${visibles.length > 1 ? 's' : ''}</span></div>
+        <div class="puces-filtre" role="group" aria-label="Sections">${[['', '✨ Toutes'], ...GENRES_RES].filter(([g]) => !g || compte(g)).map(([g, n]) => `<button class="puce-filtre ${g === (genre || '') ? 'actif' : ''}" data-genre-res="${g}" aria-pressed="${g === (genre || '')}">${n} <span>${compte(g)}</span></button>`).join('')}</div>
+        <div class="barre-filtres">
+          <label class="recherche-moderne"><span aria-hidden="true">🔍</span><input data-filtre-res="q" type="search" placeholder="Rechercher dans les ressources…" value="${echap(f.q)}" aria-label="Rechercher dans les ressources"></label>
+          ${themes.length ? `<select data-filtre-res="theme" aria-label="Catégorie"><option value="">Toutes les catégories</option>${themes.map(t => `<option ${t === f.theme ? 'selected' : ''} value="${echap(t)}">${echap(t)}</option>`).join('')}</select>` : ''}
+          <select data-filtre-res="regrouper" aria-label="Regrouper"><option value="section" ${f.regrouper !== 'theme' ? 'selected' : ''}>Regrouper par section</option><option value="theme" ${f.regrouper === 'theme' ? 'selected' : ''}>Regrouper par catégorie</option></select>
+        </div>
+        ${groupes.length ? groupes.map(([g, nom, items]) => `<section class="groupe-ressources">
+            <header class="groupe-ressources-entete"><h4>${nom}</h4><span>${items.length}</span></header>
+            ${items.length > OasisPagination.TAILLE ? paginer(items, carteRessource, 'grille-ressources') : `<div class="grille-ressources">${items.map(carteRessource).join('')}</div>`}
+          </section>`).join('') : '<p class="vide">Aucune ressource ne correspond. Essayez une autre section ou une autre recherche.</p>'}`;
     },
     async collaboration(type) {
       const t = type || 'club';
@@ -352,7 +372,7 @@
   async function afficherVue(nom, param) {
     window.OasisQuiz?.quitter();
     if(!moi&&!['accueil','bibliotheque','categorie','categories','nouveautes','recommandes','abonnement','don'].includes(nom)){window.dispatchEvent(new Event('oasis-connexion'));return;}
-    vueActive = nom;
+    vueActive = nom; listesPaginees = {};
     document.querySelectorAll('.nav-item[data-vue]').forEach(b => b.classList.toggle('actif', b.dataset.vue === nom));
     $('#sidebar').classList.remove('ouverte');
     $('#btnMenu').setAttribute('aria-expanded', 'false');
@@ -477,6 +497,32 @@
 
   let urlPdfActive = null;
   let cacheRessources = [];
+  const filtresRessources = { q: '', theme: '', regrouper: 'section' };
+  const GENRES_RES = [['dictionnaire', '📖 Dictionnaire'], ['encyclopedie', '🌍 Encyclopédie'], ['base', '🗄️ Bases de données'], ['officiel', '🏛️ Documents officiels'], ['administratif', '📋 Documents administratifs'], ['historique', '📜 Documents historiques']];
+  const NOMS_RES = Object.fromEntries(GENRES_RES);
+  const tailleLisible = o => !o ? '' : o < 1048576 ? Math.max(1, Math.round(o / 1024)) + ' Ko' : (o / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+  const carteRessource = r => `<button class="carte-res" data-ressource="${r.id}">
+      ${r.image ? `<span class="carte-res-visuel"><img src="/api/ressources/${r.id}/image" alt="" loading="lazy"></span>` : `<span class="carte-res-visuel carte-res-icone">${echap(r.icone || (NOMS_RES[r.genre] || '🗄️').split(' ')[0])}</span>`}
+      <span class="carte-res-corps">
+        <b>${echap(r.titre)}</b>
+        <span class="carte-res-meta">${[r.source, r.categorie].filter(Boolean).map(echap).join(' · ') || (NOMS_RES[r.genre] || '')}</span>
+        <span class="carte-res-texte">${echap(r.contenu.slice(0, 120))}${r.contenu.length > 120 ? '…' : ''}</span>
+        ${r.fichier || r.lien ? `<span class="puces">${r.fichier ? `<span class="puce puce-vert">${r.fichier === 'epub' ? '📗 EPUB' : '📄 PDF'}</span>` : ''}${r.lien ? '<span class="puce">🔗 En ligne</span>' : ''}</span>` : ''}
+      </span>
+    </button>`;
+  async function ouvrirDocumentRessource(r, telecharger) {
+    if (!moi) { window.dispatchEvent(new Event('oasis-connexion')); return; }
+    if (r.fichier === 'epub' && !telecharger && window.OasisEpub) return OasisEpub.open({ id: r.id, titre: r.titre, urlEpub: '/api/ressources/' + r.id + '/fichier?lecture=1' }, jeton, $('#zoneModale'), fermerModale);
+    const fenetre = telecharger ? null : window.open('', '_blank');
+    try {
+      const rep = await fetch('/api/ressources/' + r.id + '/fichier' + (telecharger ? '' : '?lecture=1'), { headers: { Authorization: 'Bearer ' + jeton } });
+      if (!rep.ok) throw new Error((await rep.json().catch(() => ({}))).erreur || 'Document indisponible.');
+      const url = URL.createObjectURL(await rep.blob());
+      if (telecharger) { const a = Object.assign(document.createElement('a'), { href: url, download: (r.titre || 'document').slice(0, 80) + '.' + r.fichier }); document.body.appendChild(a); a.click(); a.remove(); }
+      else if (fenetre) fenetre.location = url; else window.location = url;
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) { fenetre?.close(); toast(err.message); }
+  }
   let cacheMedias = [];
   let minuteurSommeil = null;
   let minuteurPosition = null;
@@ -999,24 +1045,34 @@
       catch (err) { toast(err.message); }
       return;
     }
+    if ((el = cible('data-pagination'))) {
+      const p = listesPaginees[el.dataset.pagination]; if (!p || el.disabled) return;
+      p.etat = OasisPagination.appliquer(el.dataset.paginationAction, p.etat);
+      const boite = document.querySelector(`[data-liste-paginee="${el.dataset.pagination}"]`);
+      if (boite) { boite.innerHTML = rendreListePaginee(el.dataset.pagination); boite.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      return;
+    }
+    if ((el = cible('data-doc-ressource'))) { const r = cacheRessources.find(x => x.id === el.dataset.docRessource); if (r) { if (r.fichier === 'epub' && !el.dataset.telecharger) fermerModale(); ouvrirDocumentRessource(r, !!el.dataset.telecharger); } return; }
     if ((el = cible('data-genre-res'))) return afficherVue('ressources', el.dataset.genreRes || undefined);
     if ((el = cible('data-ressource'))) {
       const r = cacheRessources.find(x => x.id === el.dataset.ressource);
       if (!r) return;
-      const NOMS = { dictionnaire: '📖 Dictionnaire', encyclopedie: '🌍 Encyclopédie', base: '🗄️ Base de données', administratif: '📋 Document administratif', historique: '📜 Document historique' };
+      const NOMS = NOMS_RES;
       $('#zoneModale').innerHTML = `
         <div class="voile" id="voile">
           <div class="modale" role="dialog" aria-modal="true">
             <div class="modale-entete">
               <div style="flex:1"><h3>${echap(r.titre)}</h3>
-                <p style="color:var(--gris);font-weight:600">${NOMS[r.genre]}${r.source ? ' · ' + echap(r.source) : ''}</p></div>
+                <p style="color:var(--gris);font-weight:600">${NOMS[r.genre] || ''}${r.categorie ? ' · ' + echap(r.categorie) : ''}${r.source ? ' · ' + echap(r.source) : ''}</p></div>
               <button class="fermer" id="btnFermer" aria-label="Fermer">✕</button>
             </div>
             <div class="corps">
               ${r.image ? `<img src="/api/ressources/${r.id}/image" alt="" style="max-width:100%;border-radius:12px;margin-bottom:14px;box-shadow:var(--ombre)">` : ''}
               <p style="font-size:15.5px;line-height:1.75">${echap(r.contenu)}</p>
               <div class="rangee-boutons">
-                ${r.lien ? `<a class="btn btn-bleu" href="${echap(r.lien)}" target="_blank" rel="noopener">🔗 Consulter la ressource en ligne</a>` : ''}
+                ${r.fichier ? `<button class="btn btn-bleu" data-doc-ressource="${r.id}">${r.fichier === 'epub' ? '📗 Lire l’EPUB' : '📄 Consulter le PDF'}</button>` : ''}
+                ${r.fichier && r.telechargementAutorise !== false ? `<button class="btn" data-doc-ressource="${r.id}" data-telecharger="1">⬇️ Télécharger (${tailleLisible(r.tailleFichier)})</button>` : ''}
+                ${r.lien ? `<a class="btn ${r.fichier ? '' : 'btn-bleu'}" href="${echap(r.lien)}" target="_blank" rel="noopener">🔗 Consulter la ressource en ligne</a>` : ''}
                 <button class="btn" data-commentaires="${r.id}" data-ct="ressource" data-tt="${echap(r.titre)}">💬 Commentaires</button>
               </div>
             </div>
@@ -1080,6 +1136,8 @@
     if (e.target.id === 'inDatePlace') afficherVue('places', e.target.value);
     const f = e.target.closest('[data-filtre]');
     if (f) { filtresBiblio[f.dataset.filtre] = f.value; (afficherVue('bibliotheque', $('#inRecherche').value.trim())); }
+    const fr = e.target.closest('[data-filtre-res]');
+    if (fr) { filtresRessources[fr.dataset.filtreRes] = fr.value; afficherVue('ressources', document.querySelector('.puce-filtre.actif[data-genre-res]')?.dataset.genreRes || undefined); }
   });
 
   // ---------- Notifications ----------

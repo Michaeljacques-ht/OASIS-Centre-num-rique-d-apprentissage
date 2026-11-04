@@ -13,7 +13,7 @@ Elle se compose de deux interfaces : le **Portail apprenant** (`http://localhost
 
 - **Deux rôles** : *apprenant* (lecteur) et *bibliothécaire* (gestionnaire). Les apprenants créent leur compte librement depuis l'écran de connexion ; le bibliothécaire peut aussi inscrire des membres depuis son espace.
 - **Sécurité** : mots de passe chiffrés (scrypt), sessions par jeton, chaque action sensible est réservée au rôle approprié.
-- **Comptes de démonstration** : `admin@oasis.ht / admin123` (bibliothécaire) et `emma@oasis.ht / demo123` (apprenant).
+- **Comptes de démonstration** : uniquement en mode démo (`OASIS_DEMO=1`) — `admin@oasis.ht / admin123` et `emma@oasis.ht / demo123`. En production, voir `SECURITE.md`.
 
 ---
 

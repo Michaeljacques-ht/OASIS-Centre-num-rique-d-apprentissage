@@ -15,6 +15,7 @@ const essai=require('./modules/essai'),doublons=require('./modules/doublons');
 const dureeLecture=require('./modules/duree-lecture');
 const rechercheTexte=require('./modules/recherche-texte');
 const ecoles = require('./modules/ecoles');
+const securite = require('./modules/securite');
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
 const baseJSON=require('./modules/base-json');
@@ -40,6 +41,7 @@ function seedParametres() {
 
 // ---------- Base de données JSON ----------
 let db = null;
+let mdpAdminInitial = null;   // affiché une fois au premier démarrage d'une base neuve
 function chargerDB() {
   const chargee=baseJSON.charger(DB_PATH);
   if (chargee) {
@@ -138,12 +140,14 @@ function seedRessources() {
 }
 
 function seed() {
-  const admin = hashMdp('admin123');
-  const demo = hashMdp('demo123');
+  // Base neuve : mot de passe administrateur fourni (OASIS_ADMIN_MDP) ou aléatoire, affiché une seule fois dans les journaux.
+  // Le compte apprenant de démonstration n'existe qu'en mode démo (OASIS_DEMO=1).
+  const initial = securite.mdpInitialAdmin();
+  mdpAdminInitial = initial.affiche ? initial.mdp : null;
   const utilisateurs = [
-    { id: uid(), nom: 'Bibliothécaire Oasis', email: 'admin@oasis.ht', role: 'bibliothecaire', ...admin, creeLe: maintenant() },
-    { id: uid(), nom: 'Emma Pierre', email: 'emma@oasis.ht', role: 'apprenant', classe: 'Terminale', ...demo, creeLe: maintenant() }
+    { id: uid(), nom: 'Bibliothécaire Oasis', email: 'admin@oasis.ht', role: 'bibliothecaire', ...hashMdp(initial.mdp), creeLe: maintenant() }
   ];
+  if (securite.modeDemo()) utilisateurs.push({ id: uid(), nom: 'Emma Pierre', email: 'emma@oasis.ht', role: 'apprenant', classe: 'Terminale', ...hashMdp('demo123'), creeLe: maintenant() });
   const cat = ['Sciences', 'Histoire', 'Littérature', 'Informatique', 'Roman', 'Mathématiques', 'Philosophie'];
   const L = (titre, auteur, categorie, type, resume, couleur, icone, extras = {}) => ({
     id: uid(), titre, auteur, categorie, type, resume, couleur, icone,
@@ -223,6 +227,17 @@ async function fichiersIdentiques(p1, p2) {
 }
 const DOSSIER_RES_IMG = path.join(__dirname, 'data', 'ressources-img');
 const cheminResImg = resId => path.join(DOSSIER_RES_IMG, resId + '.png');
+const DOSSIER_RES_DOCS = path.join(__dirname, 'data', 'ressources-docs');
+const TAILLE_MAX_DOC_RESSOURCE = 100 * 1024 * 1024; // 100 Mo
+const cheminResDoc = r => path.join(DOSSIER_RES_DOCS, r.id + '.' + (r.fichier || 'pdf'));
+/** Nature d'un document d'après ses premiers octets : 'pdf', 'epub' ou ''. */
+function natureDocument(chemin) {
+  const fd = fs.openSync(chemin, 'r'); const tete = Buffer.alloc(64);
+  try { fs.readSync(fd, tete, 0, 64, 0); } finally { fs.closeSync(fd); }
+  if (tete.slice(0, 5).toString('latin1') === '%PDF-') return 'pdf';
+  if (tete[0] === 0x50 && tete[1] === 0x4B && tete.slice(30, 58).toString('latin1') === 'mimetypeapplication/epub+zip') return 'epub';
+  return '';
+}
 const DOSSIER_MEDIAS = path.join(__dirname, 'data', 'medias');
 const TAILLE_MAX_MEDIA = 300 * 1024 * 1024; // 300 Mo (vidéos)
 const MIMES_MEDIAS = {
@@ -426,7 +441,7 @@ async function api(req, res, u) {
   if (pathname === '/api/inscription' && m === 'POST') {
     const { nom, email, motDePasse, classe, niveau, niveauDetail, ...infosProfil } = await lireCorps(req);
     if (niveau !== undefined && !['scolaire','universitaire','technique_professionnel'].includes(niveau)) return json(res,400,{erreur:'Choisissez un niveau valide.'});
-    if (!nom || !email || !motDePasse || motDePasse.length < 6) return json(res, 400, { erreur: 'Nom, email et mot de passe (6 caractères min.) requis.' });
+    if (typeof nom !== 'string' || !nom.trim() || typeof email !== 'string' || !/^\S+@\S+\.\S+$/.test(email.trim()) || typeof motDePasse !== 'string' || motDePasse.length < 8) return json(res, 400, { erreur: 'Nom, email et mot de passe (8 caractères min.) requis.' });
     if (db.utilisateurs.some(x => x.email.toLowerCase() === email.toLowerCase())) return json(res, 409, { erreur: 'Un compte existe déjà avec cet email.' });
     const nu = { id: uid(), nom, email, classe: classe || '', niveau: niveau || '', niveauDetail: String(niveauDetail || '').slice(0,80), role: 'apprenant', ...hashMdp(motDePasse), creeLe: maintenant() };
     try{Object.assign(nu,require('./modules/profils-abonnement').profil(infosProfil))}catch(e){return json(res,400,{erreur:e.message})}
@@ -437,8 +452,15 @@ async function api(req, res, u) {
   }
   if (pathname === '/api/connexion' && m === 'POST') {
     const { email, motDePasse } = await lireCorps(req);
-    const cu = db.utilisateurs.find(x => x.email.toLowerCase() === (email||'').trim().toLowerCase());
-    if (!cu || cu.actif === false || !verifMdp(motDePasse || '', cu)) return json(res, 401, { erreur: 'Email ou mot de passe incorrect.' });
+    const emailN = String(email || '').trim().toLowerCase(), ip = securite.ipDe(req);
+    const attente = securite.bloque(emailN, ip);
+    if (attente) return json(res, 429, { erreur: `Trop de tentatives de connexion. Réessayez dans ${attente} minute(s).` });
+    const cu = db.utilisateurs.find(x => x.email.toLowerCase() === emailN);
+    if (!cu || cu.actif === false || typeof motDePasse !== 'string' || !verifMdp(motDePasse, cu)) { securite.noterEchec(emailN, ip); return json(res, 401, { erreur: 'Email ou mot de passe incorrect.' }); }
+    if (securite.mdpPublicRefuse(motDePasse)) return json(res, 403, { erreur: cu.role === 'bibliothecaire'
+      ? 'Ce mot de passe de démonstration est désactivé pour la sécurité. Définissez la variable OASIS_ADMIN_MDP sur Render (10 caractères minimum), puis redéployez.'
+      : 'Ce mot de passe de démonstration est désactivé pour la sécurité. Demandez un nouveau mot de passe à la bibliothèque.' });
+    securite.noterSucces(emailN, ip);
     const jeton = uid() + uid();
     db.sessions[jeton] = cu.id; sauverDB();
     return json(res, 200, { jeton, utilisateur: ecoles.publicUser(cu) });
@@ -624,7 +646,9 @@ async function api(req, res, u) {
     if (!exigeBiblio()) return;
     journal('Sauvegarde téléchargée', utilisateur, '');
     sauverDB();
-    const corps = JSON.stringify(db, null, 2);
+    // Les sessions ouvertes ne sont jamais exportées : un fichier de sauvegarde qui circule n'ouvre aucun compte.
+    const { sessions, ...sansSessions } = db;
+    const corps = JSON.stringify({ ...sansSessions, sessions: {} }, null, 2);
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
       'Content-Disposition': `attachment; filename="sauvegarde-oasis-${new Date().toISOString().slice(0, 10)}.json"`
@@ -971,6 +995,58 @@ async function api(req, res, u) {
     return json(res, 200, p);
   }
 
+  // --- Document PDF ou EPUB joint à une ressource documentaire ---
+  if (seg[1] === 'ressources' && seg[2] && seg[3] === 'fichier') {
+    const r = db.ressources.find(x => x.id === seg[2]);
+    if (m === 'POST') {
+      if (!exigeBiblio()) return;
+      if (!r) return json(res, 404, { erreur: 'Ressource introuvable.' });
+      const tmp = path.join(DOSSIER_RES_DOCS, r.id + '.envoi');
+      let taille = 0;
+      try {
+        fs.mkdirSync(DOSSIER_RES_DOCS, { recursive: true });
+        taille = await new Promise((ok, ko) => {
+          let n = 0; const flux = fs.createWriteStream(tmp);
+          req.on('data', c => { n += c.length; if (n > TAILLE_MAX_DOC_RESSOURCE) { flux.destroy(); req.destroy(); ko(new Error('Document trop volumineux (100 Mo max).')); } });
+          req.pipe(flux); flux.on('finish', () => ok(n)); flux.on('error', ko); req.on('error', () => {});
+        });
+      } catch (err) { fs.rm(tmp, { force: true }, () => {}); return json(res, 413, { erreur: err.message }); }
+      const nature = taille ? natureDocument(tmp) : '';
+      if (!nature) { fs.rmSync(tmp, { force: true }); return json(res, 400, { erreur: 'Le fichier doit être un PDF ou un EPUB valide.' }); }
+      if (r.fichier && fs.existsSync(cheminResDoc(r))) fs.unlinkSync(cheminResDoc(r));
+      r.fichier = nature; r.tailleFichier = taille;
+      r.nomFichier = String(query.nom || '').replace(/[\\/:*?"<>|\r\n]/g, '').slice(0, 120);
+      fs.renameSync(tmp, cheminResDoc(r));
+      journal('Document joint à une ressource', utilisateur, r.titre); sauverDB();
+      return json(res, 201, { ok: true, fichier: r.fichier, tailleFichier: taille });
+    }
+    if (m === 'GET') {
+      if (!exigeAuth()) return;
+      if (!r || !r.fichier || !fs.existsSync(cheminResDoc(r))) return json(res, 404, { erreur: 'Aucun document pour cette ressource.' });
+      if (r.telechargementAutorise === false && query.lecture !== '1' && utilisateur.role !== 'bibliothecaire') return json(res, 403, { erreur: 'Téléchargement désactivé. Consultez ce document dans OASIS.' });
+      const taille = fs.statSync(cheminResDoc(r)).size;
+      const nom = encodeURIComponent((r.titre || 'document').slice(0, 80)) + '.' + r.fichier;
+      const entetes = { 'Content-Type': r.fichier === 'epub' ? 'application/epub+zip' : 'application/pdf', 'Content-Disposition': `${query.lecture === '1' ? 'inline' : 'attachment'}; filename*=UTF-8''${nom}`, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store' };
+      const plage = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '');
+      if (plage) {
+        const debut = plage[1] ? parseInt(plage[1], 10) : 0, fin = Math.min(plage[2] ? parseInt(plage[2], 10) : taille - 1, taille - 1);
+        if (debut >= taille || debut > fin) { res.writeHead(416, { 'Content-Range': `bytes */${taille}` }); return res.end(); }
+        res.writeHead(206, { ...entetes, 'Content-Range': `bytes ${debut}-${fin}/${taille}`, 'Content-Length': fin - debut + 1 });
+        return fs.createReadStream(cheminResDoc(r), { start: debut, end: fin }).pipe(res);
+      }
+      r.nbConsultations = (r.nbConsultations || 0) + 1; sauverDB();
+      res.writeHead(200, { ...entetes, 'Content-Length': taille });
+      return fs.createReadStream(cheminResDoc(r)).pipe(res);
+    }
+    if (m === 'DELETE') {
+      if (!exigeBiblio()) return;
+      if (!r) return json(res, 404, { erreur: 'Ressource introuvable.' });
+      if (r.fichier && fs.existsSync(cheminResDoc(r))) fs.unlinkSync(cheminResDoc(r));
+      r.fichier = ''; r.tailleFichier = 0; r.nomFichier = ''; sauverDB();
+      return json(res, 200, { ok: true });
+    }
+    return json(res, 405, { erreur: 'Méthode non autorisée.' });
+  }
   // --- Image d'une ressource documentaire ---
   if (seg[1] === 'ressources' && seg[2] && seg[3] === 'image' && m === 'POST') {
     if (!exigeBiblio()) return;
@@ -1002,7 +1078,8 @@ async function api(req, res, u) {
   if (pathname === '/api/categories' && m === 'POST') {
     if (!exigeBiblio()) return;
     const { nom, icone, couleur } = await lireCorps(req);
-    if (!nom || !nom.trim()) return json(res, 400, { erreur: 'Le nom de la catégorie est requis.' });
+    if (typeof nom !== 'string' || !nom.trim()) return json(res, 400, { erreur: 'Le nom de la catégorie est requis.' });
+    { const e = securite.verifierApparence({ icone, couleur }); if (e) return json(res, 400, { erreur: e }); }
     if (db.categories.some(c => c.nom.toLowerCase() === nom.trim().toLowerCase())) return json(res, 409, { erreur: 'Cette catégorie existe déjà.' });
     const c = { id: uid(), nom: nom.trim(), icone: icone || '📘', couleur: couleur || '#1e4fa3', creeLe: maintenant() };
     db.categories.push(c); sauverDB();
@@ -1128,12 +1205,14 @@ async function api(req, res, u) {
   }
   if (pathname === '/api/ressources' && m === 'POST') {
     if (!exigeBiblio()) return;
-    const { genre, titre, contenu, source, lien, icone } = await lireCorps(req);
+    const { genre, titre, contenu, source, lien, icone, categorie } = await lireCorps(req);
     if(doublons.trouver(db.ressources,{genre,titre,source},'ressources'))return json(res,409,{erreur:'Cette ressource existe déjà.'});
     if (!['dictionnaire', 'encyclopedie', 'base', 'administratif', 'historique', 'officiel'].includes(genre)) return json(res, 400, { erreur: 'Genre invalide.' });
     if (!titre || !contenu) return json(res, 400, { erreur: 'Titre et contenu requis.' });
     if (lien && !/^https?:\/\/.+/.test(lien)) return json(res, 400, { erreur: 'Le lien doit commencer par http:// ou https://' });
-    const r = { id: uid(), genre, titre, contenu, source: source || '', lien: lien || '', icone: (icone || '').slice(0, 8), image: false, creeLe: maintenant() };
+    if (icone && !securite.iconeValide(icone)) return json(res, 400, { erreur: 'Icône invalide : un emoji ou quelques caractères simples.' });
+    if (categorie && !db.categories.some(c => c.nom === categorie)) return json(res, 400, { erreur: 'Catégorie inconnue.' });
+    const r = { id: uid(), genre, titre, contenu, source: source || '', lien: lien || '', icone: (icone || '').slice(0, 8), image: false, categorie: categorie || '', fichier: '', creeLe: maintenant() };
     db.ressources.push(r); sauverDB();
     return json(res, 201, r);
   }
@@ -1142,6 +1221,7 @@ async function api(req, res, u) {
     const i = db.ressources.findIndex(r => r.id === seg[2]);
     if (i === -1) return json(res, 404, { erreur: 'Ressource introuvable.' });
     if (fs.existsSync(cheminResImg(db.ressources[i].id))) fs.unlinkSync(cheminResImg(db.ressources[i].id));
+    if (db.ressources[i].fichier && fs.existsSync(cheminResDoc(db.ressources[i]))) fs.unlinkSync(cheminResDoc(db.ressources[i]));
     db.ressources.splice(i, 1); sauverDB();
     return json(res, 200, { ok: true });
   }
@@ -1271,6 +1351,7 @@ async function api(req, res, u) {
     if(c.publicCible !== undefined && !['tous','scolaire','universitaire','technique_professionnel'].includes(c.publicCible)) return json(res,400,{erreur:'Public cible invalide.'});
     if(doublons.trouver(db.livres,c,'livres'))return json(res,409,{erreur:'Ce livre existe déjà (titre, auteur et édition, ou ISBN identique).'});
     if (!c.titre || !c.auteur || !c.categorie) return json(res, 400, { erreur: 'Titre, auteur et catégorie requis.' });
+    { const e = securite.verifierApparence(c); if (e) return json(res, 400, { erreur: e }); }
     const l = { id: uid(), titre: c.titre, auteur: c.auteur, categorie: c.categorie, type: c.type === 'physique' ? 'physique' : 'numerique',
       resume: c.resume || '', couleur: c.couleur || '#1e4fa3', icone: c.icone || '📘', annee: c.annee || new Date().getFullYear(),
       isbn: c.isbn || '', edition:String(c.edition||'').slice(0,300),editeur: c.editeur || '', langue: c.langue || 'Français', seuilLecture:c.seuilLecture===undefined?70:Number(c.seuilLecture),niveau: c.niveau || '', publicCible: c.publicCible || 'tous', motsCles: c.motsCles || '',
@@ -1298,6 +1379,7 @@ async function api(req, res, u) {
     if(c.publicCible !== undefined && !['tous','scolaire','universitaire','technique_professionnel'].includes(c.publicCible)) return json(res,400,{erreur:'Public cible invalide.'});
     if(doublons.trouver(db.livres,{...db.livres[idx],...c},'livres'))return json(res,409,{erreur:'Ces informations correspondent à un livre déjà présent.'});
     if (['titre','auteur','categorie'].some(k => c[k] !== undefined && (typeof c[k] !== 'string' || !c[k].trim()))) return json(res,400,{erreur:'Titre, auteur et catégorie ne doivent pas être vides.'});
+    { const e = securite.verifierApparence(c); if (e) return json(res, 400, { erreur: e }); }
     ['titre','auteur','categorie','resume','couleur','icone','annee','isbn','contenu','type','editeur','edition','langue','niveau','publicCible','seuilLecture','motsCles'].forEach(k => { if (c[k] !== undefined) db.livres[idx][k] = c[k]; });
     sauverDB();
     return json(res, 200, vueLivre(db.livres[idx], utilisateur));
@@ -1426,9 +1508,10 @@ async function api(req, res, u) {
     if (!exigeBiblio()) return;
     const { nom, email, motDePasse, classe, niveau, niveauDetail } = await lireCorps(req);
     if (niveau !== undefined && !['scolaire','universitaire','technique_professionnel'].includes(niveau)) return json(res,400,{erreur:'Choisissez un niveau valide.'});
-    if (!nom || !email) return json(res, 400, { erreur: 'Nom et email requis.' });
+    if (typeof nom !== 'string' || !nom.trim() || typeof email !== 'string' || !email.trim()) return json(res, 400, { erreur: 'Nom et email requis.' });
+    if (typeof motDePasse !== 'string' || motDePasse.length < 8 || ['oasis123', 'admin123', 'demo123'].includes(motDePasse)) return json(res, 400, { erreur: 'Choisissez un mot de passe initial de 8 caractères minimum (oasis123 n’est plus accepté).' });
     if (db.utilisateurs.some(x => x.email.toLowerCase() === email.toLowerCase())) return json(res, 409, { erreur: 'Email déjà utilisé.' });
-    const nu = { id: uid(), nom, email, classe: classe || '', niveau: niveau || '', niveauDetail: String(niveauDetail || '').slice(0,80), role: 'apprenant', ...hashMdp(motDePasse || 'oasis123'), creeLe: maintenant() };
+    const nu = { id: uid(), nom, email, classe: classe || '', niveau: niveau || '', niveauDetail: String(niveauDetail || '').slice(0,80), role: 'apprenant', ...hashMdp(motDePasse), creeLe: maintenant() };
     db.utilisateurs.push(nu); sauverDB();
     return json(res, 201, { id: nu.id, nom: nu.nom, email: nu.email, classe: nu.classe });
   }
@@ -1477,9 +1560,16 @@ function statique(req, res) {
 
 // ---------- Serveur ----------
 chargerDB();
+{ // correctif sécurité 1.13.1
+  const mdpChange = securite.appliquerMdpAdmin(db, hashMdp, verifMdp);
+  const corrections = securite.nettoyerApparence(db);
+  if (corrections) console.warn(`Sécurité : ${corrections} icône(s), couleur(s) ou lien(s) dangereux remplacés.`);
+  if (mdpChange || corrections) sauverDB();
+}
 let essaisAjoutes=false;for(const e of db.ecoles||[])essaisAjoutes=essai.initialiser(e)||essaisAjoutes;for(const u of db.utilisateurs)if(u.role==='apprenant'&&!u.ecoleId)essaisAjoutes=essai.initialiser(u)||essaisAjoutes;if(essaisAjoutes)sauverDB();
 const rappelsEssai=()=>require('./modules/notifications-essai').traiter(db,sauverDB).catch(e=>console.error('Rappels essai :',e.message));setTimeout(rappelsEssai,60000).unref();setInterval(rappelsEssai,3600000).unref();
 http.createServer(async (req, res) => {
+  securite.entetes(req, res);
   try {
     if (req.url.startsWith('/api/')) await api(req, res);
     else statique(req, res);
@@ -1496,7 +1586,6 @@ http.createServer(async (req, res) => {
   console.log('╚══════════════════════════════════════════════════╝');
   console.log(`Portail apprenant : http://localhost:${PORT}`);
   console.log(`Espace bibliothécaire : http://localhost:${PORT}/admin`);
-  console.log('Comptes de démonstration :');
-  console.log('  Bibliothécaire → admin@oasis.ht / admin123');
-  console.log('  Apprenant      → emma@oasis.ht  / demo123');
+  if (mdpAdminInitial) console.log(`Base neuve — administrateur : admin@oasis.ht / ${mdpAdminInitial}  (notez-le : il ne sera plus affiché)`);
+  if (securite.modeDemo()) console.log('Mode démonstration (OASIS_DEMO=1) : admin@oasis.ht / admin123 et emma@oasis.ht / demo123.');
 });

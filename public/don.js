@@ -168,3 +168,73 @@ window.OasisDon = (() => {
 
   return { render };
 })();
+
+/* ------------------------------------------------------------
+   Carte « Faire un don » flottante : elle suit le visiteur sur
+   toutes les pages du portail. Elle se replie en une pastille
+   (choix mémorisé), se cache sur la page du don, pendant la
+   lecture d'un livre, dans l'assistant IA et sur l'écran de
+   connexion, et disparaît si les dons sont suspendus.
+   ------------------------------------------------------------ */
+window.OasisDonFlottant = (() => {
+  const CLE = 'oasis_don_flottant_replie';
+  const E = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const htg = n => Number(n || 0).toLocaleString('fr-FR') + ' HTG';
+  // Sans choix mémorisé : carte dépliée sur ordinateur, pastille compacte sur téléphone
+  const lire = () => { let v = null; try { v = localStorage.getItem(CLE); } catch {} return v === null ? matchMedia('(max-width: 780px)').matches : v === '1'; };
+  const ecrire = v => { try { localStorage.setItem(CLE, v ? '1' : '0'); } catch {} };
+  let el = null, infos = null, prevu = false;
+
+  function contenu() {
+    const pct = infos.objectif ? Math.min(100, Math.round(infos.total / infos.objectif * 100)) : null;
+    return `
+      <div class="df-carte" role="complementary" aria-label="Soutenir OASIS par un don">
+        <button type="button" class="df-replier" data-df-replier aria-label="Réduire la carte de don">×</button>
+        <div class="df-tete"><span class="df-coeur" aria-hidden="true">💝</span><b>${E(infos.titre || 'Soutenez OASIS')}</b></div>
+        <p>Chaque don offre des livres et l'accès au savoir aux apprenants d'Haïti.</p>
+        ${pct !== null ? `<div class="df-barre" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Objectif de collecte"><span style="width:${pct}%"></span></div>
+        <small>${htg(infos.total)} sur ${htg(infos.objectif)} · ${pct} %</small>` : infos.donateurs ? `<small>${infos.donateurs} donateur${infos.donateurs > 1 ? 's' : ''} nous soutiennent déjà</small>` : ''}
+        <button type="button" class="btn df-bouton" data-vue="don">Faire un don</button>
+      </div>
+      <button type="button" class="df-pastille" data-vue="don" aria-label="Faire un don à OASIS"><span aria-hidden="true">💝</span> Faire un don</button>
+      <button type="button" class="df-deplier" data-df-deplier aria-label="Afficher la carte de don">+</button>`;
+  }
+
+  /** Visible partout, sauf là où elle gênerait. */
+  function majVisibilite() {
+    if (!el) return;
+    const surPageDon = !!document.querySelector('.nav-item[data-vue="don"].actif');
+    const lecture = !!document.querySelector('#zoneModale .voile');
+    const ia = !!document.querySelector('.ia-panneau:not([hidden])');
+    const connexion = !!document.getElementById('ecranConnexion') && !document.getElementById('ecranConnexion').hidden;
+    const appli = document.getElementById('appli');
+    const cacher = !!(surPageDon || lecture || ia || connexion || (appli && appli.hidden));
+    if (el.hidden !== cacher) el.hidden = cacher;            // n'écrire que si ça change (évite une boucle d'observation)
+    const replie = lire();
+    if (el.classList.contains('replie') !== replie) el.classList.toggle('replie', replie);
+  }
+
+  async function demarrer() {
+    try {
+      const r = await fetch('/api/dons/infos');
+      if (!r.ok) return;
+      infos = await r.json();
+    } catch { return; }
+    if (!infos || !infos.actif) return;
+    el = document.createElement('div');
+    el.className = 'don-flottant';
+    el.innerHTML = contenu();
+    document.body.appendChild(el);
+    el.addEventListener('click', e => {
+      if (e.target.closest('[data-df-replier]')) { ecrire(true); majVisibilite(); return; }
+      if (e.target.closest('[data-df-deplier]')) { ecrire(false); majVisibilite(); }
+    });
+    // Suit la navigation : changement de page, ouverture d'un livre, de l'assistant ou de l'écran de connexion
+    const planifier = () => { if (prevu) return; prevu = true; requestAnimationFrame(() => { prevu = false; majVisibilite(); }); };
+    new MutationObserver(planifier).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden'] });
+    majVisibilite();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrer); else demarrer();
+  return { majVisibilite };
+})();
