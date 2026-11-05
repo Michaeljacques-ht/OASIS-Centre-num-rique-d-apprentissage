@@ -1,3 +1,7 @@
+## 1.15.2 — Import depuis une adresse : 10 minutes au lieu de 3
+
+- Un gros PDF d'archive.org (40 à 85 Mo) peut arriver à moins de 300 Ko/s : le téléchargement complet a maintenant 10 minutes au lieu de 3.
+
 ## 1.15.1 — Import depuis une adresse : délai allongé
 
 - Le serveur attend désormais jusqu'à 2 minutes le premier octet (au lieu de 30 s) : archive.org met souvent plus de 30 s à commencer l'envoi d'un gros PDF, ce qui provoquait l'erreur « Le site ne répond pas ».

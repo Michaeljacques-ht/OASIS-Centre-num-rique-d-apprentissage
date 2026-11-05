@@ -8,7 +8,7 @@
    - https uniquement, 5 redirections au plus (chacune revérifiée) ;
    - refus des adresses privées ou locales (127.x, 10.x, 192.168.x, 169.254.x, ::1…),
      vérifiées au moment de la connexion pour éviter les changements de DNS ;
-   - 100 Mo au maximum, délai de 3 minutes ;
+   - 100 Mo au maximum, délai de 10 minutes ;
    - le contenu doit être un vrai PDF ou EPUB (vérifié sur les premiers octets).
    ============================================================ */
 const https = require('https');
@@ -17,7 +17,7 @@ const net = require('net');
 const fs = require('fs');
 
 const TAILLE_MAX = 100 * 1024 * 1024;
-const DELAI = 3 * 60 * 1000;
+const DELAI = 10 * 60 * 1000;   // 1.15.2 : archive.org envoie parfois à moins de 300 Ko/s
 
 function adressePrivee(ip) {
   if (net.isIPv4(ip)) {
@@ -81,7 +81,7 @@ function telecharger(adresse, destination, { redirections = 5, debut = Date.now(
       let taille = 0, tete = Buffer.alloc(0), fini = false;
       const flux = fs.createWriteStream(destination);
       const echec = e => { if (fini) return; fini = true; res.destroy(); flux.destroy(); fs.rm(destination, { force: true }, () => {}); ko(e); };
-      const minuteur = setTimeout(() => echec(new Error('Téléchargement trop long (3 minutes max).')), Math.max(1000, DELAI - (Date.now() - debut)));
+      const minuteur = setTimeout(() => echec(new Error('Téléchargement trop long (10 minutes max).')), Math.max(1000, DELAI - (Date.now() - debut)));
       res.on('data', c => {
         taille += c.length;
         if (tete.length < 1100) tete = Buffer.concat([tete, c.slice(0, 1100 - tete.length)]);
