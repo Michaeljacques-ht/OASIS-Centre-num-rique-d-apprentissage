@@ -1,6 +1,6 @@
 'use strict';
 /* ============================================================
-   OASIS — Import d'un document depuis une adresse web (1.15.0)
+   OASIS — Import d'un document depuis une adresse web (1.15.0 ; cartes PNG/JPEG en 1.16.0)
 
    Le serveur télécharge lui-même un PDF ou un EPUB public (Gallica, Wikisource, ONU…),
    sans passer par l'ordinateur du bibliothécaire.
@@ -50,6 +50,8 @@ function verifierUrl(texte) {
 }
 function nature(tete) {
   if (tete.slice(0, 5).toString('latin1') === '%PDF-') return 'pdf';
+  if (tete[0] === 0x89 && tete.slice(1, 4).toString('latin1') === 'PNG') return 'png';
+  if (tete[0] === 0xFF && tete[1] === 0xD8 && tete[2] === 0xFF) return 'jpeg';
   if (tete[0] === 0x50 && tete[1] === 0x4B && tete.slice(30, 58).toString('latin1') === 'mimetypeapplication/epub+zip') return 'epub';
   // certains PDF commencent par quelques octets parasites avant l'en-tête
   if (tete.slice(0, 1024).toString('latin1').includes('%PDF-')) return 'pdf';
@@ -60,20 +62,20 @@ function nature(tete) {
  * Télécharge l'adresse dans le fichier « destination ».
  * Renvoie { nature: 'pdf'|'epub', taille, nomFichier, urlFinale }.
  */
-function telecharger(adresse, destination, { redirections = 5, debut = Date.now() } = {}) {
+function telecharger(adresse, destination, { redirections = 5, debut = Date.now(), natures = ['pdf', 'epub'] } = {}) {
   return new Promise((ok, ko) => {
     let u;
     try { u = verifierUrl(adresse); } catch (e) { return ko(e); }
     const req = https.get(u, {
       lookup: lookupSur,
       timeout: 120000,   // archive.org peut mettre plus d'une minute avant d'envoyer le premier octet
-      headers: { 'User-Agent': 'OASIS-Bibliotheque/1.15 (import de documents libres)', Accept: 'application/pdf,application/epub+zip,*/*;q=0.5' }
+      headers: { 'User-Agent': 'OASIS-Bibliotheque/1.15 (import de documents libres)', Accept: 'application/pdf,application/epub+zip,image/png,image/jpeg,*/*;q=0.5' }
     }, res => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
         res.resume();
         if (redirections <= 0) return ko(new Error('Trop de redirections.'));
         const suivante = new URL(res.headers.location || '', u).toString();
-        return telecharger(suivante, destination, { redirections: redirections - 1, debut }).then(ok, ko);
+        return telecharger(suivante, destination, { redirections: redirections - 1, debut, natures }).then(ok, ko);
       }
       if (res.statusCode !== 200) { res.resume(); return ko(new Error(`Le site a répondu ${res.statusCode}.`)); }
       const annonce = Number(res.headers['content-length'] || 0);
@@ -94,7 +96,7 @@ function telecharger(adresse, destination, { redirections = 5, debut = Date.now(
         clearTimeout(minuteur);
         if (fini) return; fini = true;
         const n = nature(tete);
-        if (!n) { fs.rm(destination, { force: true }, () => {}); return ko(new Error('Le document reçu n’est ni un PDF ni un EPUB (page web ou fichier protégé ?).')); }
+        if (!n || !natures.includes(n)) { fs.rm(destination, { force: true }, () => {}); return ko(new Error(`Le document reçu n’est pas d’un format accepté (${natures.join(', ').toUpperCase()}) : page web ou fichier protégé ?`)); }
         const dispo = String(res.headers['content-disposition'] || '');
         const nomFichier = decodeURIComponent((dispo.match(/filename\*=UTF-8''([^;]+)/i) || dispo.match(/filename="?([^";]+)/i) || [, ''])[1] || '') || decodeURIComponent(u.pathname.split('/').pop() || '');
         ok({ nature: n, taille, nomFichier: nomFichier.slice(0, 160), urlFinale: u.toString() });

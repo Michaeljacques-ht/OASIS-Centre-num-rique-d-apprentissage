@@ -1,3 +1,8 @@
+## 1.16.0 — Cartothèque : import de cartes depuis une adresse web
+
+- Nouvelle route `POST /api/medias/:id/importer-url` (bibliothécaire, cartothèque uniquement) : le serveur télécharge lui-même une carte PDF, PNG ou JPEG publique (Wikimedia Commons, Bibliothèque du Congrès, OCHA…), avec les mêmes protections que pour les livres (https, adresses privées refusées, 100 Mo, 10 minutes, contrôle des premiers octets).
+- `modules/import-url.js` reconnaît désormais les PNG et JPEG ; les livres restent limités au PDF et à l'EPUB.
+
 ## 1.15.2 — Import depuis une adresse : 10 minutes au lieu de 3
 
 - Un gros PDF d'archive.org (40 à 85 Mo) peut arriver à moins de 300 Ko/s : le téléchargement complet a maintenant 10 minutes au lieu de 3.

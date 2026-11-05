@@ -115,7 +115,17 @@ const jetonDe = async (email, motDePasse) => (await api('/connexion', null, 'POS
     for (const ip of ['127.0.0.1', '10.0.0.1', '192.168.1.1', '169.254.169.254', '::1', 'fd00::1']) assert.equal(ImportUrl.adressePrivee(ip), true);
     assert.equal(ImportUrl.nature(Buffer.from('%PDF-1.7')), 'pdf'); assert.equal(ImportUrl.nature(Buffer.from('<html>')), '');
 
-    console.log('Ressources 1.14-1.15 : import par adresse protégé ; documents PDF et EPUB, catégorie, lecture, plages, restriction, suppression ; limite du catalogue, vignettes et cache des couvertures vérifiés.');
+    // 1.16.0 : cartothèque — import d'une carte par adresse web
+    assert.equal(ImportUrl.nature(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A])), 'png');
+    assert.equal(ImportUrl.nature(Buffer.from([0xFF, 0xD8, 0xFF, 0xE0])), 'jpeg');
+    const carte = (await api('/medias', adm, 'POST', { type: 'carte', titre: 'Carte test 1.16' })).data;
+    const son = (await api('/medias', adm, 'POST', { type: 'audio', titre: 'Son test 1.16' })).data;
+    assert.equal((await api('/medias/' + carte.id + '/importer-url', lecteur, 'POST', { url: 'https://exemple.ht/c.png' })).code, 403);
+    assert.match((await api('/medias/' + son.id + '/importer-url', adm, 'POST', { url: 'https://exemple.ht/c.png' })).data.erreur, /cartothèque/);
+    assert.match((await api('/medias/' + carte.id + '/importer-url', adm, 'POST', { url: 'http://exemple.ht/c.png' })).data.erreur, /https/);
+    assert.match((await api('/medias/' + carte.id + '/importer-url', adm, 'POST', { url: 'https://10.0.0.5/c.png' })).data.erreur, /privée/);
+
+    console.log('Ressources 1.14-1.16 : cartes par adresse ; import par adresse protégé ; documents PDF et EPUB, catégorie, lecture, plages, restriction, suppression ; limite du catalogue, vignettes et cache des couvertures vérifiés.');
   } catch (e) { console.error(e); process.exitCode = 1; }
   finally { if (server && server.exitCode === null) { const fin = new Promise(r => server.once('exit', r)); server.kill(); await fin; } fs.rmSync(temp, { recursive: true, force: true, maxRetries: 5 }); }
 })();
