@@ -101,12 +101,12 @@ const CSP = [
   // 'unsafe-inline' reste nécessaire tant que l'interface utilise des onclick="…" dans ses gabarits
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://i.ytimg.com",
   "media-src 'self' blob:",
   "font-src 'self' data:",
   "connect-src 'self'",            // empêche un script injecté d'envoyer des données vers un autre site
   "worker-src 'self' blob:",
-  "frame-src 'self' blob:",
+  "frame-src 'self' blob: https://www.youtube-nocookie.com",
   "object-src 'none'",
   "base-uri 'self'",
   "frame-ancestors 'self'"

@@ -277,13 +277,14 @@
           <div class="champ"><label for="mDescription">Description</label><textarea id="mDescription" rows="2"></textarea></div>
           <div class="champ"><label for="mFichier">Fichier — audio : MP3/OGG/M4A/WAV · vidéo : MP4/WebM · carte : PNG/JPEG/PDF (300 Mo max)</label>
             <input id="mFichier" type="file" accept=".mp3,.ogg,.m4a,.wav,.mp4,.webm,.png,.jpg,.jpeg,.pdf"></div>
+          <div class="champ"><label for="mYoutube">… ou lien YouTube (vidéo seulement — lue dans OASIS sans téléchargement)</label><input id="mYoutube" placeholder="https://www.youtube.com/watch?v=…"></div>
           <button class="btn btn-bleu" id="btnAjouterMedia">Ajouter le média</button>
         </div>
         <table><thead><tr><th>Type</th><th>Titre</th><th>Fichier</th><th>Lectures</th><th></th></tr></thead><tbody>
         ${medias.map(x => `<tr>
           <td>${ICO[x.type]} ${x.type}</td>
           <td><b>${echap(x.titre)}</b><br><small style="color:var(--gris)">${echap(x.auteur || '')}${x.categorie ? ' · ' + echap(x.categorie) : ''}</small></td>
-          <td>${x.fichier ? `<span class="pastille dispo">✔ ${(x.taille / 1048576).toFixed(1)} Mo</span>` : '<span class="pastille indispo">✖ manquant</span>'}</td>
+          <td>${x.fichier ? `<span class="pastille dispo">✔ ${(x.taille / 1048576).toFixed(1)} Mo</span>` : x.youtube ? '<span class="pastille dispo">▶ YouTube</span>' : '<span class="pastille indispo">✖ manquant</span>'}</td>
           <td>${x.nbLectures}</td>
           <td><button class="mini-btn" data-download-type="medias" data-download-id="${x.id}" data-download-etat="${x.telechargementAutorise!==false}">${x.telechargementAutorise===false?'🔒 Autoriser téléchargement':'Restreindre téléchargement'}</button><button class="mini-btn rouge" data-suppr-media="${x.id}">Supprimer</button></td>
         </tr>`).join('')}
@@ -332,7 +333,7 @@
   }
 
   // Vérifie que le serveur en ligne correspond à cette interface.
-  const VERSION_INTERFACE = '1.17.0';
+  const VERSION_INTERFACE = '1.18.0';
   async function verifierVersionServeur() {
     const bandeau = (html) => { const b = document.createElement('div'); b.className = 'erreur bandeau-version'; b.setAttribute('role', 'alert'); b.innerHTML = html; $('#zoneAdmin').before(b); };
     const liste = (titre, l, aide) => l.length ? `<details><summary><b>${l.length} ${titre}</b> — ${aide}</summary><ul class="diag-liste">${l.slice(0, 200).map(f => `<li><code>${echap(f)}</code></li>`).join('')}${l.length > 200 ? `<li>… et ${l.length - 200} autres</li>` : ''}</ul></details>` : '';
@@ -1253,7 +1254,7 @@
         const media = await api('/medias', { method: 'POST', body: JSON.stringify({
           type: $('#mType').value, titre: $('#mTitre').value.trim(), auteur: $('#mAuteur').value.trim(),
           categorie: $('#mCategorie').value.trim(), langue: $('#mLangue').value, lieu: $('#mLieu').value.trim(),
-          duree: $('#mDuree').value.trim(), description: $('#mDescription').value.trim()
+          duree: $('#mDuree').value.trim(), description: $('#mDescription').value.trim(), youtube: ($('#mYoutube')?.value || '').trim()
         }) });
         const f = $('#mFichier').files[0];
         if (f) {
@@ -1264,7 +1265,7 @@
           if (!rep.ok) { const d = await rep.json().catch(() => ({})); throw new Error(d.erreur || 'Fichier refusé.'); }
           if($('#mType').value==='video'){try{await OasisVignetteVideo.fichier(media.id,f,jeton)}catch(e){toast('Vidéo ajoutée ; la vignette sera générée à l’ouverture de la cinémathèque.')}}
         }
-        toast('Média ajouté' + (f ? ' avec son fichier.' : ' — pensez à joindre le fichier.'));
+        toast('Média ajouté' + (f ? ' avec son fichier.' : media.youtube ? ' (vidéo YouTube).' : ' — pensez à joindre le fichier.'));
         afficherOnglet('multimedia');
       } catch (err) {
         btn.disabled = false; btn.textContent = 'Ajouter le média';

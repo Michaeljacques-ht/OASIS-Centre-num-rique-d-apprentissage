@@ -128,7 +128,18 @@ const jetonDe = async (email, motDePasse) => (await api('/connexion', null, 'POS
     assert.match((await api('/medias/' + carte.id + '/importer-url', adm, 'POST', { url: 'http://exemple.ht/c.png' })).data.erreur, /https/);
     assert.match((await api('/medias/' + carte.id + '/importer-url', adm, 'POST', { url: 'https://10.0.0.5/c.png' })).data.erreur, /privée/);
 
-    console.log('Ressources 1.14-1.16 : cartes par adresse ; import par adresse protégé ; documents PDF et EPUB, catégorie, lecture, plages, restriction, suppression ; limite du catalogue, vignettes et cache des couvertures vérifiés.');
+    // 1.18.0 : vidéos YouTube intégrées
+    const yt = await api('/medias', adm, 'POST', { type: 'video', titre: 'Vidéo YouTube test', youtube: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=5' });
+    assert.equal(yt.code, 201); assert.equal(yt.data.youtube, 'dQw4w9WgXcQ');
+    assert.equal((await api('/medias', adm, 'POST', { type: 'video', titre: 'Doublon YouTube', youtube: 'https://youtu.be/dQw4w9WgXcQ' })).code, 409);
+    assert.equal((await api('/medias', adm, 'POST', { type: 'video', titre: 'Mauvais lien', youtube: 'https://exemple.ht/watch?v=dQw4w9WgXcQ' })).code, 400);
+    assert.equal((await api('/medias', adm, 'POST', { type: 'audio', titre: 'Audio YouTube', youtube: 'dQw4w9WgXcQ' })).code, 400);
+    assert.equal((await api('/medias', lecteur, 'POST', { type: 'video', titre: 'Lecteur YouTube', youtube: 'abcdefghijk' })).code, 403);
+    const v2 = (await api('/medias', adm, 'POST', { type: 'video', titre: 'Vidéo à lier' })).data;
+    assert.equal((await api('/medias/' + v2.id + '/youtube', adm, 'POST', { youtube: 'https://www.youtube.com/embed/abcdefghijk' })).data.youtube, 'abcdefghijk');
+    assert.ok((await api('/medias?type=video', lecteur)).data.some(x => x.youtube === 'abcdefghijk'));
+
+    console.log('Ressources 1.14-1.18 : vidéos YouTube ; cartes par adresse ; import par adresse protégé ; documents PDF et EPUB, catégorie, lecture, plages, restriction, suppression ; limite du catalogue, vignettes et cache des couvertures vérifiés.');
   } catch (e) { console.error(e); process.exitCode = 1; }
   finally { if (server && server.exitCode === null) { const fin = new Promise(r => server.once('exit', r)); server.kill(); await fin; } fs.rmSync(temp, { recursive: true, force: true, maxRetries: 5 }); }
 })();

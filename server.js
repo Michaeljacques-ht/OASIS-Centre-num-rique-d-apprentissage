@@ -699,10 +699,25 @@ async function api(req, res, u) {
   }
 
   // --- Bibliothèque multimédia (audiothèque, cartothèque, cinémathèque) ---
+  // 1.18.0 : une vidéo peut être une vidéo YouTube intégrée (lien, sans téléchargement du fichier)
+  const idYoutube = (v) => {
+    v = String(v || '').trim(); if (!v) return '';
+    if (/^[A-Za-z0-9_-]{11}$/.test(v)) return v;
+    let u; try { u = new URL(v); } catch (e) { return null; }
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    const h = u.hostname.replace(/^(www|m)\./, '');
+    let id = null;
+    if (h === 'youtu.be') id = u.pathname.slice(1).split('/')[0];
+    else if (h === 'youtube.com' || h === 'youtube-nocookie.com') {
+      if (u.pathname === '/watch') id = u.searchParams.get('v');
+      else { const mm = /^\/(embed|shorts|live|v)\/([^/?#]+)/.exec(u.pathname); if (mm) id = mm[2]; }
+    }
+    return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+  };
   const vueMedia = (mo) => ({
     id: mo.id, type: mo.type, titre: mo.titre, auteur: mo.auteur, categorie: mo.categorie,
     description: mo.description, langue: mo.langue, annee: mo.annee, lieu: mo.lieu, duree: mo.duree,
-    motsCles: mo.motsCles, fichier: !!mo.ext, mime: mo.mime || '', taille: mo.taille || 0,
+    motsCles: mo.motsCles, fichier: !!mo.ext, youtube: mo.youtube || '', mime: mo.mime || '', taille: mo.taille || 0,
     telechargementAutorise:mo.telechargementAutorise!==false,vignette:!!mo.vignette,nbLectures: mo.nbLectures || 0, creeLe: mo.creeLe,
     maPosition: utilisateur ? ((db.progressionsMedias.find(p => p.utilisateurId === utilisateur.id && p.mediaId === mo.id) || {}).secondes || 0) : 0
   });
@@ -722,11 +737,15 @@ async function api(req, res, u) {
     if(doublons.trouver(db.medias,c,'medias'))return json(res,409,{erreur:'Ce média existe déjà.'});
     if (!['audio', 'carte', 'video'].includes(c.type)) return json(res, 400, { erreur: 'Type invalide (audio, carte ou video).' });
     if (!c.titre || !c.titre.trim()) return json(res, 400, { erreur: 'Le titre est requis.' });
+    const yt = idYoutube(c.youtube);
+    if (yt === null) return json(res, 400, { erreur: 'Lien YouTube invalide (ex. : https://www.youtube.com/watch?v=…).' });
+    if (yt && c.type !== 'video') return json(res, 400, { erreur: 'Un lien YouTube ne peut être associé qu\'à une vidéo.' });
+    if (yt && db.medias.some(x => x.youtube === yt)) return json(res, 409, { erreur: 'Cette vidéo YouTube est déjà dans la cinémathèque.' });
     const mo = { id: uid(), type: c.type, titre: c.titre.trim(), auteur: (c.auteur || '').trim(),
       categorie: (c.categorie || '').trim(), description: (c.description || '').trim(),
       langue: c.langue || 'Français', annee: parseInt(c.annee, 10) || new Date().getFullYear(),
       lieu: (c.lieu || '').trim(), duree: (c.duree || '').trim(), motsCles: (c.motsCles || '').trim(),
-      ext: '', mime: '', taille: 0, nbLectures: 0, creeLe: maintenant() };
+      ext: '', mime: '', taille: 0, youtube: yt || '', nbLectures: 0, creeLe: maintenant() };
     db.medias.push(mo);
     journal('Média ajouté', utilisateur, `${mo.type} : ${mo.titre}`); sauverDB();
     return json(res, 201, vueMedia(mo));
@@ -744,6 +763,17 @@ async function api(req, res, u) {
     catch (err) { mo.ext = ''; mo.mime = ''; return json(res, 413, { erreur: err.message }); }
     sauverDB();
     return json(res, 201, { ok: true, taille: mo.taille });
+  }
+  if (seg[1] === 'medias' && seg[2] && seg[3] === 'youtube' && m === 'POST') {
+    if (!exigeBiblio()) return;
+    const mo = db.medias.find(x => x.id === seg[2]);
+    if (!mo) return json(res, 404, { erreur: 'Média introuvable.' });
+    if (mo.type !== 'video') return json(res, 400, { erreur: 'Un lien YouTube ne peut être associé qu\'à une vidéo.' });
+    const yt = idYoutube((await lireCorps(req)).youtube);
+    if (!yt) return json(res, 400, { erreur: 'Lien YouTube invalide.' });
+    if (db.medias.some(x => x.youtube === yt && x.id !== mo.id)) return json(res, 409, { erreur: 'Cette vidéo YouTube est déjà dans la cinémathèque.' });
+    mo.youtube = yt; sauverDB();
+    return json(res, 200, vueMedia(mo));
   }
   // 1.16.0 : la cartothèque peut importer une carte (PDF, PNG ou JPEG) depuis une adresse web publique
   // 1.17.0 : même chose pour l'audiothèque (MP3, OGG, M4A, WAV) et la cinémathèque (MP4, WebM)

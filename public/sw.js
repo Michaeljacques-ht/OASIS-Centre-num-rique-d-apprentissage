@@ -1,6 +1,6 @@
 /* OASIS Bibliothèque Numérique — Service Worker (PWA) */
 importScripts('/partage-stockage.js');
-const CACHE = 'oasis-v66';
+const CACHE = 'oasis-v67';
 self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(cles => Promise.all(cles.map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -12,6 +12,7 @@ self.addEventListener('fetch', e => {
   }
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
+  if (url.origin !== self.location.origin) return; // vignettes YouTube, etc. : laissées au navigateur
   if (url.pathname.startsWith('/api/')) {
     e.respondWith(fetch(e.request).catch(() => new Response(JSON.stringify({ erreur: 'Hors ligne — reconnectez-vous à Internet.' }), { headers: { 'Content-Type': 'application/json' } })));
     return;

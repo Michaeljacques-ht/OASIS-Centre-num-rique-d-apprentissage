@@ -296,8 +296,8 @@
         <p style="color:var(--gris);font-size:13px;margin-bottom:14px">${SOUS[t]}</p>
         ${medias.length ? `<div class="grille-livres">${medias.map(x => `
           <button class="carte-livre" data-media="${x.id}">
-            <div class="couverture ${x.type==='video'?'couverture-video':''}" ${x.type==='video'&&x.fichier&&!x.vignette?`data-vignette-video="${x.id}" data-video-titre="${echap(x.titre)}"`:''} style="background:linear-gradient(150deg, var(--bleu), #10243e)">${x.type==='video'&&x.vignette?`<img src="/api/medias/${x.id}/vignette" alt="Vignette de ${echap(x.titre)}" loading="lazy">`:''}
-              <span class="badge-type">${x.fichier ? ICO[x.type] + ' ' + (x.duree || 'Disponible') : '⏳ Bientôt'}</span>
+            <div class="couverture ${x.type==='video'?'couverture-video':''}" ${x.type==='video'&&x.fichier&&!x.vignette?`data-vignette-video="${x.id}" data-video-titre="${echap(x.titre)}"`:''} style="background:linear-gradient(150deg, var(--bleu), #10243e)">${x.type==='video'&&x.vignette?`<img src="/api/medias/${x.id}/vignette" alt="Vignette de ${echap(x.titre)}" loading="lazy">`:x.youtube?`<img src="https://i.ytimg.com/vi/${encodeURIComponent(x.youtube)}/hqdefault.jpg" alt="Vignette de ${echap(x.titre)}" loading="lazy" referrerpolicy="no-referrer">`:''}
+              <span class="badge-type">${x.fichier ? ICO[x.type] + ' ' + (x.duree || 'Disponible') : x.youtube ? '▶ YouTube' + (x.duree ? ' · ' + echap(x.duree) : '') : '⏳ Bientôt'}</span>
               <div class="titre-couv">${echap(x.titre)}</div>
               <div class="icone-couv">${ICO[x.type]}</div>
             </div>
@@ -905,9 +905,34 @@
   $('#btnAPropos').addEventListener('click', ouvrirAPropos);
 
   // ---------- Lecteurs multimédias ----------
+  // 1.18.0 : vidéo YouTube intégrée (mode sans cookies de youtube-nocookie.com)
+  function ouvrirYoutube(x) {
+    const id = encodeURIComponent(x.youtube);
+    $('#zoneModale').innerHTML = `
+      <div class="voile" id="voile">
+        <div class="modale lecteur" style="max-width:900px" role="dialog" aria-modal="true">
+          <div class="modale-entete" style="flex-wrap:wrap">
+            <div style="flex:1;min-width:200px"><h3>🎬 ${echap(x.titre)}</h3>
+              <p style="color:var(--gris)">${echap(x.auteur || '')}${x.categorie ? ' · ' + echap(x.categorie) : ''} · ${echap(x.langue)}</p></div>
+            <button class="fermer" id="btnFermer" aria-label="Fermer">✕</button>
+          </div>
+          <div class="corps">
+            ${x.description ? `<p style="margin-bottom:12px">${echap(x.description)}</p>` : ''}
+            <div style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden">
+              <iframe src="https://www.youtube-nocookie.com/embed/${id}?rel=0" title="${echap(x.titre)}" style="position:absolute;inset:0;width:100%;height:100%;border:0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+            </div>
+            <p style="margin-top:10px;font-size:12.5px;color:var(--gris)">Vidéo hébergée sur YouTube — une connexion Internet est nécessaire. <a href="https://www.youtube.com/watch?v=${id}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a></p>
+          </div>
+        </div>
+      </div>`;
+    $('#voile').addEventListener('click', e => { if (e.target.id === 'voile') fermerModale(); });
+    $('#btnFermer').addEventListener('click', fermerModale);
+  }
   function ouvrirMedia(id) {
     const x = cacheMedias.find(v => v.id === id);
     if (!x) return;
+    if (!x.fichier && x.youtube) return ouvrirYoutube(x);
     if (!x.fichier) return toast('Le fichier de ce média n\'est pas encore disponible.');
     const src = `/api/medias/${x.id}/fichier?lecture=1&jeton=${jeton}`;
     if (x.type === 'carte') return ouvrirCarte(x, src);

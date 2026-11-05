@@ -1,3 +1,8 @@
+## 1.18.0 — Cinémathèque : vidéos YouTube intégrées
+
+- Une vidéo peut désormais être un lien YouTube (champ « lien YouTube » du formulaire, ou `youtube` dans `POST /api/medias` ; `POST /api/medias/:id/youtube` pour une fiche existante). Rien n'est téléchargé : la vidéo est lue dans OASIS via le lecteur sans cookies `youtube-nocookie.com`.
+- La politique de sécurité (CSP) autorise uniquement `www.youtube-nocookie.com` en cadre et `i.ytimg.com` pour les vignettes. Le service worker ne met plus en cache les ressources d'autres sites.
+
 ## 1.17.0 — Audiothèque et cinémathèque : import par adresse web
 
 - `POST /api/medias/:id/importer-url` accepte maintenant l'audio (MP3, OGG, M4A, WAV) et la vidéo (MP4, WebM), en plus des cartes. Le format est reconnu sur les premiers octets du fichier.
