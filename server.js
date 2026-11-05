@@ -746,25 +746,31 @@ async function api(req, res, u) {
     return json(res, 201, { ok: true, taille: mo.taille });
   }
   // 1.16.0 : la cartothèque peut importer une carte (PDF, PNG ou JPEG) depuis une adresse web publique
+  // 1.17.0 : même chose pour l'audiothèque (MP3, OGG, M4A, WAV) et la cinémathèque (MP4, WebM)
   if (seg[1] === 'medias' && seg[2] && seg[3] === 'importer-url' && m === 'POST') {
     if (!exigeBiblio()) return;
     const mo = db.medias.find(x => x.id === seg[2]);
     if (!mo) return json(res, 404, { erreur: 'Média introuvable.' });
-    if (mo.type !== 'carte') return json(res, 400, { erreur: 'L’import par adresse est réservé à la cartothèque.' });
+    const TYPES_IMPORT = {
+      carte: { pdf: ['application/pdf', '.pdf'], png: ['image/png', '.png'], jpeg: ['image/jpeg', '.jpg'] },
+      audio: { mp3: ['audio/mpeg', '.mp3'], ogg: ['audio/ogg', '.ogg'], m4a: ['audio/mp4', '.m4a'], wav: ['audio/wav', '.wav'] },
+      video: { mp4: ['video/mp4', '.mp4'], webm: ['video/webm', '.webm'] }
+    };
+    const types = TYPES_IMPORT[mo.type];
+    if (!types) return json(res, 400, { erreur: 'Type de média non pris en charge.' });
     const { url: adresse } = await lireCorps(req);
     const importUrl = require('./modules/import-url');
     try { importUrl.verifierUrl(adresse); } catch (e) { return json(res, 400, { erreur: e.message }); }
     fs.mkdirSync(DOSSIER_MEDIAS, { recursive: true });
     const tmp = path.join(DOSSIER_MEDIAS, mo.id + '.import');
     let info;
-    try { info = await importUrl.telecharger(adresse, tmp, { natures: ['pdf', 'png', 'jpeg'] }); }
+    try { info = await importUrl.telecharger(adresse, tmp, { natures: Object.keys(types) }); }
     catch (e) { return json(res, 422, { erreur: 'Import impossible : ' + e.message }); }
-    const types = { pdf: ['application/pdf', '.pdf'], png: ['image/png', '.png'], jpeg: ['image/jpeg', '.jpg'] };
     const [mime, ext] = types[info.nature];
     if (mo.ext && fs.existsSync(cheminMedia(mo))) fs.unlinkSync(cheminMedia(mo));
     mo.ext = ext; mo.mime = mime; mo.taille = info.taille; mo.vignette = false; mo.sourceUrl = info.urlFinale;
     fs.renameSync(tmp, cheminMedia(mo));
-    journal('Carte importée depuis une adresse web', utilisateur, mo.titre + ' — ' + new URL(info.urlFinale).hostname);
+    journal('Média importé depuis une adresse web', utilisateur, mo.titre + ' — ' + new URL(info.urlFinale).hostname);
     sauverDB();
     return json(res, 201, { ok: true, nature: info.nature, taille: info.taille, mime });
   }

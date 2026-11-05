@@ -52,6 +52,13 @@ function nature(tete) {
   if (tete.slice(0, 5).toString('latin1') === '%PDF-') return 'pdf';
   if (tete[0] === 0x89 && tete.slice(1, 4).toString('latin1') === 'PNG') return 'png';
   if (tete[0] === 0xFF && tete[1] === 0xD8 && tete[2] === 0xFF) return 'jpeg';
+  // 1.17.0 : audio et vidéo (audiothèque, cinémathèque)
+  const debut4 = tete.slice(0, 4).toString('latin1');
+  if (debut4 === 'OggS') return 'ogg';
+  if (debut4 === 'RIFF' && tete.slice(8, 12).toString('latin1') === 'WAVE') return 'wav';
+  if (tete.slice(0, 3).toString('latin1') === 'ID3' || (tete[0] === 0xFF && (tete[1] & 0xE0) === 0xE0)) return 'mp3';
+  if (tete.slice(4, 8).toString('latin1') === 'ftyp') return /^M4A|^M4B/.test(tete.slice(8, 12).toString('latin1')) ? 'm4a' : 'mp4';
+  if (tete[0] === 0x1A && tete[1] === 0x45 && tete[2] === 0xDF && tete[3] === 0xA3) return 'webm';
   if (tete[0] === 0x50 && tete[1] === 0x4B && tete.slice(30, 58).toString('latin1') === 'mimetypeapplication/epub+zip') return 'epub';
   // certains PDF commencent par quelques octets parasites avant l'en-tête
   if (tete.slice(0, 1024).toString('latin1').includes('%PDF-')) return 'pdf';
@@ -69,7 +76,7 @@ function telecharger(adresse, destination, { redirections = 5, debut = Date.now(
     const req = https.get(u, {
       lookup: lookupSur,
       timeout: 120000,   // archive.org peut mettre plus d'une minute avant d'envoyer le premier octet
-      headers: { 'User-Agent': 'OASIS-Bibliotheque/1.16.1 (+https://oasis-centre-num-rique-d-apprentissage.onrender.com/; bibliotheque numerique educative en Haiti) Node.js', Accept: 'application/pdf,application/epub+zip,image/png,image/jpeg,*/*;q=0.5' }
+      headers: { 'User-Agent': 'OASIS-Bibliotheque/1.17 (+https://oasis-centre-num-rique-d-apprentissage.onrender.com/; bibliotheque numerique educative en Haiti) Node.js', Accept: '*/*' }
     }, res => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
         res.resume();

@@ -1,3 +1,7 @@
+## 1.17.0 — Audiothèque et cinémathèque : import par adresse web
+
+- `POST /api/medias/:id/importer-url` accepte maintenant l'audio (MP3, OGG, M4A, WAV) et la vidéo (MP4, WebM), en plus des cartes. Le format est reconnu sur les premiers octets du fichier.
+
 ## 1.16.1 — Import par adresse : identification auprès des sites
 
 - Le serveur se présente désormais avec l'adresse du site OASIS dans son en-tête User-Agent, comme l'exige Wikimedia Commons, qui refusait les téléchargements (erreur 429).

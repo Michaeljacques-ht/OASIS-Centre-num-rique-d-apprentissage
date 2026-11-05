@@ -121,7 +121,10 @@ const jetonDe = async (email, motDePasse) => (await api('/connexion', null, 'POS
     const carte = (await api('/medias', adm, 'POST', { type: 'carte', titre: 'Carte test 1.16' })).data;
     const son = (await api('/medias', adm, 'POST', { type: 'audio', titre: 'Son test 1.16' })).data;
     assert.equal((await api('/medias/' + carte.id + '/importer-url', lecteur, 'POST', { url: 'https://exemple.ht/c.png' })).code, 403);
-    assert.match((await api('/medias/' + son.id + '/importer-url', adm, 'POST', { url: 'https://exemple.ht/c.png' })).data.erreur, /cartothèque/);
+    assert.match((await api('/medias/' + son.id + '/importer-url', adm, 'POST', { url: 'http://exemple.ht/c.mp3' })).data.erreur, /https/);
+    assert.equal(ImportUrl.nature(Buffer.from('OggS\0\x02')), 'ogg');
+    assert.equal(ImportUrl.nature(Buffer.from('ID3\x04\0')), 'mp3');
+    assert.equal(ImportUrl.nature(Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from('ftypM4A ')])), 'm4a');
     assert.match((await api('/medias/' + carte.id + '/importer-url', adm, 'POST', { url: 'http://exemple.ht/c.png' })).data.erreur, /https/);
     assert.match((await api('/medias/' + carte.id + '/importer-url', adm, 'POST', { url: 'https://10.0.0.5/c.png' })).data.erreur, /privée/);
 
