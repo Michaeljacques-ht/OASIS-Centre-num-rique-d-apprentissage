@@ -1,3 +1,7 @@
+## 1.16.1 — Import par adresse : identification auprès des sites
+
+- Le serveur se présente désormais avec l'adresse du site OASIS dans son en-tête User-Agent, comme l'exige Wikimedia Commons, qui refusait les téléchargements (erreur 429).
+
 ## 1.16.0 — Cartothèque : import de cartes depuis une adresse web
 
 - Nouvelle route `POST /api/medias/:id/importer-url` (bibliothécaire, cartothèque uniquement) : le serveur télécharge lui-même une carte PDF, PNG ou JPEG publique (Wikimedia Commons, Bibliothèque du Congrès, OCHA…), avec les mêmes protections que pour les livres (https, adresses privées refusées, 100 Mo, 10 minutes, contrôle des premiers octets).

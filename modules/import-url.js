@@ -69,7 +69,7 @@ function telecharger(adresse, destination, { redirections = 5, debut = Date.now(
     const req = https.get(u, {
       lookup: lookupSur,
       timeout: 120000,   // archive.org peut mettre plus d'une minute avant d'envoyer le premier octet
-      headers: { 'User-Agent': 'OASIS-Bibliotheque/1.15 (import de documents libres)', Accept: 'application/pdf,application/epub+zip,image/png,image/jpeg,*/*;q=0.5' }
+      headers: { 'User-Agent': 'OASIS-Bibliotheque/1.16.1 (+https://oasis-centre-num-rique-d-apprentissage.onrender.com/; bibliotheque numerique educative en Haiti) Node.js', Accept: 'application/pdf,application/epub+zip,image/png,image/jpeg,*/*;q=0.5' }
     }, res => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
         res.resume();
