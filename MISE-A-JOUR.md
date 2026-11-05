@@ -1,3 +1,7 @@
+## 1.15.1 — Import depuis une adresse : délai allongé
+
+- Le serveur attend désormais jusqu'à 2 minutes le premier octet (au lieu de 30 s) : archive.org met souvent plus de 30 s à commencer l'envoi d'un gros PDF, ce qui provoquait l'erreur « Le site ne répond pas ».
+
 # Mettre à jour OASIS — mode d’emploi
 
 Le site tourne sur **Render**, qui lit le dépôt **GitHub** `Michaeljacques-ht/OASIS-Centre-num-rique-d-apprentissage`.

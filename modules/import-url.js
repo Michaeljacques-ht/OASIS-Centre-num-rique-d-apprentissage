@@ -66,7 +66,7 @@ function telecharger(adresse, destination, { redirections = 5, debut = Date.now(
     try { u = verifierUrl(adresse); } catch (e) { return ko(e); }
     const req = https.get(u, {
       lookup: lookupSur,
-      timeout: 30000,
+      timeout: 120000,   // archive.org peut mettre plus d'une minute avant d'envoyer le premier octet
       headers: { 'User-Agent': 'OASIS-Bibliotheque/1.15 (import de documents libres)', Accept: 'application/pdf,application/epub+zip,*/*;q=0.5' }
     }, res => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
