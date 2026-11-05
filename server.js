@@ -1333,6 +1333,38 @@ async function api(req, res, u) {
     return json(res,405,{erreur:'Méthode non autorisée.'});
   }
   // --- E-books PDF ---
+  // --- Import d'un PDF ou EPUB depuis une adresse web publique (Gallica, Wikisource, ONU…) ---
+  if (seg[1] === 'livres' && seg[2] && seg[3] === 'importer-url' && m === 'POST') {
+    if (!exigeBiblio()) return;
+    const l = db.livres.find(x => x.id === seg[2]);
+    if (!l) return json(res, 404, { erreur: 'Livre introuvable.' });
+    const { url: adresse } = await lireCorps(req);
+    const importUrl = require('./modules/import-url');
+    try { importUrl.verifierUrl(adresse); } catch (e) { return json(res, 400, { erreur: e.message }); }
+    fs.mkdirSync(DOSSIER_PDF, { recursive: true });
+    const tmp = path.join(DOSSIER_PDF, l.id + '.import');
+    let info;
+    try { info = await importUrl.telecharger(adresse, tmp); }
+    catch (e) { return json(res, 422, { erreur: 'Import impossible : ' + e.message }); }
+    try {
+      const donnees = await fs.promises.readFile(tmp);
+      const empreinte = crypto.createHash('sha256').update(donnees).digest('hex');
+      if (db.livres.some(x => x.id !== l.id && (x.empreintePdf === empreinte || x.empreinteEpub === empreinte))) { fs.rmSync(tmp, { force: true }); return json(res, 409, { erreur: 'Ce fichier existe déjà dans le catalogue.' }); }
+      if (info.nature === 'epub') {
+        if (!require('./modules/epub-valide')(donnees)) { fs.rmSync(tmp, { force: true }); return json(res, 400, { erreur: 'EPUB invalide.' }); }
+        fs.renameSync(tmp, cheminEpub(l.id)); l.epub = true; l.empreinteEpub = empreinte;
+        try { l.nbMotsLecture = dureeLecture.epub(donnees); } catch {}
+        recupererCouvertureEpub(l, true);
+      } else {
+        fs.renameSync(tmp, cheminPdf(l.id)); l.pdf = true; l.empreintePdf = empreinte;
+        try { const pdf = await require('./modules/pdf-lib').PDFDocument.load(donnees, { ignoreEncryption: true }); l.nbPagesLecture = pdf.getPageCount(); } catch {}
+      }
+      l.sourceUrl = info.urlFinale;
+      journal('Document importé depuis une adresse web', utilisateur, l.titre + ' — ' + new URL(info.urlFinale).hostname);
+      sauverDB();
+      return json(res, 201, { ok: true, nature: info.nature, taille: info.taille, nomFichier: info.nomFichier, couverture: !!l.couverture });
+    } catch (e) { fs.rmSync(tmp, { force: true }); return json(res, 500, { erreur: 'Import impossible : ' + e.message }); }
+  }
   if (seg[1] === 'livres' && seg[2] && seg[3] === 'pdf' && m === 'POST') {
     if (!exigeBiblio()) return;
     const l = db.livres.find(x => x.id === seg[2]);

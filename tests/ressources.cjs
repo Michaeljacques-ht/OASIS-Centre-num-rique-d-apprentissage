@@ -105,7 +105,17 @@ const jetonDe = async (email, motDePasse) => (await api('/connexion', null, 'POS
     const fav = id => api('/livres?format=page&q=' + encodeURIComponent('changé 1.14.2'), id).then(r => r.data.livres[0].favori);
     assert.equal(await fav(lecteur), true); assert.equal(await fav(adm), false); assert.equal(await fav(null), false);
 
-    console.log('Ressources 1.14 : documents PDF et EPUB, catégorie, lecture, plages, restriction, suppression ; limite du catalogue, vignettes et cache des couvertures vérifiés.');
+    // 1.15.0 : import depuis une adresse web — protections
+    const cibleUrl = (await api('/livres?limite=1', adm)).data[0].id;
+    assert.equal((await api('/livres/' + cibleUrl + '/importer-url', lecteur, 'POST', { url: 'https://exemple.ht/a.pdf' })).code, 403);
+    assert.match((await api('/livres/' + cibleUrl + '/importer-url', adm, 'POST', { url: 'http://exemple.ht/a.pdf' })).data.erreur, /https/);
+    assert.match((await api('/livres/' + cibleUrl + '/importer-url', adm, 'POST', { url: 'https://127.0.0.1/a.pdf' })).data.erreur, /privée/);
+    assert.match((await api('/livres/' + cibleUrl + '/importer-url', adm, 'POST', { url: 'https://localhost/a.pdf' })).data.erreur, /privée|impossible/);
+    const ImportUrl = require('../modules/import-url');
+    for (const ip of ['127.0.0.1', '10.0.0.1', '192.168.1.1', '169.254.169.254', '::1', 'fd00::1']) assert.equal(ImportUrl.adressePrivee(ip), true);
+    assert.equal(ImportUrl.nature(Buffer.from('%PDF-1.7')), 'pdf'); assert.equal(ImportUrl.nature(Buffer.from('<html>')), '');
+
+    console.log('Ressources 1.14-1.15 : import par adresse protégé ; documents PDF et EPUB, catégorie, lecture, plages, restriction, suppression ; limite du catalogue, vignettes et cache des couvertures vérifiés.');
   } catch (e) { console.error(e); process.exitCode = 1; }
   finally { if (server && server.exitCode === null) { const fin = new Promise(r => server.once('exit', r)); server.kill(); await fin; } fs.rmSync(temp, { recursive: true, force: true, maxRetries: 5 }); }
 })();

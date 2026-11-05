@@ -14,13 +14,28 @@
       headers: { 'Content-Type': 'application/json', ...(jeton ? { Authorization: 'Bearer ' + jeton } : {}), ...(options.headers || {}) }
     });
     const data = await rep.json().catch(() => ({}));
-    if (!rep.ok) { const erreur = new Error(data.erreur || 'Erreur serveur'); erreur.statut = rep.status; throw erreur; }
+    if (!rep.ok) { const erreur = new Error(data.erreur || 'Erreur serveur'); erreur.statut = rep.status; if (await sessionPerdue(rep.status, data.erreur)) erreur.sessionPerdue = true; throw erreur; }
     if (chemin.split('?')[0] === '/livres' && (!options.method || options.method === 'GET')) {
       if (Array.isArray(data)) return data;
       for (const key of ['livres', 'items', 'data', 'results']) if (Array.isArray(data[key])) return data[key];
       throw new Error(data.erreur || 'Le catalogue reçu est invalide. Vérifiez que le serveur et les fichiers du site sont à jour.');
     }
     return data;
+  }
+  /* Session d'administration fermée (mot de passe changé, déconnexion dans un autre onglet, redémarrage) :
+     on prévient clairement au lieu d'afficher « Réservé au bibliothécaire » à chaque action. */
+  let alerteSession = false;
+  async function sessionPerdue(statut, message) {
+    if (statut !== 401 && !(statut === 403 && /Réservé au bibliothécaire/.test(message || ''))) return false;
+    try { const r = await fetch('/api/moi', { headers: { Authorization: 'Bearer ' + jeton } }); if (r.ok && (await r.json()).role === 'bibliothecaire') return false; } catch { return false; }
+    if (!alerteSession) {
+      alerteSession = true;
+      document.getElementById('zoneModale').innerHTML = `<div class="voile"><div class="modale" role="alertdialog" aria-modal="true"><div class="corps" style="padding:24px">
+        <h3>🔒 Votre session d’administration est fermée</h3>
+        <p style="margin:10px 0 18px">Le serveur ne vous reconnaît plus comme bibliothécaire : le mot de passe administrateur a peut-être été changé, ou vous vous êtes déconnecté dans un autre onglet. Rien n’a été modifié. Reconnectez-vous, puis recommencez l’opération.</p>
+        <button class="btn btn-bleu" onclick="localStorage.removeItem('oasis_jeton');location.href='/'">Se reconnecter</button></div></div></div>`;
+    }
+    return true;
   }
   function toast(msg) {
     document.querySelectorAll('.toast').forEach(t => t.remove());
@@ -92,6 +107,7 @@
             <button class="btn" id="btnDoublons">Détecter les doublons</button><button class="btn" id="btnCategories">🗂️ Catégories</button>
             ${livres.some(l => l.couverture && !l.vignette) ? `<button class="btn" id="btnAllegerCouv" title="Créer des vignettes légères pour accélérer l'affichage">⚡ Alléger les couvertures (${livres.filter(l => l.couverture && !l.vignette).length})</button>` : ''}
             <button class="btn" id="btnImporterPdf">📚 Importer des PDF</button>
+            <button class="btn" id="btnImporterUrl" title="Le serveur télécharge lui-même des PDF ou EPUB libres (Gallica, Wikisource…)">🌐 Importer depuis une adresse</button>
             <button class="btn" id="btnImporter">📥 Importer (CSV / JSON)</button>
             <button class="btn btn-ajouter-livre" id="btnNouveauLivre">+ Ajouter un livre</button>
             <button class="btn btn-bleu" id="btnNouveauEpub">+ Ajouter EPUB</button>
@@ -316,7 +332,7 @@
   }
 
   // Vérifie que le serveur en ligne correspond à cette interface.
-  const VERSION_INTERFACE = '1.14.2';
+  const VERSION_INTERFACE = '1.15.0';
   async function verifierVersionServeur() {
     const bandeau = (html) => { const b = document.createElement('div'); b.className = 'erreur bandeau-version'; b.setAttribute('role', 'alert'); b.innerHTML = html; $('#zoneAdmin').before(b); };
     const liste = (titre, l, aide) => l.length ? `<details><summary><b>${l.length} ${titre}</b> — ${aide}</summary><ul class="diag-liste">${l.slice(0, 200).map(f => `<li><code>${echap(f)}</code></li>`).join('')}${l.length > 200 ? `<li>… et ${l.length - 200} autres</li>` : ''}</ul></details>` : '';
@@ -528,6 +544,47 @@
     if ($('#bilanVignettes')) { $('#bilanVignettes').textContent = `${fait} vignette(s) créée(s)${ko ? `, ${ko} échec(s)` : ''}${arret ? ' — arrêté' : ''}.`; $('#arreterVignettes').textContent = 'Fermer'; $('#arreterVignettes').onclick = () => { fermerModale(); afficherOnglet('catalogue'); }; }
   }
 
+  /* ---------- Import depuis une adresse web (le serveur télécharge lui-même) ---------- */
+  async function formImporterUrl() {
+    await chargerCategories();
+    modale(`<h3>🌐 Importer depuis une adresse web</h3>
+      <p>Collez une adresse <b>https://</b> par ligne, vers un PDF ou un EPUB <b>libre de droits</b> (Gallica, Wikisource, archive.org, sites officiels…). Vous pouvez ajouter le titre, l'auteur et la catégorie après des barres verticales :<br><code>https://… | Titre | Auteur | Catégorie</code></p>
+      <div class="champ"><label for="urlLignes">Adresses</label><textarea id="urlLignes" rows="8" placeholder="https://gallica.bnf.fr/ark:/12148/bpt6k…pdf | Les Contemplations | Victor Hugo | Littérature"></textarea></div>
+      <div class="champ"><label for="urlCategorie">Catégorie par défaut</label><select id="urlCategorie">${optionsCategories('Littérature')}</select></div>
+      <div id="urlResultats"></div>
+      <div class="pied-form"><button class="btn" id="urlFermer">Fermer</button><button class="btn btn-bleu" id="urlLancer">Importer</button></div>`);
+    $('#urlFermer').onclick = () => { fermerModale(); afficherOnglet('catalogue'); };
+    $('#urlLancer').onclick = async () => {
+      const lignes = $('#urlLignes').value.split('\n').map(x => x.trim()).filter(Boolean);
+      if (!lignes.length) return;
+      $('#urlLancer').disabled = true;
+      const zone = $('#urlResultats');
+      zone.innerHTML = `<table class="table-moderne" style="min-width:0"><tbody>${lignes.map((l, i) => `<tr><td>${echap(l.split('|')[1]?.trim() || l.split('|')[0].trim()).slice(0, 80)}</td><td id="urlEtat${i}">En attente…</td></tr>`).join('')}</tbody></table>`;
+      let ok = 0;
+      for (let i = 0; i < lignes.length; i++) {
+        const [adresse, titre, auteur, categorie] = lignes[i].split('|').map(x => (x || '').trim());
+        const etat = $('#urlEtat' + i); etat.textContent = 'Téléchargement par le serveur…';
+        let livre = null;
+        try {
+          livre = await api('/livres', { method: 'POST', body: JSON.stringify({ titre: titre || decodeURIComponent(adresse.split('/').pop() || 'Document').replace(/\.(pdf|epub)$/i, ''), auteur: auteur || 'Auteur à préciser', categorie: listeCategories.includes(categorie) ? categorie : $('#urlCategorie').value, type: 'numerique' }) });
+          const r = await api('/livres/' + livre.id + '/importer-url', { method: 'POST', body: JSON.stringify({ url: adresse }) });
+          if (r.nature === 'pdf') {
+            etat.textContent = 'Création de la couverture…';
+            const rep = await fetch('/api/livres/' + livre.id + '/pdf?lecture=1', { headers: { Authorization: 'Bearer ' + jeton } });
+            if (rep.ok) await genererCouverture(livre.id, await rep.blob());
+          }
+          ok++; etat.innerHTML = `<span class="puce puce-vert">✔ ${r.nature.toUpperCase()} · ${(r.taille / 1048576).toFixed(1)} Mo</span>`;
+        } catch (e) {
+          if (livre) await api('/livres/' + livre.id, { method: 'DELETE' }).catch(() => {});
+          etat.innerHTML = `<span class="puce puce-rouge">✖ ${echap(e.message)}</span>`;
+          if (e.sessionPerdue) break;
+        }
+      }
+      toast(ok + ' document(s) importé(s).');
+      $('#urlLancer').disabled = false;
+    };
+  }
+
   async function envoyerEpub(id, fichier) {
     if(fichier.size > 50*1024*1024) throw new Error('EPUB trop volumineux (50 Mo max).');
     const rep = await fetch('/api/livres/'+id+'/epub',{method:'POST',headers:{Authorization:'Bearer '+jeton,'Content-Type':'application/epub+zip'},body:fichier});
@@ -552,7 +609,7 @@
       body: fichier
     });
     const d = await rep.json().catch(() => ({}));
-    if (!rep.ok) throw new Error(d.erreur || 'Échec de l\'envoi du PDF.');
+    if (!rep.ok) { const e = new Error(d.erreur || 'Échec de l\'envoi du PDF.'); e.sessionPerdue = await sessionPerdue(rep.status, d.erreur); throw e; }
     return d;
   }
 
@@ -941,10 +998,11 @@
           const auteur = document.querySelector(`[data-imp-auteur="${i}"]`).value.trim() || 'Auteur à préciser';
           const categorie = document.querySelector(`[data-imp-cat="${i}"]`).value;
           const isbn=document.querySelector(`[data-imp-isbn="${i}"]`).value.trim();const editeur=document.querySelector(`[data-imp-editeur="${i}"]`).value.trim(),edition=document.querySelector(`[data-imp-edition="${i}"]`).value.trim();const livre = await api('/livres', { method: 'POST', body: JSON.stringify({ titre, auteur, categorie, editeur,edition,isbn,type: 'numerique' }) });
-          await envoyerPdf(livre.id, f);
+          try { await envoyerPdf(livre.id, f); }
+          catch (e) { await api('/livres/' + livre.id, { method: 'DELETE' }).catch(() => {}); throw e; }   // pas de fiche « Incomplet » orpheline
           await genererCouverture(livre.id, f);
           ok++;
-        } catch (err) { echoue++; erreurs.push(`${f.name} : ${err.message}`); }
+        } catch (err) { echoue++; erreurs.push(`${f.name} : ${err.message}`); if (err.sessionPerdue) { echoue += filesPdf.length - i - 1; break; } }
       }
       btn.textContent = 'Importer tout';
       $('#msgForm').innerHTML = `<div class="${echoue ? 'erreur' : 'succes'}">✅ ${ok} livre(s) importé(s) et classé(s)${echoue ? ` — ⚠️ ${echoue} échec(s) : ${echap(erreurs.slice(0, 3).join(' · '))}` : ''}</div>`;
@@ -1186,6 +1244,7 @@
     $('#btnNouveauEpub')?.addEventListener('click', () => formImporterEpub());
     $('#btnImporter')?.addEventListener('click', formImporter);
     $('#btnImporterPdf')?.addEventListener('click', formImporterPdf);
+    $('#btnImporterUrl')?.addEventListener('click', formImporterUrl);
     $('#btnCategories')?.addEventListener('click', formCategories);
     $('#btnAjouterMedia')?.addEventListener('click', async () => {
       const btn = $('#btnAjouterMedia');

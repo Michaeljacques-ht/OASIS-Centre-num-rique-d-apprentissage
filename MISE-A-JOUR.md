@@ -104,3 +104,8 @@ Sur Render : **Events** → choisissez un déploiement réussi plus ancien → *
 - Bibliothèque, Catégories et Nouveautés : le serveur n'envoie que la page de 50 livres affichée, avec les filtres, au lieu des 3 300 livres.
 - Aucun réglage à faire : déployez simplement cette version.
 
+## Version 1.15.0 — Importer depuis une adresse web
+
+- Catalogue → « 🌐 Importer depuis une adresse » : collez une adresse https:// par ligne (`adresse | titre | auteur | catégorie`). Le serveur télécharge lui-même le PDF ou l'EPUB (Gallica, Wikisource, archive.org, sites officiels), crée la fiche et la couverture.
+- Protections : https seulement, adresses privées refusées, 100 Mo et 3 minutes au maximum, vrai PDF/EPUB exigé, réservé aux bibliothécaires. À utiliser uniquement pour des documents libres de droits.
+
