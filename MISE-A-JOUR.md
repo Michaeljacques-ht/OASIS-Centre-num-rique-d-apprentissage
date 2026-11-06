@@ -1,3 +1,8 @@
+## 1.21.0 — Ressources : Laboratoire virtuel
+
+- Nouvelle section `laboratoire` (🧪 Laboratoire virtuel) : simulations et laboratoires en ligne de physique, chimie, biologie, électronique et astronomie.
+- La section « Bibliothèques en ligne » est retirée ; au démarrage, ses fiches éventuelles sont rangées dans « Bases de données ».
+
 ## 1.20.0 — Ressources : nouvelles sections
 
 - Quatre nouvelles sections dans la page Ressources et dans le formulaire du bibliothécaire : `bibliotheque` (📚 Bibliothèques en ligne), `specialise` (🔬 Ressources spécialisées par discipline), `outil-enseignant` (🧑‍🏫 Outils technopédagogiques pour les enseignants) et `outil-apprenant` (🎒 Outils technopédagogiques pour les apprenants).

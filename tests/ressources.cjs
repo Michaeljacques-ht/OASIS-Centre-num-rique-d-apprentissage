@@ -147,7 +147,8 @@ const jetonDe = async (email, motDePasse) => (await api('/connexion', null, 'POS
     assert.equal((await api('/ressources/inconnue/importer-url', adm, 'POST', { url: 'https://exemple.ht/a.pdf' })).code, 404);
 
     // 1.20.0 : section « Bibliothèques en ligne » et modification d'une ressource
-    const bib = await api('/ressources', adm, 'POST', { genre: 'bibliotheque', titre: 'Bibliothèque test 1.20', contenu: 'Test', lien: 'https://exemple.ht/' });
+    assert.equal((await api('/ressources', adm, 'POST', { genre: 'bibliotheque', titre: 'Section retirée', contenu: 'Test' })).code, 400);
+    const bib = await api('/ressources', adm, 'POST', { genre: 'laboratoire', titre: 'Laboratoire test 1.21', contenu: 'Test', lien: 'https://exemple.ht/' });
     assert.equal(bib.code, 201);
     assert.equal((await api('/ressources/' + bib.data.id, lecteur, 'PUT', { genre: 'base' })).code, 403);
     assert.equal((await api('/ressources/' + bib.data.id, adm, 'PUT', { genre: 'inconnu' })).code, 400);
@@ -157,7 +158,7 @@ const jetonDe = async (email, motDePasse) => (await api('/connexion', null, 'POS
     assert.equal((await api('/ressources/inconnue', adm, 'PUT', { genre: 'base' })).code, 404);
     for (const g of ['specialise', 'outil-enseignant', 'outil-apprenant']) assert.equal((await api('/ressources', adm, 'POST', { genre: g, titre: 'Test ' + g, contenu: 'Test', lien: 'https://exemple.ht/' + g })).code, 201);
 
-    console.log('Ressources 1.14-1.20 : bibliothèques en ligne, ressources spécialisées, outils technopédagogiques et modification ; import de documents de ressources par adresse ; vidéos YouTube ; cartes par adresse ; import par adresse protégé ; documents PDF et EPUB, catégorie, lecture, plages, restriction, suppression ; limite du catalogue, vignettes et cache des couvertures vérifiés.');
+    console.log('Ressources 1.14-1.21 : laboratoire virtuel, ressources spécialisées, outils technopédagogiques et modification ; import de documents de ressources par adresse ; vidéos YouTube ; cartes par adresse ; import par adresse protégé ; documents PDF et EPUB, catégorie, lecture, plages, restriction, suppression ; limite du catalogue, vignettes et cache des couvertures vérifiés.');
   } catch (e) { console.error(e); process.exitCode = 1; }
   finally { if (server && server.exitCode === null) { const fin = new Promise(r => server.once('exit', r)); server.kill(); await fin; } fs.rmSync(temp, { recursive: true, force: true, maxRetries: 5 }); }
 })();

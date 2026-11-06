@@ -71,7 +71,7 @@ function chargerDB() {
     }
     ['progressions', 'notes', 'journal', 'medias', 'progressionsMedias', 'groupes', 'messagesGroupes', 'commentaires', 'invitations'].forEach(k => { if (!db[k]) db[k] = []; });
     db.livres.forEach(l => { if (l.editeur === undefined) l.editeur = ''; if (l.langue === undefined) l.langue = 'Français'; if (l.niveau === undefined) l.niveau = ''; if (l.motsCles === undefined) l.motsCles = ''; if (l.nbTelechargements === undefined) l.nbTelechargements = 0; });
-    db.ressources.forEach(r => { if (r.lien === undefined) r.lien = ''; });
+    db.ressources.forEach(r => { if (r.lien === undefined) r.lien = ''; if (r.genre === 'bibliotheque') r.genre = 'base'; });
     if (!db.parametres.identiteBibliothequeNumerique) {
       db.parametres.nom = 'OASIS Bibliothèque Numérique';
       db.parametres.piedDePage = 'OASIS Bibliothèque Numérique © 2026 — Haïti';
@@ -121,8 +121,8 @@ function seedCategories() {
   ];
 }
 
-// 1.20.0 : nouvelles sections « Bibliothèques en ligne », « Ressources spécialisées » et « Outils technopédagogiques »
-const GENRES_RESSOURCES = ['dictionnaire', 'encyclopedie', 'base', 'bibliotheque', 'specialise', 'outil-enseignant', 'outil-apprenant', 'administratif', 'historique', 'officiel'];
+// 1.20.0 : sections « Ressources spécialisées » et « Outils technopédagogiques » ; 1.21.0 : « Laboratoire virtuel » (la section « Bibliothèques en ligne » est retirée, ses fiches vont dans « Bases de données »)
+const GENRES_RESSOURCES = ['dictionnaire', 'encyclopedie', 'base', 'specialise', 'laboratoire', 'outil-enseignant', 'outil-apprenant', 'administratif', 'historique', 'officiel'];
 function seedRessources() {
   const R = (genre, titre, contenu, source = '', lien = '') => ({ id: uid(), genre, titre, contenu, source, lien, creeLe: maintenant() });
   return [
