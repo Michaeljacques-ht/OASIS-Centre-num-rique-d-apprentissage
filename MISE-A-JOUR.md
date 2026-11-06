@@ -1,3 +1,8 @@
+## 1.20.0 — Ressources : nouvelles sections
+
+- Quatre nouvelles sections dans la page Ressources et dans le formulaire du bibliothécaire : `bibliotheque` (📚 Bibliothèques en ligne), `specialise` (🔬 Ressources spécialisées par discipline), `outil-enseignant` (🧑‍🏫 Outils technopédagogiques pour les enseignants) et `outil-apprenant` (🎒 Outils technopédagogiques pour les apprenants).
+- Nouvelle route `PUT /api/ressources/:id` (bibliothécaire) : modifier le titre, le texte, la source, le lien, l'icône, la catégorie ou la section d'une ressource sans perdre son document ni son image.
+
 ## 1.19.0 — Ressources : import de documents par adresse web
 
 - Nouvelle route `POST /api/ressources/:id/importer-url` (bibliothécaire) : le serveur télécharge lui-même un PDF ou un EPUB public et le joint à une ressource (documents officiels, administratifs…), avec les mêmes protections que pour les livres (https, adresses privées refusées, 100 Mo, 10 minutes, contrôle des premiers octets).

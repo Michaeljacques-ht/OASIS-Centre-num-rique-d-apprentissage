@@ -333,7 +333,7 @@
   }
 
   // Vérifie que le serveur en ligne correspond à cette interface.
-  const VERSION_INTERFACE = '1.19.0';
+  const VERSION_INTERFACE = '1.20.0';
   async function verifierVersionServeur() {
     const bandeau = (html) => { const b = document.createElement('div'); b.className = 'erreur bandeau-version'; b.setAttribute('role', 'alert'); b.innerHTML = html; $('#zoneAdmin').before(b); };
     const liste = (titre, l, aide) => l.length ? `<details><summary><b>${l.length} ${titre}</b> — ${aide}</summary><ul class="diag-liste">${l.slice(0, 200).map(f => `<li><code>${echap(f)}</code></li>`).join('')}${l.length > 200 ? `<li>… et ${l.length - 200} autres</li>` : ''}</ul></details>` : '';
@@ -1088,7 +1088,7 @@
   }
   const rendusPagines = { catalogue: rendreCatalogue, ressources: () => rendreRessources() };
   /* ---------- Ressources documentaires ---------- */
-  const GENRES_RES = [['dictionnaire', '📖 Dictionnaire'], ['encyclopedie', '🌍 Encyclopédie'], ['base', '🗄️ Base de données'], ['officiel', '🏛️ Document officiel'], ['administratif', '📋 Document administratif'], ['historique', '📜 Document historique']];
+  const GENRES_RES = [['dictionnaire', '📖 Dictionnaire'], ['encyclopedie', '🌍 Encyclopédie'], ['base', '🗄️ Base de données'], ['bibliotheque', '📚 Bibliothèque en ligne'], ['specialise', '🔬 Ressource spécialisée'], ['outil-enseignant', '🧑‍🏫 Outil technopédagogique (enseignants)'], ['outil-apprenant', '🎒 Outil technopédagogique (apprenants)'], ['officiel', '🏛️ Document officiel'], ['administratif', '📋 Document administratif'], ['historique', '📜 Document historique']];
   const NOMS_RES = Object.fromEntries(GENRES_RES);
   let ressourcesCache = [];
   const filtresRessources = { q: '', genre: '' };

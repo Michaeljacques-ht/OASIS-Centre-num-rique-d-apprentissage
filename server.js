@@ -121,6 +121,8 @@ function seedCategories() {
   ];
 }
 
+// 1.20.0 : nouvelles sections « Bibliothèques en ligne », « Ressources spécialisées » et « Outils technopédagogiques »
+const GENRES_RESSOURCES = ['dictionnaire', 'encyclopedie', 'base', 'bibliotheque', 'specialise', 'outil-enseignant', 'outil-apprenant', 'administratif', 'historique', 'officiel'];
 function seedRessources() {
   const R = (genre, titre, contenu, source = '', lien = '') => ({ id: uid(), genre, titre, contenu, source, lien, creeLe: maintenant() });
   return [
@@ -1328,7 +1330,7 @@ async function api(req, res, u) {
     if (!exigeBiblio()) return;
     const { genre, titre, contenu, source, lien, icone, categorie } = await lireCorps(req);
     if(doublons.trouver(db.ressources,{genre,titre,source},'ressources'))return json(res,409,{erreur:'Cette ressource existe déjà.'});
-    if (!['dictionnaire', 'encyclopedie', 'base', 'administratif', 'historique', 'officiel'].includes(genre)) return json(res, 400, { erreur: 'Genre invalide.' });
+    if (!GENRES_RESSOURCES.includes(genre)) return json(res, 400, { erreur: 'Genre invalide.' });
     if (!titre || !contenu) return json(res, 400, { erreur: 'Titre et contenu requis.' });
     if (lien && !/^https?:\/\/.+/.test(lien)) return json(res, 400, { erreur: 'Le lien doit commencer par http:// ou https://' });
     if (icone && !securite.iconeValide(icone)) return json(res, 400, { erreur: 'Icône invalide : un emoji ou quelques caractères simples.' });
@@ -1336,6 +1338,22 @@ async function api(req, res, u) {
     const r = { id: uid(), genre, titre, contenu, source: source || '', lien: lien || '', icone: (icone || '').slice(0, 8), image: false, categorie: categorie || '', fichier: '', creeLe: maintenant() };
     db.ressources.push(r); sauverDB();
     return json(res, 201, r);
+  }
+  // 1.20.0 : modifier une ressource (dont changer de section) sans perdre son document ni son image
+  if (seg[1] === 'ressources' && seg[2] && !seg[3] && m === 'PUT') {
+    if (!exigeBiblio()) return;
+    const r = db.ressources.find(x => x.id === seg[2]);
+    if (!r) return json(res, 404, { erreur: 'Ressource introuvable.' });
+    const c = await lireCorps(req);
+    if (c.genre !== undefined && !GENRES_RESSOURCES.includes(c.genre)) return json(res, 400, { erreur: 'Genre invalide.' });
+    if (['titre', 'contenu'].some(k => c[k] !== undefined && (typeof c[k] !== 'string' || !c[k].trim()))) return json(res, 400, { erreur: 'Titre et contenu ne doivent pas être vides.' });
+    if (c.lien && !/^https?:\/\/.+/.test(c.lien)) return json(res, 400, { erreur: 'Le lien doit commencer par http:// ou https://' });
+    if (c.icone && !securite.iconeValide(c.icone)) return json(res, 400, { erreur: 'Icône invalide : un emoji ou quelques caractères simples.' });
+    if (c.categorie && !db.categories.some(x => x.nom === c.categorie)) return json(res, 400, { erreur: 'Catégorie inconnue.' });
+    ['genre', 'titre', 'contenu', 'source', 'lien', 'categorie'].forEach(k => { if (c[k] !== undefined) r[k] = String(c[k]); });
+    if (c.icone !== undefined) r.icone = String(c.icone).slice(0, 8);
+    journal('Ressource modifiée', utilisateur, r.titre); sauverDB();
+    return json(res, 200, r);
   }
   if (seg[1] === 'ressources' && seg[2] && m === 'DELETE') {
     if (!exigeBiblio()) return;

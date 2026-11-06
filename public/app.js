@@ -516,7 +516,7 @@
   let urlPdfActive = null;
   let cacheRessources = [];
   const filtresRessources = { q: '', theme: '', regrouper: 'section' };
-  const GENRES_RES = [['dictionnaire', '📖 Dictionnaire'], ['encyclopedie', '🌍 Encyclopédie'], ['base', '🗄️ Bases de données'], ['officiel', '🏛️ Documents officiels'], ['administratif', '📋 Documents administratifs'], ['historique', '📜 Documents historiques']];
+  const GENRES_RES = [['dictionnaire', '📖 Dictionnaire'], ['encyclopedie', '🌍 Encyclopédie'], ['base', '🗄️ Bases de données'], ['bibliotheque', '📚 Bibliothèques en ligne'], ['specialise', '🔬 Ressources spécialisées'], ['outil-enseignant', '🧑‍🏫 Outils technopédagogiques pour enseignants'], ['outil-apprenant', '🎒 Outils technopédagogiques pour apprenants'], ['officiel', '🏛️ Documents officiels'], ['administratif', '📋 Documents administratifs'], ['historique', '📜 Documents historiques']];
   const NOMS_RES = Object.fromEntries(GENRES_RES);
   const tailleLisible = o => !o ? '' : o < 1048576 ? Math.max(1, Math.round(o / 1024)) + ' Ko' : (o / 1048576).toFixed(1).replace('.', ',') + ' Mo';
   const carteRessource = r => `<button class="carte-res" data-ressource="${r.id}">
