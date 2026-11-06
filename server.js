@@ -1097,6 +1097,26 @@ async function api(req, res, u) {
   }
 
   // --- Document PDF ou EPUB joint à une ressource documentaire ---
+  // 1.19.0 : joindre à une ressource un PDF ou un EPUB public par son adresse web
+  if (seg[1] === 'ressources' && seg[2] && seg[3] === 'importer-url' && m === 'POST') {
+    if (!exigeBiblio()) return;
+    const r = db.ressources.find(x => x.id === seg[2]);
+    if (!r) return json(res, 404, { erreur: 'Ressource introuvable.' });
+    const { url: adresse, nom } = await lireCorps(req);
+    const importUrl = require('./modules/import-url');
+    try { importUrl.verifierUrl(adresse); } catch (e) { return json(res, 400, { erreur: e.message }); }
+    fs.mkdirSync(DOSSIER_RES_DOCS, { recursive: true });
+    const tmp = path.join(DOSSIER_RES_DOCS, r.id + '.import');
+    let info;
+    try { info = await importUrl.telecharger(adresse, tmp, { natures: ['pdf', 'epub'] }); }
+    catch (e) { return json(res, 422, { erreur: 'Import impossible : ' + e.message }); }
+    if (r.fichier && fs.existsSync(cheminResDoc(r))) fs.unlinkSync(cheminResDoc(r));
+    r.fichier = info.nature; r.tailleFichier = info.taille; r.sourceUrl = info.urlFinale;
+    r.nomFichier = String(nom || decodeURIComponent(new URL(info.urlFinale).pathname.split('/').pop() || '')).replace(/[\\/:*?"<>|\r\n]/g, '').slice(0, 120);
+    fs.renameSync(tmp, cheminResDoc(r));
+    journal('Document importé depuis une adresse web', utilisateur, r.titre + ' — ' + new URL(info.urlFinale).hostname); sauverDB();
+    return json(res, 201, { ok: true, fichier: r.fichier, tailleFichier: r.tailleFichier });
+  }
   if (seg[1] === 'ressources' && seg[2] && seg[3] === 'fichier') {
     const r = db.ressources.find(x => x.id === seg[2]);
     if (m === 'POST') {

@@ -1,3 +1,7 @@
+## 1.19.0 — Ressources : import de documents par adresse web
+
+- Nouvelle route `POST /api/ressources/:id/importer-url` (bibliothécaire) : le serveur télécharge lui-même un PDF ou un EPUB public et le joint à une ressource (documents officiels, administratifs…), avec les mêmes protections que pour les livres (https, adresses privées refusées, 100 Mo, 10 minutes, contrôle des premiers octets).
+
 ## 1.18.0 — Cinémathèque : vidéos YouTube intégrées
 
 - Une vidéo peut désormais être un lien YouTube (champ « lien YouTube » du formulaire, ou `youtube` dans `POST /api/medias` ; `POST /api/medias/:id/youtube` pour une fiche existante). Rien n'est téléchargé : la vidéo est lue dans OASIS via le lecteur sans cookies `youtube-nocookie.com`.

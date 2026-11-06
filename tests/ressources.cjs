@@ -139,7 +139,14 @@ const jetonDe = async (email, motDePasse) => (await api('/connexion', null, 'POS
     assert.equal((await api('/medias/' + v2.id + '/youtube', adm, 'POST', { youtube: 'https://www.youtube.com/embed/abcdefghijk' })).data.youtube, 'abcdefghijk');
     assert.ok((await api('/medias?type=video', lecteur)).data.some(x => x.youtube === 'abcdefghijk'));
 
-    console.log('Ressources 1.14-1.18 : vidéos YouTube ; cartes par adresse ; import par adresse protégé ; documents PDF et EPUB, catégorie, lecture, plages, restriction, suppression ; limite du catalogue, vignettes et cache des couvertures vérifiés.');
+    // 1.19.0 : document joint à une ressource par adresse web
+    const off = (await api('/ressources', adm, 'POST', { genre: 'officiel', titre: 'Document officiel test 1.19', contenu: 'Test' })).data;
+    assert.equal((await api('/ressources/' + off.id + '/importer-url', lecteur, 'POST', { url: 'https://exemple.ht/a.pdf' })).code, 403);
+    assert.match((await api('/ressources/' + off.id + '/importer-url', adm, 'POST', { url: 'http://exemple.ht/a.pdf' })).data.erreur, /https/);
+    assert.match((await api('/ressources/' + off.id + '/importer-url', adm, 'POST', { url: 'https://192.168.0.2/a.pdf' })).data.erreur, /privée/);
+    assert.equal((await api('/ressources/inconnue/importer-url', adm, 'POST', { url: 'https://exemple.ht/a.pdf' })).code, 404);
+
+    console.log('Ressources 1.14-1.19 : import de documents de ressources par adresse ; vidéos YouTube ; cartes par adresse ; import par adresse protégé ; documents PDF et EPUB, catégorie, lecture, plages, restriction, suppression ; limite du catalogue, vignettes et cache des couvertures vérifiés.');
   } catch (e) { console.error(e); process.exitCode = 1; }
   finally { if (server && server.exitCode === null) { const fin = new Promise(r => server.once('exit', r)); server.kill(); await fin; } fs.rmSync(temp, { recursive: true, force: true, maxRetries: 5 }); }
 })();
