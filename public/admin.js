@@ -207,6 +207,8 @@
     },
     abonnementsComptabilite:()=>OasisAdminAbonnements.ouvrir(api),
     dons:()=>OasisAdminDons.ouvrir(api),
+    annonces:()=>OasisAdminVitrine.annonces(api),
+    partenaires:()=>OasisAdminVitrine.partenaires(api),
     quizLecture:()=>OasisAdminQuiz.ouvrir(api),
     rechercheTexte:()=>OasisAdminRecherche.ouvrir(api),
     assistantIA:()=>OasisAdminIA.ouvrir(api),
@@ -214,7 +216,7 @@
       const p = await api('/parametres');
       return `
         <div class="section-titre"><h3>⚙️ Paramètres de la bibliothèque</h3></div>
-        <div id="msgParam"></div><section class="panneau" style="margin-bottom:16px"><h4>Tarifs établissements et anciens paramètres (HTG)</h4><p>Les nouveaux tarifs individuels se règlent dans Administrateurs et profils.</p><p>Les nouveaux tarifs s’appliquent aux prochains paiements. Les commandes déjà initiées conservent leur montant et les abonnements actifs gardent leur échéance.</p><div class="admin-form-grid">${[['mensuel','Ancien tarif mensuel (hors profils)'],['annuel','Ancien tarif annuel (hors profils)'],['petite','Petite école — annuel (100 élèves)'],['moyenne','École moyenne — annuel (300 élèves)'],['grande','Grande école — annuel (600 élèves)']].map(([k,n])=>`<div class="champ"><label for="tarif-${k}">${n}</label><input id="tarif-${k}" type="number" min="1" max="10000000" step="1" value="${p.tarifsAbonnement[k]}"></div>`).join('')}</div></section>
+        <div id="msgParam"></div><section class="panneau" style="margin-bottom:16px"><h4>Dons d’accès minimums (HTG)</h4><p>La bibliothèque fonctionne uniquement par dons : chaque montant ci-dessous est le don minimum qui ouvre l’accès ; le donateur peut toujours donner davantage. Les dons minimums individuels par profil se règlent dans Administrateurs et profils.</p><p>Les nouveaux montants s’appliquent aux prochains dons. Les dons déjà initiés conservent leur montant et les accès actifs gardent leur échéance.</p><div class="admin-form-grid">${[['mensuel','Don mensuel minimum (hors profils)'],['annuel','Don annuel minimum (hors profils)'],['petite','Petite école — palier annuel (100 élèves)'],['moyenne','École moyenne — palier annuel (300 élèves)'],['grande','Grande école — palier annuel (600 élèves)'],['tres_grande','Très grande école — palier annuel (1 200 élèves)'],['reseau','Réseau scolaire / université — palier annuel (3 000 élèves)']].map(([k,n])=>`<div class="champ"><label for="tarif-${k}">${n}</label><input id="tarif-${k}" type="number" min="1" max="10000000" step="1" value="${p.tarifsAbonnement[k]??''}"></div>`).join('')}</div></section>
         <div class="panneau" style="margin-bottom:16px">
           <h4 style="margin-bottom:12px;color:var(--encre)">Identité (en-tête et pied de page)</h4>
           <div class="champ"><label for="pNom">Nom de la bibliothèque</label><input id="pNom" value="${echap(p.nom)}"></div>
@@ -333,7 +335,7 @@
   }
 
   // Vérifie que le serveur en ligne correspond à cette interface.
-  const VERSION_INTERFACE = '1.21.0';
+  const VERSION_INTERFACE = '1.25.0';
   async function verifierVersionServeur() {
     const bandeau = (html) => { const b = document.createElement('div'); b.className = 'erreur bandeau-version'; b.setAttribute('role', 'alert'); b.innerHTML = html; $('#zoneAdmin').before(b); };
     const liste = (titre, l, aide) => l.length ? `<details><summary><b>${l.length} ${titre}</b> — ${aide}</summary><ul class="diag-liste">${l.slice(0, 200).map(f => `<li><code>${echap(f)}</code></li>`).join('')}${l.length > 200 ? `<li>… et ${l.length - 200} autres</li>` : ''}</ul></details>` : '';
@@ -347,7 +349,7 @@
         return;
       }
       const v = await api('/version');
-      const noms = { abonnements: 'Abonnements', dons: 'Dons', quizLecture: 'Quiz de lecture', rechercheTexte: 'Recherche dans les livres', assistantIA: 'OASIS IA' };
+      const noms = { abonnements: 'Abonnements', dons: 'Dons', annonces: 'Annonces', partenaires: 'Partenaires', quizLecture: 'Quiz de lecture', rechercheTexte: 'Recherche dans les livres', assistantIA: 'OASIS IA' };
       const manque = Object.keys(noms).filter(k => !v[k]).map(k => noms[k]);
       if (v.version === VERSION_INTERFACE && !manque.length) return;
       bandeau(`Serveur en ligne : version ${echap(v.version || 'inconnue')} — interface : ${VERSION_INTERFACE}. Certaines rubriques (${echap(manque.join(', ') || 'récentes')}) peuvent afficher « Route introuvable ». Le serveur (server.js, modules/, package.json) n’a pas été mis à jour : suivez <code>MISE-A-JOUR.md</code>.`);
@@ -1290,7 +1292,7 @@
     $('#btnSauverParametres')?.addEventListener('click', async () => {
       try {
         await api('/parametres', { method: 'PUT', body: JSON.stringify({
-          tarifsAbonnement:Object.fromEntries(['mensuel','annuel','petite','moyenne','grande'].map(k=>[k,Number($('#tarif-'+k).value)])),nom: $('#pNom').value, slogan: $('#pSlogan').value, messageAccueil: $('#pAccueil').value, piedDePage: $('#pPied').value, aPropos: $('#pAPropos').value,
+          tarifsAbonnement:Object.fromEntries(['mensuel','annuel','petite','moyenne','grande','tres_grande','reseau'].map(k=>[k,Number($('#tarif-'+k).value)])),nom: $('#pNom').value, slogan: $('#pSlogan').value, messageAccueil: $('#pAccueil').value, piedDePage: $('#pPied').value, aPropos: $('#pAPropos').value,
           adresse: $('#pAdresse').value, telephone: $('#pTel').value, email: $('#pEmail').value, horaires: $('#pHoraires').value,
           dureeEmpruntPhysique: $('#pDureeP').value, dureeEmpruntNumerique: $('#pDureeN').value,
           maxEmprunts: $('#pMax').value, retraitReservationJours: $('#pRetrait').value,

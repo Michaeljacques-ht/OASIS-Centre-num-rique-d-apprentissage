@@ -61,7 +61,7 @@
       $('#inNom').required = modeInscription;
       $('#inMdp').autocomplete = modeInscription ? 'new-password' : 'current-password';
       $('#titreConnexion').textContent = modeInscription ? 'Commencez votre parcours avec OASIS.' : 'Votre prochaine découverte commence ici.';
-      $('#btnAuth').textContent = modeInscription ? 'Créer mon compte — 30 jours gratuits' : 'Se connecter';
+      $('#btnAuth').textContent = modeInscription ? 'Créer mon compte' : 'Se connecter';
       $('#txtBascule').textContent = modeInscription ? 'Déjà un compte ?' : 'Pas encore de compte ?';
       $('#lienBascule').textContent = modeInscription ? 'Se connecter' : 'Créer un compte';
       $('#msgAuth').innerHTML = '';
@@ -73,13 +73,27 @@
         const corps = { email: $('#inEmail').value.trim(), motDePasse: $('#inMdp').value };
         if (modeInscription) { Object.assign(corps,OasisProfilAbonnement.valeurs());corps.nom = $('#inNom').value.trim(); corps.niveau = $('#inNiveau').value; corps.niveauDetail = $('#inNiveauDetail').value.trim(); }
         const r = await api(modeInscription ? '/inscription' : '/connexion', { method: 'POST', body: JSON.stringify(corps) });
+        if (r.aConfirmer) { $('#msgAuth').innerHTML = `<div class="${r.envoye ? 'succes' : 'erreur'}">📧 ${echap(r.message)}</div><button type="button" class="mini-btn" data-renvoyer-confirmation="${echap(r.email)}">Renvoyer l’email de confirmation</button>`; return; }
         jeton = r.jeton; moi = r.utilisateur;
         localStorage.setItem('oasis_jeton', jeton); localStorage.removeItem('educa_jeton');
         demarrer();
       } catch (err) {
-        $('#msgAuth').innerHTML = `<div class="erreur">${echap(err.message)}</div>`;
+        $('#msgAuth').innerHTML = `<div class="erreur">${echap(err.message)}</div>${/pas encore activé/.test(err.message) ? `<button type="button" class="mini-btn" data-renvoyer-confirmation="${echap($('#inEmail').value.trim())}">Renvoyer l’email de confirmation</button>` : ''}`;
       }
     });
+    // 1.24.0 : renvoi de l'email de confirmation et retour du lien d'activation
+    $('#msgAuth').addEventListener('click', async e => {
+      const b = e.target.closest('[data-renvoyer-confirmation]'); if (!b) return;
+      b.disabled = true;
+      try { const r = await api('/renvoyer-confirmation', { method: 'POST', body: JSON.stringify({ email: b.dataset.renvoyerConfirmation }) }); b.insertAdjacentHTML('afterend', `<p class="succes">${echap(r.message)}</p>`); }
+      catch (err) { b.insertAdjacentHTML('afterend', `<p class="erreur">${echap(err.message)}</p>`); }
+    });
+    const etatCompte = new URLSearchParams(location.search).get('compte');
+    if (etatCompte) {
+      const textes = { confirme: ['succes', '✅ Votre adresse email est confirmée et votre compte est activé. Connectez-vous pour commencer.'], 'lien-expire': ['erreur', 'Ce lien d’activation a expiré. Connectez-vous avec votre email pour en demander un nouveau.'], 'lien-invalide': ['erreur', 'Ce lien d’activation n’est pas valide ou a déjà été utilisé. Si votre compte est déjà activé, connectez-vous.'] };
+      const t = textes[etatCompte]; if (t) $('#msgAuth').innerHTML = `<div class="${t[0]}">${t[1]}</div>`;
+      history.replaceState(null, '', location.pathname);
+    }
   }
 
   async function verifierSession() {
@@ -144,16 +158,18 @@
   const moduleAbsent = f => `<div class="erreur">Cette rubrique n’est pas encore installée sur le serveur (fichier ${f} manquant). L’administrateur doit redéployer le projet complet.</div>`;
   const vues = {
     abonnement: () => OasisAbonnement.render(api, moi),
+    partenaires: () => OasisVitrine.page(),
     don: () => window.OasisDon ? OasisDon.render(api, moi) : moduleAbsent('don.js'),
     quiz: () => window.OasisQuiz ? OasisQuiz.render(api, moi) : moduleAbsent('quiz.js'),
-    espace: async () => `<h2>Mon espace</h2><p>Bienvenue ${echap(moi?.nom || "")}. Retrouvez vos lectures dans la bibliothèque et gérez votre abonnement ci-dessous.</p><button class="btn btn-bleu" data-vue="bibliotheque">Explorer la bibliothèque</button> <button class="mini-btn" data-sg-reactiver>Réactiver les suggestions personnalisées</button>` + await OasisAbonnement.render(api, moi),
+    espace: async () => `<h2>Mon espace</h2><p>Bienvenue ${echap(moi?.nom || "")}. Retrouvez vos lectures dans la bibliothèque et gérez votre don d’accès ci-dessous.</p><button class="btn btn-bleu" data-vue="bibliotheque">Explorer la bibliothèque</button> <button class="mini-btn" data-sg-reactiver>Réactiver les suggestions personnalisées</button>` + await OasisAbonnement.render(api, moi),
     async accueil() {
-      const [nouveautes, cats, compteurs, suggestions, continuer] = await Promise.all([
+      const [nouveautes, cats, compteurs, suggestions, continuer, partenaires] = await Promise.all([
         api('/livres?tri=nouveautes&limite=4'),
         chargerCategories(),
         api('/statistiques-publiques').catch(() => null),
         moi?.niveau ? api('/recommandations').catch(()=>null) : null,
-        moi && window.OasisSuggestions ? OasisSuggestions.continuer(api).catch(() => '') : ''
+        moi && window.OasisSuggestions ? OasisSuggestions.continuer(api).catch(() => '') : '',
+        window.OasisVitrine ? OasisVitrine.blocAccueil().catch(() => '') : ''
       ]);
       return `
         <button class="banniere-accueil" data-vue="bibliotheque" aria-label="Accéder à la bibliothèque">
@@ -175,7 +191,8 @@
             <button class="btn-orange" data-vue="bibliotheque">Accéder</button>
           </div>
         </div>
-        <section class="ecole-offre"><div><h3>Une bibliothèque pour votre école</h3><p>Personnalisez votre espace, inscrivez vos élèves et accompagnez leurs lectures.</p><strong>À partir de ${Number(parametres.tarifsAbonnement?.petite||50000).toLocaleString('fr-FR')} gourdes / an · jusqu’à 100 élèves</strong></div><a class="btn btn-bleu" href="/ecole?inscription=1">Créer un espace établissement</a></section>
+        <section class="ecole-offre"><div><h3>Une bibliothèque pour votre école</h3><p>Personnalisez votre espace, inscrivez vos élèves et accompagnez leurs lectures.</p><strong>Accès par don d’établissement, à partir de ${Number(parametres.tarifsAbonnement?.petite||50000).toLocaleString('fr-FR')} gourdes par an · paliers jusqu’à 3 000 élèves</strong></div><a class="btn btn-bleu" href="/ecole?inscription=1">Créer un espace établissement</a></section>
+        ${partenaires || ''}
         ${continuer || ''}${suggestions ? `<div class="section-titre"><h3>Pour votre niveau</h3><button data-vue="recommandes">Voir Plus ›</button></div>${grille(suggestions.livres.slice(0,4))}` : ''}<div class="section-titre"><h3>Nouveautés</h3><button data-vue="nouveautes">Voir Plus ›</button></div>
         ${grille(nouveautes.slice(0, 4))}
         <div class="section-titre"><h3>Catégories Populaires</h3><button data-vue="categories">Voir Plus ›</button></div>
@@ -389,7 +406,7 @@
 
   async function afficherVue(nom, param) {
     window.OasisQuiz?.quitter();
-    if(!moi&&!['accueil','bibliotheque','categorie','categories','nouveautes','recommandes','abonnement','don'].includes(nom)){window.dispatchEvent(new Event('oasis-connexion'));return;}
+    if(!moi&&!['accueil','bibliotheque','categorie','categories','nouveautes','recommandes','abonnement','don','partenaires'].includes(nom)){window.dispatchEvent(new Event('oasis-connexion'));return;}
     vueActive = nom; listesPaginees = {};
     document.querySelectorAll('.nav-item[data-vue]').forEach(b => b.classList.toggle('actif', b.dataset.vue === nom));
     $('#sidebar').classList.remove('ouverte');
@@ -595,7 +612,7 @@
     $('#zoneModale').innerHTML = `<div class="voile" id="voile"><div class="modale lecteur lecteur-pdf-mobile" role="dialog" aria-modal="true" aria-label="Lecture PDF">
       <div class="pdf-entete"><h3>${echap(livre.titre)}</h3><button class="mini-btn" id="btnFermer" aria-label="Fermer">✕</button></div>
       <div class="pdf-outils"><button class="mini-btn" id="pdfAvant" aria-label="Page précédente">←</button><label>Page <input type="number" id="pdfPage" min="1" value="1" aria-label="Numéro de page"></label><span id="pdfTotal"></span><button class="mini-btn" id="pdfApres" aria-label="Page suivante">→</button><button class="mini-btn" id="pdfMoins" aria-label="Réduire le zoom">−</button><button class="mini-btn" id="pdfPlus" aria-label="Augmenter le zoom">+</button>${livre.telechargementAutorise!==false?`<a class="mini-btn" href="${urlPdfActive}" download="${echap(livre.titre)}.pdf">Télécharger</a><a class="mini-btn" href="${urlPdfActive}" target="_blank" rel="noopener">Ouvrir ↗</a>`:'<span>🔒 Consultation en ligne uniquement</span>'}<button class="mini-btn bleu" id="btnTerminerPdf" ${!livre.accesComplet ? 'hidden' : ''}>Terminer</button></div>
-      ${!livre.accesComplet ? '<div class="pdf-abonnement">Aperçu gratuit : cinq pages maximum. <button class="mini-btn bleu" data-abonner>Lire la suite — s’abonner</button></div>' : ''}${cible?.extrait ? `<div class="passage-recherche"><b>🔎 Passage recherché, page ${cible.page}${!livre.accesComplet && cible.page > 5 ? ' (au-delà de l’aperçu gratuit de 5 pages)' : ''} :</b> ${echap(cible.extrait)}</div>` : ''}<p id="pdfEtat" role="status" aria-live="polite">Chargement du document…</p><div class="pdf-pages" id="pdfPages"><div class="pdf-feuille"><canvas id="pdfCanvas" aria-label="Page du document PDF"></canvas><div class="textLayer" id="pdfTexte"></div></div></div></div></div>`;
+      ${!livre.accesComplet ? '<div class="pdf-abonnement">Aperçu gratuit : cinq pages maximum. <button class="mini-btn bleu" data-abonner>Lire la suite — faire un don d’accès</button></div>' : ''}${cible?.extrait ? `<div class="passage-recherche"><b>🔎 Passage recherché, page ${cible.page}${!livre.accesComplet && cible.page > 5 ? ' (au-delà de l’aperçu gratuit de 5 pages)' : ''} :</b> ${echap(cible.extrait)}</div>` : ''}<p id="pdfEtat" role="status" aria-live="polite">Chargement du document…</p><div class="pdf-pages" id="pdfPages"><div class="pdf-feuille"><canvas id="pdfCanvas" aria-label="Page du document PDF"></canvas><div class="textLayer" id="pdfTexte"></div></div></div></div></div>`;
     let doc=null, renderTask=null, closed=false, page=1, zoom=1, sequence=0;
     const assistance=OasisLecture.start($('#zoneModale .lecteur'),livre,moi?jeton:null,async()=>{if(!doc)return '';const text=await (await doc.getPage(page)).getTextContent();return text.items.map(x=>x.str+(x.hasEOL?'\n':' ')).join('')},{unite:'page',page:()=>page,aller:n=>{if(!doc)return;page=Math.max(1,Math.min(doc.numPages,n));render()}});
     const slPdf=moi&&window.OasisSurlignage?OasisSurlignage.brancher({livre,unite:'page',root:()=>$('#pdfTexte'),page:()=>page,filtre:n=>n.page===page,pourcentage:()=>doc?Math.round(page/doc.numPages*100):0}):null;
@@ -903,6 +920,7 @@
     $('#voile').addEventListener('click', e => { if (e.target.id === 'voile') fermerModale(); });
   }
   $('#btnAPropos').addEventListener('click', ouvrirAPropos);
+  $('#btnAProposNav')?.addEventListener('click', () => { document.getElementById('sidebar')?.classList.remove('ouverte'); ouvrirAPropos(); });
 
   // ---------- Lecteurs multimédias ----------
   // 1.18.0 : vidéo YouTube intégrée (mode sans cookies de youtube-nocookie.com)
@@ -1334,11 +1352,12 @@
     const navigationEcole=OasisNavigationEcole.destination(moi?.role,location.search);
     if (navigationEcole.redirigerEcole) { location.href='/ecole'; return; }
     $('.contenu').classList.toggle('sans-colonne', !moi);
+    window.OasisVitrine?.annonces();
     $('#ecranConnexion').hidden = true;
     $('#appli').hidden = false;
     if(!moi){
       $('#btnConnexionPublic').hidden=false;$('#nomProfil').textContent='Visiteur';$('#avatarProfil').textContent='';$('#avatarProfil').hidden=true;$('#lienAdmin').hidden=true;$('#btnDeconnexion').hidden=true;
-      document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=!['accueil','bibliotheque','categories','nouveautes','recommandes','abonnement','don'].includes(b.dataset.vue));
+      document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=!['accueil','bibliotheque','categories','nouveautes','recommandes','abonnement','don','partenaires'].includes(b.dataset.vue));
       $('#colonneDroite').hidden=true;$('#btnNotifs').hidden=true;chargerParametres();chargerCategories().then(()=>afficherVue(navigationEcole.vue||'accueil'));return;
     }
     $('#avatarProfil').hidden=false;$('#btnDeconnexion').hidden=false;$('#btnNotifs').hidden=false;$('#colonneDroite').hidden=false;document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=false);$('#btnConnexionPublic').hidden=true;document.querySelector('.lien-don').hidden=true;

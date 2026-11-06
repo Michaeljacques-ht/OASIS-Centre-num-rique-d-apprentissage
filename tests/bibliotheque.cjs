@@ -9,11 +9,11 @@ async function request(route,token,method='GET',body){if(route==='/inscription'&
  const stats=await request('/statistiques-publiques');assert.equal(stats.code,200);assert.equal(typeof stats.data.livres,'number');assert.equal(stats.data.visiteurs,1);
  const tracked=await fetch(base+'/api/statistiques-publiques',{headers:{Cookie:'oasis_visite=1'}});assert.equal((await tracked.json()).visiteurs,1);
  const login=async(email,motDePasse)=>{const r=await request('/connexion',null,'POST',{email,motDePasse});assert.equal(r.code,200);return r.data.jeton};
- const schoolPlans=await request('/ecoles/formules');assert.equal(schoolPlans.code,200);assert.deepEqual(schoolPlans.data.formules.map(x=>x.montant),[50000,100000,150000]);
+ const schoolPlans=await request('/ecoles/formules');assert.equal(schoolPlans.code,200);assert.deepEqual(schoolPlans.data.formules.map(x=>x.montant),[50000,100000,150000,250000,500000]);
  const signup=await request('/ecoles/inscription',null,'POST',{nom:'Responsable HTTP',nomEcole:'École HTTP',email:'school-http@example.ht',motDePasse:'secret123',role:'bibliothecaire'});assert.equal(signup.code,201);assert.equal(signup.data.utilisateur.role,'admin_etablissement');
  const schoolToken=signup.data.jeton;assert.equal((await request('/moi',schoolToken)).data.ecoleId,signup.data.utilisateur.ecoleId);
  assert.equal((await request('/ecoles/mon-espace',schoolToken)).code,200);
- assert.equal((await request('/ecoles/membres',schoolToken)).code,200);assert.equal((await request('/abonnement/statut',schoolToken)).data.essaiActif,true);
+ assert.equal((await request('/ecoles/membres',schoolToken)).code,402);assert.equal((await request('/abonnement/statut',schoolToken)).data.essaiActif,false);
  assert.equal((await request('/stats',schoolToken)).code,403);
  assert.equal((await request('/livres',schoolToken,'POST',{titre:'Interdit',auteur:'Test',categorie:'Sciences'})).code,403);
  assert.equal((await fetch(base+'/ecole')).status,200);
@@ -57,7 +57,7 @@ async function request(route,token,method='GET',body){if(route==='/inscription'&
  assert.equal((await request('/parametres',learner,'PUT',{tarifsAbonnement:prices})).code,403);
  assert.equal((await request('/parametres',admin,'PUT',{tarifsAbonnement:{...prices,mensuel:-1}})).code,400);
  assert.equal((await request('/parametres',admin,'PUT',{tarifsAbonnement:prices})).code,200);
- assert.deepEqual((await request('/abonnement/tarifs')).data,prices);
+ assert.deepEqual((await request('/abonnement/tarifs')).data,{...prices,tres_grande:250000,reseau:500000});
  assert.equal((await request('/ecoles/formules')).data.formules[0].montant,60000);
  assert.equal((await request('/parametres')).data.tarifsAbonnement.annuel,6500);
  assert.equal((await request('/livres',admin,'POST',{titre:'Titre modifié',auteur:'Auteur',categorie:'Sciences'})).code,409);
@@ -67,7 +67,7 @@ async function request(route,token,method='GET',body){if(route==='/inscription'&
  const detection=await request('/doublons',admin);assert.equal(detection.code,200);assert(Array.isArray(detection.data));
  assert.equal((await request('/doublons/fusionner',admin,'POST',{type:'livres',conserve:'absent',retire:'absent2'})).code,409);
  const versionServeur=(await request('/version')).data;assert.equal(versionServeur.detectionDoublons,true);assert.equal(versionServeur.version,require('../package.json').version);
- const schoolSpace=(await request('/ecoles/mon-espace',schoolToken)).data;assert(schoolSpace.ecole.essaiActif);assert.equal(schoolSpace.ecole.joursEssaiRestants,30);
+ const schoolSpace=(await request('/ecoles/mon-espace',schoolToken)).data;assert(!schoolSpace.ecole.essaiActif);assert.equal(schoolSpace.ecole.joursEssaiRestants,0);assert(!schoolSpace.ecole.actif);
  const ordered=(await request('/livres')).data.map(x=>x.titre);assert.deepEqual(ordered,[...ordered].sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base',numeric:true})));
  assert.equal((await request('/admin-abonnements',learner)).code,403);assert.equal((await request('/admin-abonnements',schoolToken)).code,403);
  assert.equal((await request('/admin-abonnements',admin)).code,200);

@@ -149,7 +149,7 @@ function seed() {
   const utilisateurs = [
     { id: uid(), nom: 'Bibliothécaire Oasis', email: 'admin@oasis.ht', role: 'bibliothecaire', ...hashMdp(initial.mdp), creeLe: maintenant() }
   ];
-  if (securite.modeDemo()) utilisateurs.push({ id: uid(), nom: 'Emma Pierre', email: 'emma@oasis.ht', role: 'apprenant', classe: 'Terminale', ...hashMdp('demo123'), creeLe: maintenant() });
+  if (securite.modeDemo()) utilisateurs.push({ id: uid(), nom: 'Emma Pierre', email: 'emma@oasis.ht', role: 'apprenant', classe: 'Terminale', ...hashMdp('demo123'), abonnementFin: new Date(Date.now() + 365 * 86400000).toISOString(), creeLe: maintenant() }); // 1.25.0 : compte de démonstration considéré comme donateur
   const cat = ['Sciences', 'Histoire', 'Littérature', 'Informatique', 'Roman', 'Mathématiques', 'Philosophie'];
   const L = (titre, auteur, categorie, type, resume, couleur, icone, extras = {}) => ({
     id: uid(), titre, auteur, categorie, type, resume, couleur, icone,
@@ -426,7 +426,7 @@ async function api(req, res, u) {
   }
   if(req.method==='GET'&&['livres','medias'].includes(seg[1])&&['pdf','epub','fichier'].includes(seg[3])){const x=db[seg[1]].find(x=>x.id===seg[2]);const tokenUser=query.jeton&&db.utilisateurs.find(u=>u.id===db.sessions[query.jeton]);const lecteur=utilisateur||tokenUser;if(x?.telechargementAutorise===false&&query.lecture!=='1'&&lecteur?.role!=='bibliothecaire')return json(res,403,{erreur:'Téléchargement désactivé. Consultez ce document dans le lecteur OASIS.'});}
   if(pathname==='/api/abonnement/tarifs'&&req.method==='GET')return json(res,200,tarifs.lire(db));
-  if (pathname === '/api/ecoles/formules' && req.method === 'GET') return json(res, 200, {formules:tarifs.formules(db),devisAuDela:600});
+  if (pathname === '/api/ecoles/formules' && req.method === 'GET') return json(res, 200, {formules:tarifs.formules(db),devisAuDela:3000});
   if (pathname === '/api/statistiques-publiques' && req.method === 'GET') {
     db.statistiquesPubliques ||= { visiteurs: 0, depuis: new Date().toISOString() };
     if (!/(?:^|;\s*)oasis_visite=1(?:;|$)/.test(req.headers.cookie || '')) {
@@ -457,6 +457,7 @@ async function api(req, res, u) {
   if (await require('./modules/suggestions').route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, vueLivre})) return;
   if (await rechercheTexte.route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
   if (await require('./modules/dons').route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
+  if (await require('./modules/vitrine').route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
   if (await require('./modules/quiz').route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
   const exigeAuth = () => { if (!utilisateur) { json(res, 401, { erreur: 'Connexion requise.' }); return false; } return true; };
   const exigeBiblio = () => { if (!utilisateur || utilisateur.role !== 'bibliothecaire') { json(res, 403, { erreur: 'Réservé au bibliothécaire.' }); return false; } return true; };
@@ -489,10 +490,45 @@ async function api(req, res, u) {
     if (db.utilisateurs.some(x => x.email.toLowerCase() === email.toLowerCase())) return json(res, 409, { erreur: 'Un compte existe déjà avec cet email.' });
     const nu = { id: uid(), nom, email, classe: classe || '', niveau: niveau || '', niveauDetail: String(niveauDetail || '').slice(0,80), role: 'apprenant', ...hashMdp(motDePasse), creeLe: maintenant() };
     try{Object.assign(nu,require('./modules/profils-abonnement').profil(infosProfil))}catch(e){return json(res,400,{erreur:e.message})}
-    essai.initialiser(nu);db.utilisateurs.push(nu);
+    essai.initialiser(nu);
+    // 1.24.0 : confirmation de l'adresse email avant activation du compte (si l'envoi d'emails est configuré)
+    const courriel = require('./modules/courriel');
+    if (courriel.actif()) {
+      nu.emailVerifie = false; nu.jetonConfirmation = require('crypto').randomBytes(24).toString('hex');
+      nu.confirmationExpire = new Date(Date.now() + 48 * 3600000).toISOString(); nu.confirmationEnvoyeeLe = maintenant();
+      db.utilisateurs.push(nu); sauverDB();
+      const envoi = await courriel.envoyer(courriel.confirmation(nu, nu.jetonConfirmation)).catch(e => ({ ok: false, erreur: e.message }));
+      if (!envoi.ok) console.error('Email de confirmation non envoyé à ' + nu.email + ' : ' + envoi.erreur);
+      journal('Inscription en attente de confirmation', nu, nu.email);
+      return json(res, 201, { aConfirmer: true, email: nu.email, envoye: envoi.ok,
+        message: envoi.ok ? 'Compte créé. Un email de confirmation vient d’être envoyé à ' + nu.email + ' : ouvrez le lien qu’il contient pour activer votre compte.' : 'Compte créé, mais l’email de confirmation n’a pas pu partir. Réessayez dans quelques minutes avec « Renvoyer l’email de confirmation ».' });
+    }
+    nu.emailVerifie = true; db.utilisateurs.push(nu);
     const jeton = uid() + uid();
     db.sessions[jeton] = nu.id; sauverDB();
     return json(res, 201, { jeton, utilisateur: ecoles.publicUser(nu) });
+  }
+  if (pathname === '/api/confirmer-email' && m === 'GET') {
+    const j = String(query.jeton || '');
+    const cu = j.length >= 32 ? db.utilisateurs.find(x => x.jetonConfirmation && x.jetonConfirmation === j) : null;
+    const aller = (etat) => { res.writeHead(302, { Location: '/?compte=' + etat }); res.end(); };
+    if (!cu) return aller('lien-invalide');
+    if (new Date(cu.confirmationExpire || 0) < new Date()) return aller('lien-expire');
+    cu.emailVerifie = true; cu.emailVerifieLe = maintenant(); delete cu.jetonConfirmation; delete cu.confirmationExpire;
+    journal('Email confirmé, compte activé', cu, cu.email); sauverDB();
+    return aller('confirme');
+  }
+  if (pathname === '/api/renvoyer-confirmation' && m === 'POST') {
+    const { email } = await lireCorps(req);
+    const courriel = require('./modules/courriel');
+    const cu = db.utilisateurs.find(x => x.email.toLowerCase() === String(email || '').trim().toLowerCase());
+    const reponse = { ok: true, message: 'Si un compte en attente existe pour cette adresse, un nouvel email de confirmation vient d’être envoyé.' };
+    if (!cu || cu.emailVerifie !== false || !courriel.actif()) return json(res, 200, reponse);
+    if (Date.now() - new Date(cu.confirmationEnvoyeeLe || 0).getTime() < 120000) return json(res, 429, { erreur: 'Un email vient d’être envoyé. Patientez deux minutes avant d’en demander un autre.' });
+    cu.jetonConfirmation = require('crypto').randomBytes(24).toString('hex'); cu.confirmationExpire = new Date(Date.now() + 48 * 3600000).toISOString(); cu.confirmationEnvoyeeLe = maintenant(); sauverDB();
+    const envoi = await courriel.envoyer(courriel.confirmation(cu, cu.jetonConfirmation)).catch(e => ({ ok: false, erreur: e.message }));
+    if (!envoi.ok) { console.error('Email de confirmation non renvoyé à ' + cu.email + ' : ' + envoi.erreur); return json(res, 502, { erreur: 'L’email n’a pas pu être envoyé. Réessayez plus tard.' }); }
+    return json(res, 200, reponse);
   }
   if (pathname === '/api/connexion' && m === 'POST') {
     const { email, motDePasse } = await lireCorps(req);
@@ -505,6 +541,7 @@ async function api(req, res, u) {
       ? 'Ce mot de passe de démonstration est désactivé pour la sécurité. Définissez la variable OASIS_ADMIN_MDP sur Render (10 caractères minimum), puis redéployez.'
       : 'Ce mot de passe de démonstration est désactivé pour la sécurité. Demandez un nouveau mot de passe à la bibliothèque.' });
     securite.noterSucces(emailN, ip);
+    if (cu.emailVerifie === false) return json(res, 403, { erreur: 'Votre compte n’est pas encore activé. Ouvrez le lien de l’email de confirmation envoyé à ' + cu.email + ', ou demandez un nouvel email.', emailNonConfirme: true });
     const jeton = uid() + uid();
     db.sessions[jeton] = cu.id; sauverDB();
     return json(res, 200, { jeton, utilisateur: ecoles.publicUser(cu) });
@@ -555,7 +592,7 @@ async function api(req, res, u) {
     const l = db.livres.find(x => x.id === seg[2]);
     if (!l) return json(res, 404, { erreur: 'Livre introuvable.' });
     let p = db.progressions.find(x => x.utilisateurId === utilisateur.id && x.livreId === l.id);
-    if(!abonnement.actif(db,utilisateur))return json(res,402,{erreur:'Un abonnement actif est requis pour valider le livre.'});
+    if(!abonnement.actif(db,utilisateur))return json(res,402,{erreur:'Un don d’accès actif est requis pour valider le livre.'});
     await calculerDuree(l);const estimation=dureeLecture.estimation(l);
     if(estimation.minutes===null)return json(res,409,{erreur:"La durée ne peut pas être calculée : vérifiez le fichier du document."});
     if(!p?.termine && ((p?.secondesLecture||0)<estimation.secondesRequises || (p?.pourcentage||0)<95))return json(res,409,{erreur:`Validation indisponible : atteignez 95 % du parcours et ${Math.ceil(estimation.secondesRequises/60)} minutes actives de lecture. Il reste ${Math.ceil(Math.max(0,estimation.secondesRequises-(p?.secondesLecture||0))/60)} minute(s).`,estimationLecture:estimation});
@@ -1077,7 +1114,7 @@ async function api(req, res, u) {
     if (!exigeBiblio()) return;
     const c = await lireCorps(req);
     const p = db.parametres;
-    if(c.tarifsAbonnement!==undefined){if(!tarifs.valide(c.tarifsAbonnement))return json(res,400,{erreur:'Les cinq prix doivent être des montants entiers de 1 à 10 000 000 HTG.'});p.tarifsAbonnement={...c.tarifsAbonnement};journal('Tarifs des abonnements modifiés',utilisateur,JSON.stringify(p.tarifsAbonnement));}
+    if(c.tarifsAbonnement!==undefined){if(!tarifs.valide(c.tarifsAbonnement))return json(res,400,{erreur:'Les montants minimums doivent être des entiers de 1 à 10 000 000 HTG.'});p.tarifsAbonnement={...c.tarifsAbonnement};journal('Tarifs des abonnements modifiés',utilisateur,JSON.stringify(p.tarifsAbonnement));}
     ['nom', 'slogan', 'messageAccueil', 'adresse', 'telephone', 'email', 'horaires', 'piedDePage'].forEach(k => {
       if (typeof c[k] === 'string') p[k] = c[k].trim().slice(0, 300);
     });

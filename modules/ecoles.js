@@ -49,7 +49,7 @@ module.exports={active,roles,publicUser,quota,effectif,async route(req,res,c){
   const b=await lireCorps(req),nombre=Number(b.eleves);if(!Number.isInteger(nombre)||nombre<=600||nombre>100000)return send(400,{erreur:'Indiquez un effectif supérieur à 600 élèves.'});
   db.devisEcoles ||= [];db.devisEcoles.push({id:uid(),ecoleId:e.id,eleves:nombre,message:texte(b.message,2000),contact:u.email,statut:'a_traiter',creeLe:new Date().toISOString()});sauverDB();return send(201,{ok:true});
  }
- if(!active(e))return send(402,{erreur:'Activez l’abonnement établissement annuel adapté à votre effectif pour gérer les élèves et les lectures.'});
+ if(!active(e))return send(402,{erreur:'Faites le don annuel de l’établissement, selon votre effectif, pour gérer les élèves et les lectures.'});
  if(s[2]==='membres'&&m==='GET')return send(200,members().map(publicUser));
  if(s[2]==='membres'&&m==='POST'){
   const b=await lireCorps(req),nom=texte(b.nom),email=texte(b.email).toLowerCase(),role=b.role==='bibliothecaire_ecole'?'bibliothecaire_ecole':'apprenant';

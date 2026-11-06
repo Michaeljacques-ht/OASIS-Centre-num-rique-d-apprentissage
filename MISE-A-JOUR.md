@@ -1,3 +1,30 @@
+## 1.25.0 — Annonces défilantes, partenaires supporteurs, fin de la période de découverte
+
+- **Période de découverte supprimée** : les nouveaux comptes (lecteurs et établissements) n'ont plus 30 jours gratuits ; l'accès complet s'ouvre par un don. Les essais déjà en cours vont à leur terme. Le compte de démonstration est considéré comme donateur.
+- **Annonces** (Espace bibliothécaire › Annonces) : messages courts avec type (information, important, événement, nouveauté, partenaire, appel aux dons), lien facultatif, dates de début et de fin, ordre et activation. Ils défilent dans une barre en haut de toutes les pages (pause au survol, fermeture possible, sans animation si l'appareil demande moins de mouvements).
+- **Partenaires supporteurs** (Espace bibliothécaire › Partenaires) : logo, niveau (Or, Argent, Bronze, Supporteur), secteur, slogan, présentation, offre spéciale pour les membres OASIS, adresse, téléphone, WhatsApp, email, site, Facebook, Instagram, couleur, période d'affichage et ordre. Carrousel sur l'accueil, page « Partenaires » avec les petites publicités, compteur de visites des liens.
+
+## 1.24.0 — Bibliothèque par dons et confirmation d'inscription par email
+
+- **Accès par don** : les abonnements sont remplacés par des dons. Le montant affiché (mensuel ou annuel, selon le profil) est le don minimum qui ouvre l'accès complet ; le donateur peut donner davantage. Les dons d'accès confirmés apparaissent dans la liste des dons avec un reçu `REC-DON-…`. Les 30 jours de découverte gratuits sont conservés.
+- **Établissements** : dons annuels par paliers selon l'effectif — petite (100 élèves), moyenne (300), grande (600), et deux nouveaux paliers plus élevés : très grande école (1 200 élèves, 250 000 HTG) et réseau scolaire / université (3 000 élèves, 500 000 HTG). L'établissement peut donner plus que le montant suggéré.
+- **Confirmation d'inscription** : quand l'envoi d'emails est configuré, un nouvel inscrit reçoit un email « Activez votre compte » ; le compte ne peut pas se connecter avant d'avoir ouvert le lien (valable 48 h). Bouton « Renvoyer l'email de confirmation ». Les comptes existants ne sont pas concernés.
+- **À configurer sur Render** (Environment) : `BREVO_API_KEY` (clé API Brevo), `BREVO_SENDER_EMAIL` (adresse d'expéditeur validée dans Brevo) et, si besoin, `SITE_URL`. Sans ces variables, les inscriptions restent actives immédiatement, comme avant.
+
+## 1.23.0 — Nouvel en-tête sur téléphone
+
+- Bandeau bleu nuit aux coins arrondis, logo et marque « OASIS — Bibliothèque numérique intelligente », boutons en verre dépoli, carte de salutation, en-tête qui reste visible en faisant défiler.
+- Sur téléphone, Collaboration et À propos quittent l'en-tête (Collaboration reste dans le menu ; « À propos » y est ajouté) pour laisser la place à la marque.
+
+## 1.22.0 — Nouveau lecteur EPUB
+
+- Pagination réelle : « Page 3 sur 21 de ce chapitre · environ page 145 sur 980 · 15 % du livre », avec barre de progression.
+- Sommaire avec les vrais titres des chapitres (table des matières EPUB 3 ou EPUB 2) au lieu de « Chapitre 7 ».
+- Lecture plein écran (bouton ou touche F), flèches de page sur les côtés, clavier (← →, Début, Fin), glissement du doigt sur téléphone, molette.
+- Panneau « Affichage » : thème clair, sépia ou sombre ; trois polices ; interligne ; largeur du texte ; lecture page par page ou défilement continu. Les choix sont mémorisés sur l'appareil.
+- Recherche dans tout le livre avec extraits et accès direct au passage surligné.
+- Signets par livre et reprise automatique à la dernière page lue.
+
 ## 1.21.0 — Ressources : Laboratoire virtuel
 
 - Nouvelle section `laboratoire` (🧪 Laboratoire virtuel) : simulations et laboratoires en ligne de physique, chimie, biologie, électronique et astronomie.

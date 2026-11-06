@@ -7,7 +7,7 @@
   <link rel="icon" href="/icone-192.png">
   <link rel="apple-touch-icon" href="/icone-192.png">
   <title>OASIS Bibliothèque Numérique</title>
-  <link rel="stylesheet" href="/styles.css?v66">
+  <link rel="stylesheet" href="/styles.css?v69">
   <link rel="manifest" href="/manifest.json">
 </head>
 <body>
@@ -63,7 +63,7 @@
         <button class="nav-item" data-vue="bibliotheque"><span class="ic">📚</span> Bibliothèque</button>
         <button class="nav-item" data-vue="favoris"><span class="ic">❤️</span> Mes Favoris</button>
         <button class="nav-item" data-vue="emprunts"><span class="ic">🔖</span> Mes Emprunts</button>
-        <button class="nav-item" data-vue="abonnement"><span class="ic">💳</span> Abonnement</button><div class="sep"></div>
+        <button class="nav-item" data-vue="abonnement"><span class="ic">💝</span> Accès par don</button><div class="sep"></div>
         <button class="nav-item" data-vue="categories"><span class="ic">🗂️</span> Catégories</button>
         <button class="nav-item" data-vue="nouveautes"><span class="ic">✨</span> Nouveautés</button>
         <button class="nav-item" data-vue="recommandes"><span class="ic">⭐</span> Recommandés</button>
@@ -76,7 +76,9 @@
         <button class="nav-item" data-vue="quiz"><span class="ic">🧠</span> Quiz de lecture</button>
         <button class="nav-item" data-vue="places"><span class="ic">🪑</span> Places de lecture</button>
         <div class="sep"></div>
+        <button class="nav-item" data-vue="partenaires"><span class="ic">🤝</span> Partenaires</button>
         <button class="nav-item nav-don" data-vue="don"><span class="ic">💝</span> Faire un don</button>
+        <button class="nav-item nav-apropos" id="btnAProposNav"><span class="ic">ℹ️</span> À propos</button>
         <a class="nav-item" href="/ecole" id="lienEcole"><span class="ic">🏫</span> Espace établissement</a>
         <a class="nav-item" href="/admin" id="lienAdmin" hidden><span class="ic">🛠️</span> Espace bibliothécaire</a>
         <button class="nav-item" id="btnDeconnexion"><span class="ic">🚪</span> Se déconnecter</button>
@@ -87,11 +89,11 @@
     <div class="principal">
       <header class="entete">
         <button class="bouton-menu" id="btnMenu" aria-controls="sidebar" aria-expanded="false" aria-label="Ouvrir le menu">☰</button>
-        <span class="marque-mobile" aria-label="OASIS Bibliothèque Numérique">OASIS</span>
+        <button class="marque-mobile" data-vue="accueil" aria-label="OASIS, Bibliothèque numérique intelligente — accueil"><img src="/logo.png" alt=""><span><b>OASIS</b><small>Bibliothèque numérique intelligente</small></span></button>
         <h1 id="titreEntete">Bibliothèque <span>Numérique</span></h1>
         <div class="droite"><button class="mini-btn bleu" id="btnConnexionPublic">Se connecter</button>
           <button class="lien-entete" id="btnNotifs" style="position:relative">🔔 <span class="txt">Notifications</span><span id="badgeNotifs" class="badge-notif" hidden></span></button>
-          <button class="lien-entete" data-vue="collaboration">👥 <span class="txt">Collaboration</span></button>
+          <button class="lien-entete lien-collab" data-vue="collaboration">👥 <span class="txt">Collaboration</span></button>
           <button class="lien-entete lien-don" data-vue="don">💝 <span class="txt">Faire un don</span></button>
           <button class="lien-entete" id="btnAPropos">ℹ️ <span class="txt">À propos</span></button>
           <div class="profil"><span id="nomProfil"></span><div class="avatar" id="avatarProfil"></div></div>
@@ -123,7 +125,7 @@
   </div>
 
   <div id="zoneModale"></div>
-  <script src="/abonnement.js?v66"></script>
+  <script src="/abonnement.js?v67"></script>
   <script src="/don.js?v66"></script>
   <script src="/quiz.js?v66"></script>
   <script src="/recherche-texte.js?v66"></script>
@@ -132,11 +134,12 @@
   <script src="/vendor/jszip/jszip.min.js"></script>
   <script src="/surlignage.js?v66"></script>
   <script src="/lecture-assistance.js?v66"></script>
-  <script src="/lecteur-epub.js?v66"></script>
+  <script src="/lecteur-epub.js?v67"></script>
   <script src="/vignette-video.js?v66"></script>
   <script src="/navigation-ecole.js?v66"></script>
-  <script src="/profil-abonnement.js?v66"></script>
+  <script src="/profil-abonnement.js?v67"></script>
 <script src="/pagination.js?v66"></script>
-<script src="/app.js?v66"></script>
+<script src="/vitrine.js?v1"></script>
+  <script src="/app.js?v68"></script>
 </body>
 </html>

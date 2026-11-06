@@ -3,15 +3,18 @@ const assert=require('node:assert/strict');const PP=require('../lib/plopplop');c
 PP.passerelleActive=()=>true;PP.initierPaiement=async c=>{amount=c.montant;return {ok:true,urlPaiement:'https://plopplop.solutionip.app/test',transactionId:'test'}};PP.verifierPaiement=async()=>({ok:true,paye:paid});
 async function call(route,body={},u=user){let result;assert(await A.route({url:'/api/abonnement/'+route,method:route==='statut'?'GET':'POST'},{},{db,utilisateur:u,json:(r,code,data)=>result={code,data},lireCorps:async()=>body,sauverDB:()=>{},uid:()=>String(++serial)}));return result}
 assert.equal((await call('payer',{plan:'mensuel'},null)).code,401);assert.equal((await call('payer',{plan:'gratuit'})).code,400);
-const cmd=await call('payer',{plan:'mensuel',montant:1});assert.equal(cmd.code,201);assert.equal(amount,500);assert(!A.actif(db,user));
+assert.equal((await call('payer',{plan:'mensuel',montant:1})).code,400);const genereux=await call('payer',{plan:'mensuel',montant:1200});assert.equal(genereux.code,201);assert.equal(amount,1200);
+const cmd=await call('payer',{plan:'mensuel'});assert.equal(cmd.code,201);assert.equal(amount,500);assert(!A.actif(db,user));
 assert.equal((await call('verifier/'+cmd.data.id,{}, {id:'bob'})).code,404);assert.equal((await call('verifier/'+cmd.data.id)).data.paye,false);assert(!A.actif(db,user));
 paid=true;assert.equal((await call('verifier/'+cmd.data.id)).data.paye,true);assert(A.actif(db,user));const end=user.abonnementFin;await call('verifier/'+cmd.data.id);assert.equal(user.abonnementFin,end);
-const annual=await call('payer',{plan:'annuel',montant:0});assert.equal(amount,5000);await call('verifier/'+annual.data.id);assert(new Date(user.abonnementFin)>new Date(end));
+assert.equal((await call('payer',{plan:'annuel',montant:0})).code,400);const annual=await call('payer',{plan:'annuel'});assert.equal(amount,5000);await call('verifier/'+annual.data.id);assert(new Date(user.abonnementFin)>new Date(end));
 assert(!A.actif(db,{role:'apprenant',abonnementFin:'2000-01-01'}));assert(A.actif(db,{role:'bibliothecaire'}));
 PP.verifierPaiement=async()=>({ok:false,error:'Échec passerelle'});const fail=await call('payer',{plan:'mensuel'});const last=user.abonnementFin;assert.equal((await call('verifier/'+fail.data.id)).code,502);assert.equal(user.abonnementFin,last);
 db.parametres={tarifsProfils:{etudiant:750},tarifsAbonnement:{mensuel:750,annuel:7500,petite:65000,moyenne:130000,grande:195000}};
-const changed=await call('payer',{plan:'mensuel',montant:1});assert.equal(amount,750);assert.equal(db.commandesAbonnement.find(c=>c.id===cmd.data.id).montant,500);
-await call('payer',{plan:'annuel',montant:1});assert.equal(amount,7500);
+const changed=await call('payer',{plan:'mensuel'});assert.equal(amount,750);assert.equal(db.commandesAbonnement.find(c=>c.id===cmd.data.id).montant,500);
+await call('payer',{plan:'annuel'});assert.equal(amount,7500);
 const owner={id:'school-owner',role:'admin_etablissement',ecoleId:'school-test'};db.ecoles=[{id:'school-test',formule:'petite',limiteEleves:100}];db.utilisateurs=[owner];
-await call('payer',{plan:'etablissement',formule:'petite',montant:1},owner);assert.equal(amount,65000);
-console.log('Abonnements : tarifs, accès, isolation, confirmation et idempotence vérifiés.');})().catch(e=>{console.error(e);process.exitCode=1});
+assert.equal((await call('payer',{plan:'etablissement',formule:'petite',montant:1},owner)).code,400);await call('payer',{plan:'etablissement',formule:'petite'},owner);assert.equal(amount,65000);
+const palier=await call('payer',{plan:'etablissement',formule:'tres_grande',montant:300000},owner);assert.equal(palier.code,201);assert.equal(amount,300000);
+const donsAcces=(db.dons||[]).filter(d=>d.donAcces&&d.statut==='paye');assert(donsAcces.length>=2);assert(donsAcces.every(d=>/^REC-DON-/.test(d.numeroRecu)));
+console.log('Dons d’accès : minimums, dons plus élevés, paliers établissement, reçus, accès, isolation, confirmation et idempotence vérifiés.');})().catch(e=>{console.error(e);process.exitCode=1});

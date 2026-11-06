@@ -31,7 +31,8 @@ const DEFAUTS = {
 const AFFECTATIONS = {
   general: 'Là où le besoin est le plus grand',
   livres: 'Achat et numérisation de livres',
-  bourses: 'Abonnements offerts aux apprenants',
+  bourses: 'Accès offerts aux apprenants',
+  acces: 'Don d’accès à la bibliothèque',
   equipement: 'Équipement et connexion'
 };
 const verrous = new Set();
