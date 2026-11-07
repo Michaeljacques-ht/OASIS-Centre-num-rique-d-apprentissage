@@ -213,7 +213,7 @@ window.OasisEpub = (() => {
       const enregistrerProgression = pct => {
         if (!token || livre.urlEpub) return;
         clearTimeout(minuterieProgression);
-        minuterieProgression = setTimeout(() => fetch('/api/livres/' + encodeURIComponent(livre.id) + '/progression', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ pourcentage: pct }) }).catch(() => {}), 1500);
+        minuterieProgression = setTimeout(() => fetch('/api/livres/' + encodeURIComponent(livre.id) + '/progression', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ pourcentage: pct }) }).then(r => r.ok ? r.json() : null).then(d => assistance?.valider?.(d)).catch(() => {}), 1500);
       };
 
       /* ---------- Navigation ---------- */

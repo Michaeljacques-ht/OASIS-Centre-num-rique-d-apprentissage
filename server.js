@@ -13,6 +13,7 @@ const abonnement = require('./modules/abonnement');
 const tarifs=require('./modules/tarifs');
 const essai=require('./modules/essai'),doublons=require('./modules/doublons');
 const dureeLecture=require('./modules/duree-lecture');
+const progressionLecture=require('./modules/progression-lecture');
 const rechercheTexte=require('./modules/recherche-texte');
 const ecoles = require('./modules/ecoles');
 const securite = require('./modules/securite');
@@ -563,7 +564,7 @@ async function api(req, res, u) {
     const {session,secondes}=await lireCorps(req);
     if(typeof session!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(session)||!Number.isSafeInteger(secondes)||secondes<0||secondes>86400)return json(res,400,{erreur:'Durée ou session invalide.'});
     let p=db.progressions.find(x=>x.utilisateurId===utilisateur.id&&x.livreId===l.id);
-    if(!p){p={id:uid(),utilisateurId:utilisateur.id,livreId:l.id,pourcentage:0,termine:false,creeLe:maintenant()};db.progressions.push(p)}
+    if(!p){p={id:uid(),utilisateurId:utilisateur.id,livreId:l.id,pourcentage:0,termine:false,validationTemps:1,creeLe:maintenant()};db.progressions.push(p)}
     p.sessionsTemps=p.sessionsTemps||{};
     const old=p.sessionsTemps[session]||{secondes:0,debut:Date.now()};
     const now=Date.now();const budget=Math.min(30,(p.budgetTemps===undefined?20:p.budgetTemps)+Math.min(30,Math.max(0,(now-(p.dernierTempsServeur||now))/1000)));
@@ -572,7 +573,8 @@ async function api(req, res, u) {
     if(accepted>old.secondes){p.secondesLecture=(p.secondesLecture||0)+accepted-old.secondes;old.secondes=accepted;p.majLe=maintenant()}
     p.sessionsTemps[session]=old;
     const keys=Object.keys(p.sessionsTemps);if(keys.length>100)delete p.sessionsTemps[keys[0]];
-    sauverDB();return json(res,200,{secondesLecture:p.secondesLecture||0});
+    await calculerDuree(l);const etatProg=progressionLecture.appliquer(p,l);
+    sauverDB();return json(res,200,etatProg);
   }
   if (seg[1] === 'livres' && seg[2] && seg[3] === 'progression' && m === 'POST') {
     if (!exigeAuth()) return;
@@ -580,12 +582,13 @@ async function api(req, res, u) {
     const l = db.livres.find(x => x.id === seg[2]);
     if (!l) return json(res, 404, { erreur: 'Livre introuvable.' });
     let p = db.progressions.find(x => x.utilisateurId === utilisateur.id && x.livreId === l.id);
-    if (!p) { p = { id: uid(), utilisateurId: utilisateur.id, livreId: l.id, pourcentage: 0, termine: false, creeLe: maintenant() }; db.progressions.push(p); }
-    const pct = Math.min(100, Math.max(0, Math.round(Number(pourcentage) || 0)));
-    p.pourcentage = Math.max(p.pourcentage, pct);
+    if (!p) { p = { id: uid(), utilisateurId: utilisateur.id, livreId: l.id, pourcentage: 0, termine: false, validationTemps: 1, creeLe: maintenant() }; db.progressions.push(p); }
+    // 1.26.0 : la position suit le défilement ; la progression validée suit le temps de lecture réel.
+    await calculerDuree(l);
+    const etatProg = progressionLecture.appliquer(p, l, pourcentage);
     p.majLe = maintenant();
     toucherActivite(utilisateur); sauverDB();
-    return json(res, 200, p);
+    return json(res, 200, { ...p, ...etatProg, sessionsTemps: undefined, budgetTemps: undefined, dernierTempsServeur: undefined });
   }
   if (seg[1] === 'livres' && seg[2] && seg[3] === 'terminer' && m === 'POST') {
     if (!exigeAuth()) return;
@@ -595,7 +598,7 @@ async function api(req, res, u) {
     if(!abonnement.actif(db,utilisateur))return json(res,402,{erreur:'Un don d’accès actif est requis pour valider le livre.'});
     await calculerDuree(l);const estimation=dureeLecture.estimation(l);
     if(estimation.minutes===null)return json(res,409,{erreur:"La durée ne peut pas être calculée : vérifiez le fichier du document."});
-    if(!p?.termine && ((p?.secondesLecture||0)<estimation.secondesRequises || (p?.pourcentage||0)<95))return json(res,409,{erreur:`Validation indisponible : atteignez 95 % du parcours et ${Math.ceil(estimation.secondesRequises/60)} minutes actives de lecture. Il reste ${Math.ceil(Math.max(0,estimation.secondesRequises-(p?.secondesLecture||0))/60)} minute(s).`,estimationLecture:estimation});
+    if(!p?.termine && ((p?.secondesLecture||0)<estimation.secondesRequises || Math.max(p?.pourcentage||0,p?.positionMax||0)<95))return json(res,409,{erreur:`Validation indisponible : atteignez 95 % du parcours et ${Math.ceil(estimation.secondesRequises/60)} minutes actives de lecture. Il reste ${Math.ceil(Math.max(0,estimation.secondesRequises-(p?.secondesLecture||0))/60)} minute(s).`,estimationLecture:estimation});
     if (!p) { p = { id: uid(), utilisateurId: utilisateur.id, livreId: l.id, pourcentage: 100, termine: false, creeLe: maintenant() }; db.progressions.push(p); }
     if (!p.termine) { p.termine = true; p.pourcentage = 100; p.termineLe = maintenant(); journal('Lecture terminée', utilisateur, l.titre); }
     toucherActivite(utilisateur); sauverDB();
@@ -1828,6 +1831,8 @@ http.createServer(async (req, res) => {
   console.log('╚══════════════════════════════════════════════════╝');
   console.log(`Portail apprenant : http://localhost:${PORT}`);
   console.log(`Espace bibliothécaire : http://localhost:${PORT}/admin`);
+  // 1.26.0 : recalcul des anciennes progressions gonflées par le simple défilement.
+  (async () => { let n = 0; for (const p of db.progressions) { if (p.validationTemps) continue; const l = db.livres.find(x => x.id === p.livreId); if (!l) { p.validationTemps = 1; continue; } try { await calculerDuree(l); } catch {} if (progressionLecture.migrer(p, l)) n++; } if (n) { sauverDB(); console.log('Progressions recalculées selon le temps de lecture :', n); } })().catch(e => console.warn('Recalcul des progressions :', e.message));
   if (mdpAdminInitial) console.log(`Base neuve — administrateur : admin@oasis.ht / ${mdpAdminInitial}  (notez-le : il ne sera plus affiché)`);
   if (securite.modeDemo()) console.log('Mode démonstration (OASIS_DEMO=1) : admin@oasis.ht / admin123 et emma@oasis.ht / demo123.');
 });

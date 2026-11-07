@@ -1,11 +1,11 @@
 {
   "name": "oasis-centre-numerique",
-  "version": "1.25.0",
+  "version": "1.26.0",
   "private": true,
   "description": "OASIS Bibliothèque Numérique — espaces individuels et établissements",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/profils.cjs && node tests/navigation-ecole.cjs && node tests/metadonnees.cjs && node tests/partage.cjs && node tests/doublons-essai.cjs && node tests/base-json.cjs && node tests/bibliotheque.cjs && node tests/abonnement.cjs && node tests/ecoles.cjs && node tests/dons.cjs && node tests/quiz.cjs && node tests/recherche-texte.cjs && node tests/ia.cjs && node tests/surlignages.cjs && node tests/diagnostic.cjs && node tests/securite.cjs && node tests/ressources.cjs && node tests/courriel.cjs && node tests/vitrine.cjs",
+    "test": "node tests/profils.cjs && node tests/navigation-ecole.cjs && node tests/metadonnees.cjs && node tests/partage.cjs && node tests/doublons-essai.cjs && node tests/base-json.cjs && node tests/bibliotheque.cjs && node tests/abonnement.cjs && node tests/ecoles.cjs && node tests/dons.cjs && node tests/quiz.cjs && node tests/recherche-texte.cjs && node tests/ia.cjs && node tests/surlignages.cjs && node tests/diagnostic.cjs && node tests/securite.cjs && node tests/ressources.cjs && node tests/courriel.cjs && node tests/vitrine.cjs && node tests/progression.cjs",
     "manifeste": "node outils/manifeste.cjs"
   },
   "engines": {

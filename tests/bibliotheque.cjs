@@ -43,6 +43,7 @@ async function request(route,token,method='GET',body){if(route==='/inscription'&
  assert.equal((await request('/livres/'+book.id+'/temps-lecture',learner,'POST',{...timing,secondes:-1})).code,400);
  assert.equal((await request('/livres/'+book.id,learner)).data.maProgression.secondesLecture,15);
  assert.equal((await request('/livres/'+book.id,admin)).data.maProgression,null);
+ { const saut=(await request('/livres/'+book.id+'/progression',learner,'POST',{pourcentage:100})).data; assert.equal(saut.position,100); assert.ok(saut.pourcentage<100,'le défilement seul ne doit pas valider le livre'); assert.equal(saut.limiteParTemps,true); assert.equal(saut.sessionsTemps,undefined); }
  const gated=(await request('/livres',admin,'POST',{titre:'Durée test',auteur:'Test',categorie:'Sciences',dureeLectureMinutes:1,seuilLecture:1,contenu:'Texte test'})).data;
  assert.equal(gated.estimationLecture.secondesRequises,1);
  assert.equal((await request('/livres/'+gated.id+'/terminer',admin,'POST')).code,409);

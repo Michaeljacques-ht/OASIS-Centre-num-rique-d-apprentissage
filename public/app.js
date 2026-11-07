@@ -500,7 +500,7 @@
             </div>
             ${l.maProgression && l.maProgression.pourcentage > 0 ? `
               <div style="margin-top:14px">
-                <small style="font-weight:700;color:var(--encre)">${l.maProgression.termine ? '✅ Lecture terminée' : `📖 Lecture en cours : ${l.maProgression.pourcentage} %`}</small>
+                <small style="font-weight:700;color:var(--encre)">${l.maProgression.termine ? '✅ Lecture terminée' : `📖 Progression validée : ${l.maProgression.pourcentage} %${(l.maProgression.positionMax || 0) > l.maProgression.pourcentage + 2 ? ` · position atteinte : ${l.maProgression.positionMax} %` : ''}`}</small>
                 <div class="barre-progression"><div style="width:${l.maProgression.pourcentage}%"></div></div>
               </div>` : ''}
             ${window.OasisSuggestions ? OasisSuggestions.aussiLus(l.id, api) : ''}
@@ -634,7 +634,7 @@
         const couche=$('#pdfTexte');if(couche&&ticket===sequence){couche.replaceChildren();couche.style.width=viewport.width+'px';couche.style.height=viewport.height+'px';couche.style.setProperty('--scale-factor',viewport.scale);try{await pdfjsLib.renderTextLayer({textContentSource:await p.getTextContent(),container:couche,viewport,textDivs:[]}).promise}catch{}if(ticket===sequence)slPdf?.rafraichir();}
         if(ticket!==sequence||closed)return;$('#pdfEtat').textContent='Page '+page+' sur '+doc.numPages;
         assistance?.ready();assistance?.progress(Math.round(page/doc.numPages*100));$('#pdfPage').value=page;$('#pdfAvant').disabled=page===1;$('#pdfApres').disabled=page===doc.numPages;area.scrollTop=0;
-        if(moi && livre.accesComplet) api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:Math.round(page/doc.numPages*100)})}).catch(()=>{});
+        if(moi && livre.accesComplet) api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:Math.round(page/doc.numPages*100)})}).then(d=>assistance?.valider?.(d)).catch(()=>{});
       }catch(e){if(e.name!=='RenderingCancelledException'&&!closed&&ticket===sequence)$('#pdfEtat').textContent='Lecture impossible : utilisez Télécharger ou Ouvrir.'}
     }
     try{
@@ -646,7 +646,6 @@
       $('#pdfPage').onchange=e=>{page=Math.max(1,Math.min(doc.numPages,Number(e.target.value)||1));render()};
       $('#pdfMoins').onclick=()=>{zoom=Math.max(.5,zoom-.25);render()};$('#pdfPlus').onclick=()=>{zoom=Math.min(3,zoom+.25);render()};
       await render();
-      api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:livre.maProgression?.pourcentage||1})}).catch(()=>{});
     }catch(e){if(!closed)$('#pdfEtat').textContent='Ce PDF ne peut pas être affiché. Utilisez Télécharger pour le lire dans votre application PDF.'}
   }
 
@@ -665,7 +664,7 @@
       .replace(/^# (.+)$/gm, '<h1>$1</h1>')
       .replace(/^## (.+)$/gm, '<h2>$1</h2>')
       .split(/\n\n+/).map(b => b.startsWith('<h') ? b : `<p>${b}</p>`).join('');
-    const pct = livre.maProgression ? livre.maProgression.pourcentage : 0;
+    const pct = livre.maProgression ? Number(livre.maProgression.position ?? livre.maProgression.pourcentage) || 0 : 0;
     $('#zoneModale').innerHTML = `
       <div class="voile" id="voile">
         <div class="modale lecteur" id="modaleLecteur" role="dialog" aria-modal="true">
@@ -696,7 +695,7 @@
     modaleEl.addEventListener('scroll', () => {
       $('#jaugeLecture').style.width = pctActuel() + '%';
       clearTimeout(minuteurProg);
-      minuteurProg = setTimeout(() => api('/livres/' + livre.id + '/progression', { method: 'POST', body: JSON.stringify({ pourcentage: pctActuel() }) }).catch(() => {}), 1200);
+      minuteurProg = setTimeout(() => api('/livres/' + livre.id + '/progression', { method: 'POST', body: JSON.stringify({ pourcentage: pctActuel() }) }).then(d => OasisLecture.valider(d)).catch(() => {}), 1200);
     });
     // Zoom
     let taille = 16.5;
@@ -710,7 +709,7 @@
       if (document.fullscreenElement) document.exitFullscreen();
       else modaleEl.requestFullscreen?.().catch(() => toast('Plein écran non disponible sur ce navigateur.'));
     });
-    const partiesTexte=Math.max(1,Math.ceil(String(d.contenu).length/2500)),zoneDefil=()=>[$('#texteLecture'),modaleEl].find(x=>x&&x.scrollHeight>x.clientHeight+4);const slTexte=(window.OasisSurlignage||{brancher:()=>({rafraichir(){},fermer(){}})}).brancher({livre,unite:'partie',root:()=>$('#texteLecture'),page:debut=>Math.min(Math.max(1,Math.ceil(String(d.contenu).length/2500)),1+Math.floor(debut/Math.max(1,$('#texteLecture').textContent.length)*Math.max(1,Math.ceil(String(d.contenu).length/2500)))),pourcentage:()=>pctActuel()});slTexte.rafraichir();const assistanceTexte=OasisLecture.start($('#modaleLecteur'),livre,jeton,()=>$('#texteLecture').innerText,{unite:'partie',page:()=>{const z=zoneDefil();return z?Math.min(partiesTexte,1+Math.floor(z.scrollTop/Math.max(1,z.scrollHeight-z.clientHeight)*partiesTexte*0.999)):1},aller:n=>{const z=zoneDefil();if(z)z.scrollTop=(n-1)/partiesTexte*(z.scrollHeight-z.clientHeight)}});assistanceTexte.ready();modaleEl.addEventListener('scroll',()=>assistanceTexte.progress(pctActuel()));assistanceTexte.progress(pctActuel());api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:pctActuel()})}).catch(()=>{});$('#btnVoix').hidden=true;
+    const partiesTexte=Math.max(1,Math.ceil(String(d.contenu).length/2500)),zoneDefil=()=>[$('#texteLecture'),modaleEl].find(x=>x&&x.scrollHeight>x.clientHeight+4);const slTexte=(window.OasisSurlignage||{brancher:()=>({rafraichir(){},fermer(){}})}).brancher({livre,unite:'partie',root:()=>$('#texteLecture'),page:debut=>Math.min(Math.max(1,Math.ceil(String(d.contenu).length/2500)),1+Math.floor(debut/Math.max(1,$('#texteLecture').textContent.length)*Math.max(1,Math.ceil(String(d.contenu).length/2500)))),pourcentage:()=>pctActuel()});slTexte.rafraichir();const assistanceTexte=OasisLecture.start($('#modaleLecteur'),livre,jeton,()=>$('#texteLecture').innerText,{unite:'partie',page:()=>{const z=zoneDefil();return z?Math.min(partiesTexte,1+Math.floor(z.scrollTop/Math.max(1,z.scrollHeight-z.clientHeight)*partiesTexte*0.999)):1},aller:n=>{const z=zoneDefil();if(z)z.scrollTop=(n-1)/partiesTexte*(z.scrollHeight-z.clientHeight)}});assistanceTexte.ready();modaleEl.addEventListener('scroll',()=>assistanceTexte.progress(pctActuel()));assistanceTexte.progress(pctActuel());api('/livres/'+livre.id+'/progression',{method:'POST',body:JSON.stringify({pourcentage:pctActuel()})}).then(d=>assistanceTexte.valider(d)).catch(()=>{});$('#btnVoix').hidden=true;
     // Marque-page
     $('#btnSignet').addEventListener('click', async () => {
       try {
