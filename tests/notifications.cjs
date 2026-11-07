@@ -65,3 +65,5 @@ let server, base, sortie = '';
   } catch (e) { console.error(e); console.error(sortie.slice(-1500)); process.exitCode = 1; }
   finally { if (server && server.exitCode === null) { const f = new Promise(r => server.once('exit', r)); server.kill(); await f; } fs.rmSync(temp, { recursive: true, force: true, maxRetries: 5 }); }
 })();
+// La version affichée par l'interface d'administration doit suivre package.json (évite le bandeau rouge « interface : … »).
+assert.equal(fs.readFileSync(path.join(__dirname, '../public/admin.js'), 'utf8').match(/VERSION_INTERFACE = '([\d.]+)'/)[1], require('../package.json').version);
