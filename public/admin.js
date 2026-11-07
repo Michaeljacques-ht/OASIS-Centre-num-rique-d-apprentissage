@@ -223,7 +223,16 @@
           <div class="champ"><label for="pSlogan">Slogan (bannière d'accueil)</label><input id="pSlogan" value="${echap(p.slogan)}"></div>
           <div class="champ"><label for="pAccueil">Message de bienvenue (en-tête du portail, après « Bonjour Prénom — »)</label><input id="pAccueil" value="${echap(p.messageAccueil || '')}" placeholder="Ex. : bienvenue dans votre bibliothèque !"></div>
           <div class="champ"><label for="pPied">Ligne de copyright du pied de page</label><input id="pPied" value="${echap(p.piedDePage)}"></div>
-          <div class="champ"><label for="pAPropos">Texte « À propos » (bouton ℹ️ du portail)</label><textarea id="pAPropos" rows="4">${echap(p.aPropos || '')}</textarea></div>
+          <div class="champ"><label for="pAPropos">Présentation de la bibliothèque (page « À propos »)</label><textarea id="pAPropos" rows="4">${echap(p.aPropos || '')}</textarea></div>
+          <div class="champ"><label for="pMission">Mission</label><textarea id="pMission" rows="2">${echap(p.mission || '')}</textarea></div>
+          <div class="champ"><label for="pVision">Vision</label><textarea id="pVision" rows="2">${echap(p.vision || '')}</textarea></div>
+        </div>
+        <div class="panneau" style="margin-bottom:16px">
+          <h4 style="margin-bottom:12px;color:var(--encre)">Fondateur (page « À propos »)</h4>
+          <div class="admin-form-grid"><div class="champ"><label for="pFondNom">Nom</label><input id="pFondNom" value="${echap(p.fondateurNom || '')}"></div>
+          <div class="champ"><label for="pFondTitre">Titre</label><input id="pFondTitre" value="${echap(p.fondateurTitre || '')}"></div></div>
+          <div class="champ"><label for="pFondBio">Biographie</label><textarea id="pFondBio" rows="5">${echap(p.fondateurBio || '')}</textarea></div>
+          <div class="champ"><label for="pFondDom">Domaines d’expertise (séparés par des virgules)</label><input id="pFondDom" value="${echap(p.fondateurDomaines || '')}"></div>
         </div>
         <div class="panneau" style="margin-bottom:16px">
           <h4 style="margin-bottom:12px;color:var(--encre)">Coordonnées (pied de page)</h4>
@@ -408,7 +417,7 @@
         <div class="champ"><label for="fCouleur">Couleur</label><input id="fCouleur" type="color" value="#1e4fa3" style="height:42px;padding:4px"></div>
       </div>
       <div class="admin-form-grid">
-        <div class="champ"><label for="fEditeur">Éditeur</label><input id="fEditeur" placeholder="Ex. : Éduca Diffusion"></div>
+        <div class="champ"><label for="fEditeur">Éditeur</label><input id="fEditeur" placeholder="Ex. : Éditions Henri Deschamps"></div>
         <div class="champ"><label for="fEdition">Édition (récupérée si disponible)</label><input id="fEdition"></div><div class="champ"><label for="fIsbn">ISBN</label><input id="fIsbn" placeholder="Ex. : 978-…"></div>
       </div>
       <div class="admin-form-grid">
@@ -595,7 +604,7 @@
   }
   async function modifierLivre(id) {
     const l=await api('/livres/'+id);
-    const champs=[['titre','Titre'],['auteur','Auteur'],['categorie','Catégorie'],['editeur','Éditeur'],['edition','Édition'],['isbn','ISBN'],['langue','Langue'],['seuilLecture','Temps minimum requis (%)'],['publicCible','Public cible'],['niveau','Classe ou spécialité'],['motsCles','Mots-clés'],['annee','Année'],['icone','Icône'],['couleur','Couleur']];
+    const champs=[['titre','Titre'],['auteur','Auteur'],['categorie','Catégorie'],['editeur','Éditeur (maison d’édition réelle)'],['lieuEdition','Lieu d’édition'],['edition','Édition'],['sourceNumerique','Source numérique (Gallica, Wikisource…)'],['isbn','ISBN'],['langue','Langue'],['seuilLecture','Temps minimum requis (%)'],['publicCible','Public cible'],['niveau','Classe ou spécialité'],['motsCles','Mots-clés'],['annee','Année'],['icone','Icône'],['couleur','Couleur']];
     modale(`<h3>Modifier le document</h3><div id="msgModification"></div><p><b>Durée calculée automatiquement : ${l.estimationLecture?.minutes ? l.estimationLecture.minutes+' minutes' : 'Indisponible'}</b><br>${echap(l.estimationLecture?.source||'')}</p><div class="form-document">${champs.map(([k,n])=>`<div class="champ"><label for="edit-${k}">${n}</label>${k==='publicCible' ? `<select id="edit-${k}">${['tous','scolaire','universitaire','technique_professionnel'].map((v,i)=>`<option value="${v}" ${(l.publicCible||'tous')===v?'selected':''}>${['Tous niveaux','Scolaire','Universitaire','Technique et professionnel'][i]}</option>`).join('')}</select>` : `<input id="edit-${k}" value="${echap(k==='seuilLecture'?(l[k]===undefined?70:l[k]):(l[k]||''))}" ${k==='annee'?'type="number"':k==='couleur'?'type="color"':''}>`}</div>`).join('')}</div><div class="champ"><label for="edit-resume">Résumé</label><textarea id="edit-resume" rows="4">${echap(l.resume||'')}</textarea></div><button class="btn btn-bleu" id="saveDocument">Enregistrer</button><section class="document-apercu"><h4>Couverture du document</h4>${l.couverture ? `<a href="/api/livres/${l.id}/couverture" target="_blank" rel="noopener"><img src="/api/livres/${l.id}/couverture" alt="Couverture de ${echap(l.titre)}"></a>` : `<p>Aucune couverture disponible pour ce document.</p>`}<p><b>${echap(l.titre)}</b><br>${echap(l.auteur)} · ${echap(l.annee || "Année non renseignée")}</p><p>Formats disponibles : ${[l.pdf ? "PDF" : "", l.epub ? "EPUB" : ""].filter(Boolean).join(" / ") || "Aucun fichier joint"}</p>${l.pdf || l.epub ? '<h4>Consulter le document</h4><p>Feuilletez les pages pour retrouver l’auteur, l’éditeur, l’année et les autres informations.</p><div id="apercuEdition"></div>' : ''}</section>`);
     if(l.pdf||l.epub)OasisApercuDocument.open(l,jeton,$('#apercuEdition'));
     $('#saveDocument').onclick=async()=>{try{const body={};champs.forEach(([k])=>body[k]=$('#edit-'+k).value.trim());body.annee=Number(body.annee)||null;body.resume=$('#edit-resume').value;await api('/livres/'+id,{method:'PUT',body:JSON.stringify(body)});fermerModale();toast('Document modifié.');afficherOnglet('catalogue');}catch(e){$('#msgModification').textContent=e.message}};
@@ -1292,7 +1301,7 @@
     $('#btnSauverParametres')?.addEventListener('click', async () => {
       try {
         await api('/parametres', { method: 'PUT', body: JSON.stringify({
-          tarifsAbonnement:Object.fromEntries(['mensuel','annuel','petite','moyenne','grande','tres_grande','reseau'].map(k=>[k,Number($('#tarif-'+k).value)])),nom: $('#pNom').value, slogan: $('#pSlogan').value, messageAccueil: $('#pAccueil').value, piedDePage: $('#pPied').value, aPropos: $('#pAPropos').value,
+          tarifsAbonnement:Object.fromEntries(['mensuel','annuel','petite','moyenne','grande','tres_grande','reseau'].map(k=>[k,Number($('#tarif-'+k).value)])),nom: $('#pNom').value, slogan: $('#pSlogan').value, messageAccueil: $('#pAccueil').value, piedDePage: $('#pPied').value, aPropos: $('#pAPropos').value, mission: $('#pMission').value, vision: $('#pVision').value, fondateurNom: $('#pFondNom').value, fondateurTitre: $('#pFondTitre').value, fondateurBio: $('#pFondBio').value, fondateurDomaines: $('#pFondDom').value,
           adresse: $('#pAdresse').value, telephone: $('#pTel').value, email: $('#pEmail').value, horaires: $('#pHoraires').value,
           dureeEmpruntPhysique: $('#pDureeP').value, dureeEmpruntNumerique: $('#pDureeN').value,
           maxEmprunts: $('#pMax').value, retraitReservationJours: $('#pRetrait').value,

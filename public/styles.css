@@ -847,3 +847,108 @@ mark.sl-com{border-bottom:2px dotted #7a5a00}
 .partenaire-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}.partenaire-actions a{text-decoration:none}
 .devenir-partenaire{text-align:center}
 @media(max-width:780px){.grille-partenaires{grid-template-columns:1fr}.partenaire-mini{flex-basis:78%}}
+
+/* ===== 1.27.0 — Citations ===== */
+.modale-citer{max-width:760px}
+.cit-surtitre{display:block;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--bleu);margin-bottom:2px}
+.cit-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px 18px;background:var(--bleu-clair,#eaf1fc);border-radius:12px;padding:12px 16px;margin-bottom:12px}
+.cit-meta-ligne{display:flex;gap:8px;font-size:13.5px;min-width:0}
+.cit-meta-ligne dt{color:var(--gris);min-width:72px;flex-shrink:0}
+.cit-meta-ligne dd{color:var(--encre);font-weight:600;overflow-wrap:anywhere}
+.cit-meta-ligne.manque dd span{color:#b45309;font-weight:500;font-style:italic}
+.cit-avertissement{font-size:13px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:9px 12px;margin-bottom:12px}
+.cit-styles{display:grid;gap:10px}
+.cit-style{border:1px solid var(--bord);border-radius:12px;padding:10px 14px;background:var(--carte,#fff)}
+.cit-style header{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.cit-style header b{font-size:12.5px;letter-spacing:.04em;color:var(--bleu);text-transform:uppercase}
+.cit-style p{font-size:14px;line-height:1.6;color:var(--encre);padding-left:1.6em;text-indent:-1.6em;overflow-wrap:anywhere}
+.cit-export{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px;font-size:13px;color:var(--gris)}
+.cit-note{font-size:12px;color:var(--gris);margin-top:8px}
+
+/* ===== 1.27.0 — Notifications ===== */
+#btnNotifs.a-nouveau{animation:cloche 1.6s ease 1}
+@keyframes cloche{0%,100%{transform:rotate(0)}15%{transform:rotate(-12deg)}30%{transform:rotate(10deg)}45%{transform:rotate(-6deg)}60%{transform:rotate(3deg)}}
+.modale-notifs{max-width:560px;padding:0;overflow:hidden}
+.notifs-entete{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 20px 10px;background:linear-gradient(135deg,var(--bleu),var(--bleu-fonce));color:#fff}
+.notifs-entete h3{color:#fff;font-size:19px}
+.notifs-entete small{opacity:.85;font-size:12.5px}
+.notifs-entete .fermer{color:#fff;background:#ffffff22;border-radius:10px}
+.notifs-outils{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--bord);flex-wrap:wrap}
+.notifs-filtres{display:inline-flex;background:var(--fond);border-radius:999px;padding:3px}
+.notifs-filtres button{padding:5px 14px;border-radius:999px;font-size:13px;font-weight:600;color:var(--gris)}
+.notifs-filtres button[aria-pressed="true"]{background:#fff;color:var(--bleu);box-shadow:0 1px 4px #10243e1f}
+.notifs-corps{max-height:min(62vh,560px);overflow-y:auto;padding:6px 10px 14px!important}
+.notifs-groupe{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--gris);margin:12px 8px 6px}
+.notifs-liste{list-style:none;display:grid;gap:4px}
+.notif{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;padding:10px 12px;border-radius:12px;background:var(--bleu-clair,#eaf1fc);transition:background .15s,transform .15s;position:relative}
+.notif:hover,.notif:focus-visible{background:#dce8fb;transform:translateX(2px)}
+.notif.lue{background:transparent}
+.notif.lue:hover{background:var(--fond)}
+.notif-icone{flex:0 0 38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:18px;background:#fff;box-shadow:0 1px 4px #10243e1a}
+.notif-retard .notif-icone{background:#fee2e2}.notif-echeance .notif-icone{background:#fef3c7}.notif-reservation .notif-icone{background:#dcfce7}
+.notif-abonnement .notif-icone{background:#fce7f3}.notif-message .notif-icone,.notif-invitation .notif-icone{background:#e0e7ff}
+.notif-texte{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.notif-texte b{font-size:14px;color:var(--encre)}
+.notif-texte span{font-size:13.5px;color:var(--texte);overflow-wrap:anywhere}
+.notif-texte small{font-size:12px;color:var(--gris)}
+.notif.lue .notif-texte b{font-weight:600}
+.notif-point{width:9px;height:9px;border-radius:50%;background:var(--orange);flex-shrink:0;margin-top:6px}
+.notif-retard:not(.lue){box-shadow:inset 3px 0 0 var(--rouge)}
+.notifs-vide{text-align:center;padding:34px 18px;color:var(--gris)}
+.notifs-vide span{font-size:40px;display:block;margin-bottom:6px}
+.notifs-vide b{color:var(--encre);display:block;margin-bottom:4px}
+
+/* ===== 1.27.0 — À propos ===== */
+.apropos{display:grid;gap:22px;max-width:1080px}
+.apropos-surtitre{display:inline-block;font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--orange)}
+.apropos-hero{display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:center;padding:32px;border-radius:24px;color:#fff;background:radial-gradient(ellipse at top right,#2d6ad4,transparent 60%),radial-gradient(ellipse at bottom left,#5a3420,transparent 55%),#0a1f44;box-shadow:var(--ombre)}
+.apropos-logo{width:130px;height:130px;object-fit:contain;background:#fff;border-radius:28px;padding:12px}
+.apropos-hero h2{font-size:clamp(24px,3.4vw,34px);color:#fff;line-height:1.15;margin:4px 0}
+.apropos-slogan{color:#ffd28a;font-weight:700;margin-bottom:10px}
+.apropos-intro{line-height:1.7;opacity:.93;max-width:70ch}
+.apropos-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.apropos-chiffres{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.apropos-chiffres div{background:var(--carte,#fff);border-radius:16px;padding:16px;text-align:center;box-shadow:var(--ombre)}
+.apropos-chiffres span{font-size:22px}
+.apropos-chiffres b{display:block;font-size:26px;color:var(--bleu);line-height:1.2}
+.apropos-chiffres small{color:var(--gris);font-size:12.5px}
+.apropos-duo{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.apropos-duo article,.apropos-bloc,.apropos-modele,.apropos-fondateur{background:var(--carte,#fff);border-radius:20px;padding:22px 24px;box-shadow:var(--ombre)}
+.apropos-duo h3,.apropos-bloc h3,.apropos-modele h3{color:var(--encre);margin-bottom:8px;font-size:19px}
+.apropos-duo p{line-height:1.7}
+.apropos-pastille{display:inline-grid;place-items:center;width:42px;height:42px;border-radius:12px;background:var(--bleu-clair,#eaf1fc);font-size:20px;margin-bottom:8px}
+.apropos-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-top:6px}
+.apropos-grille article{border:1px solid var(--bord);border-radius:14px;padding:14px;transition:transform .15s,box-shadow .15s}
+.apropos-grille article:hover{transform:translateY(-2px);box-shadow:var(--ombre)}
+.apropos-grille article span{font-size:24px}
+.apropos-grille h4{color:var(--encre);margin:4px 0;font-size:15px}
+.apropos-grille p{font-size:13.5px;color:var(--gris);line-height:1.55}
+.apropos-grille.compacte article{background:var(--fond);border-color:transparent}
+.apropos-modele{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;background:linear-gradient(135deg,#fff7ed,#fff)}
+.apropos-modele p{line-height:1.7;margin-bottom:8px}
+.apropos-modele ul{padding-left:20px;color:var(--texte);line-height:1.8}
+.apropos-modele-actions{display:grid;gap:8px}
+.apropos-fondateur{display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:start;border-left:5px solid var(--orange)}
+.fondateur-avatar{width:110px;height:110px;border-radius:50%;display:grid;place-items:center;font-size:38px;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--bleu),var(--orange));box-shadow:0 8px 24px #1549b540}
+.apropos-fondateur h3{font-size:24px;color:var(--encre)}
+.fondateur-titre{color:var(--bleu);font-weight:700;margin-bottom:10px}
+.apropos-fondateur p{line-height:1.75}
+.fondateur-domaines{list-style:none;display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.fondateur-domaines li{background:var(--bleu-clair,#eaf1fc);color:var(--bleu);font-weight:600;font-size:13px;border-radius:999px;padding:5px 12px}
+.apropos-contacts{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.apropos-contacts div{display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:center;background:var(--fond);border-radius:12px;padding:12px}
+.apropos-contacts span{grid-row:span 2;font-size:20px}
+.apropos-contacts small{color:var(--gris);font-size:12px}
+.apropos-contacts b{color:var(--encre);overflow-wrap:anywhere;font-size:14px}
+.apropos-contacts a{color:inherit}
+.apropos-pied{text-align:center;color:var(--gris);font-size:12.5px}
+@media (max-width:760px){
+  .apropos-hero{grid-template-columns:1fr;text-align:center;padding:24px 18px}
+  .apropos-logo{margin:0 auto;width:96px;height:96px}
+  .apropos-actions{justify-content:center}
+  .apropos-duo,.apropos-modele{grid-template-columns:1fr}
+  .apropos-fondateur{grid-template-columns:1fr;text-align:center}
+  .fondateur-avatar{margin:0 auto}
+  .fondateur-domaines{justify-content:center}
+  .cit-style p{padding-left:0;text-indent:0}
+}

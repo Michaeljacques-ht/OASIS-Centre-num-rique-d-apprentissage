@@ -159,6 +159,7 @@
   const vues = {
     abonnement: () => OasisAbonnement.render(api, moi),
     partenaires: () => OasisVitrine.page(),
+    apropos: () => OasisAPropos.render(api, parametres),
     don: () => window.OasisDon ? OasisDon.render(api, moi) : moduleAbsent('don.js'),
     quiz: () => window.OasisQuiz ? OasisQuiz.render(api, moi) : moduleAbsent('quiz.js'),
     espace: async () => `<h2>Mon espace</h2><p>Bienvenue ${echap(moi?.nom || "")}. Retrouvez vos lectures dans la bibliothèque et gérez votre don d’accès ci-dessous.</p><button class="btn btn-bleu" data-vue="bibliotheque">Explorer la bibliothèque</button> <button class="mini-btn" data-sg-reactiver>Réactiver les suggestions personnalisées</button>` + await OasisAbonnement.render(api, moi),
@@ -406,7 +407,7 @@
 
   async function afficherVue(nom, param) {
     window.OasisQuiz?.quitter();
-    if(!moi&&!['accueil','bibliotheque','categorie','categories','nouveautes','recommandes','abonnement','don','partenaires'].includes(nom)){window.dispatchEvent(new Event('oasis-connexion'));return;}
+    if(!moi&&!['accueil','bibliotheque','categorie','categories','nouveautes','recommandes','abonnement','don','partenaires','apropos'].includes(nom)){window.dispatchEvent(new Event('oasis-connexion'));return;}
     vueActive = nom; listesPaginees = {};
     document.querySelectorAll('.nav-item[data-vue]').forEach(b => b.classList.toggle('actif', b.dataset.vue === nom));
     $('#sidebar').classList.remove('ouverte');
@@ -896,28 +897,7 @@
     });
     $('#inCommentaire').addEventListener('keydown', e => { if (e.key === 'Enter') $('#btnCommenter').click(); });
   }
-  function ouvrirAPropos() {
-    const p = parametres;
-    $('#zoneModale').innerHTML = `
-      <div class="voile" id="voile">
-        <div class="modale" role="dialog" aria-modal="true">
-          <div class="corps" style="padding:28px;text-align:center">
-            <img src="/logo.png" alt="Logo" style="width:110px;height:110px;object-fit:contain">
-            <h3 style="margin:8px 0 4px">${echap(p.nom || 'OASIS Bibliothèque Numérique')}</h3>
-            <p style="color:var(--bleu);font-weight:700;margin-bottom:14px">${echap(p.slogan || '')}</p>
-            <p style="text-align:left;line-height:1.7">${echap(p.aPropos || '')}</p>
-            <div style="text-align:left;margin-top:14px;font-size:13.5px;color:var(--gris)">
-              ${p.adresse ? '📍 ' + echap(p.adresse) + '<br>' : ''}${p.telephone ? '📞 ' + echap(p.telephone) + '<br>' : ''}${p.email ? '✉️ ' + echap(p.email) + '<br>' : ''}${p.horaires ? '🕐 ' + echap(p.horaires) : ''}
-            </div>
-            <p style="margin-top:16px;font-size:12.5px;color:var(--gris)">${echap(p.piedDePage || '')}</p>
-            <div class="rangee-boutons" style="justify-content:center">
-              <button class="btn" onclick="document.getElementById('zoneModale').innerHTML=''">Fermer</button>
-            </div>
-          </div>
-        </div>
-      </div>`;
-    $('#voile').addEventListener('click', e => { if (e.target.id === 'voile') fermerModale(); });
-  }
+  function ouvrirAPropos() { fermerModale(); afficherVue('apropos'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
   $('#btnAPropos').addEventListener('click', ouvrirAPropos);
   $('#btnAProposNav')?.addEventListener('click', () => { document.getElementById('sidebar')?.classList.remove('ouverte'); ouvrirAPropos(); });
 
@@ -1207,66 +1187,94 @@
     if (fr) { filtresRessources[fr.dataset.filtreRes] = fr.value; afficherVue('ressources', document.querySelector('.puce-filtre.actif[data-genre-res]')?.dataset.genreRes || undefined); }
   });
 
-  // ---------- Notifications ----------
+  // ---------- Notifications (1.27.0 : lu / non lu, liens, regroupement) ----------
+  let notifsCache = [], filtreNotifs = 'toutes';
   async function rafraichirNotifications() {
+    if (!moi) return [];
     try {
-      const notifs = await api('/notifications');
+      const d = await api('/notifications');
+      notifsCache = Array.isArray(d) ? d.map((n, k) => ({ id: 'n' + k, ...n })) : d.notifications;
+      const nb = Array.isArray(d) ? d.length : d.nonLues;
       const badge = $('#badgeNotifs');
-      const importantes = notifs.filter(n => n.type !== 'nouveaute').length;
-      badge.hidden = importantes === 0;
-      badge.textContent = importantes;
-      return notifs;
-    } catch { return []; }
+      badge.hidden = nb === 0; badge.textContent = nb > 99 ? '99+' : nb;
+      $('#btnNotifs').setAttribute('aria-label', nb ? `Notifications, ${nb} non lue${nb > 1 ? 's' : ''}` : 'Notifications');
+      $('#btnNotifs').classList.toggle('a-nouveau', nb > 0);
+      return notifsCache;
+    } catch { return notifsCache; }
   }
-  $('#btnNotifs').addEventListener('click', async () => {
-    const notifs = await rafraichirNotifications();
+  const ilYa = date => {
+    const t = new Date(date).getTime(); if (!t) return '';
+    const s = Math.round((Date.now() - t) / 1000);
+    if (s < 0) { const j = Math.ceil(-s / 86400); return j <= 1 ? 'demain' : 'dans ' + j + ' j'; }
+    if (s < 60) return 'à l’instant'; if (s < 3600) return 'il y a ' + Math.floor(s / 60) + ' min';
+    if (s < 86400) return 'il y a ' + Math.floor(s / 3600) + ' h'; if (s < 172800) return 'hier';
+    if (s < 604800) return 'il y a ' + Math.floor(s / 86400) + ' jours';
+    return new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  };
+  async function marquerLues(ids, tous) {
+    if (!moi) return;
+    notifsCache.forEach(n => { if (tous || ids.includes(n.id)) n.lu = true; });
+    try { await api('/notifications/lues', { method: 'POST', body: JSON.stringify({ ids, tous: !!tous }) }); } catch {}
+    const nb = notifsCache.filter(n => !n.lu).length, badge = $('#badgeNotifs');
+    badge.hidden = nb === 0; badge.textContent = nb; $('#btnNotifs').classList.toggle('a-nouveau', nb > 0);
+  }
+  function dessinerNotifs() {
+    const corps = $('#notifsCorps'); if (!corps) return;
+    const liste = notifsCache.filter(n => filtreNotifs === 'toutes' || !n.lu);
+    const nonLues = notifsCache.filter(n => !n.lu).length;
+    $('#notifsCompte').textContent = nonLues ? `${nonLues} non lue${nonLues > 1 ? 's' : ''}` : 'Tout est lu';
+    $('#notifsToutLire').disabled = !nonLues;
+    document.querySelectorAll('[data-filtre-notifs]').forEach(b => b.setAttribute('aria-pressed', b.dataset.filtreNotifs === filtreNotifs));
+    if (!liste.length) { corps.innerHTML = `<div class="notifs-vide"><span aria-hidden="true">${filtreNotifs === 'toutes' ? '🌿' : '✅'}</span><b>${filtreNotifs === 'toutes' ? 'Aucune notification' : 'Aucune notification non lue'}</b><p>Vous serez prévenu ici des nouveautés, retours d’emprunt, réservations, messages de vos groupes et annonces.</p></div>`; return; }
+    const groupes = [['Nouvelles', liste.filter(n => !n.lu)], ['Déjà lues', liste.filter(n => n.lu)]].filter(([, xs]) => xs.length);
+    corps.innerHTML = groupes.map(([titre, xs]) => `<h4 class="notifs-groupe">${titre}</h4><ul class="notifs-liste">${xs.map(n => `
+      <li><button class="notif notif-${echap(n.type)}${n.lu ? ' lue' : ''}" data-notif="${echap(n.id)}">
+        <span class="notif-icone" aria-hidden="true">${echap(n.icone || '🔔')}</span>
+        <span class="notif-texte"><b>${echap(n.titre || 'Notification')}</b><span>${echap(n.texte)}</span><small>${ilYa(n.date)}${n.action ? ' · ' + (n.action.livre ? 'Voir le document' : n.action.groupe ? 'Ouvrir le groupe' : n.action.lien ? 'Ouvrir le lien ↗' : 'Ouvrir') : ''}</small></span>
+        ${n.lu ? '' : '<span class="notif-point" aria-label="Non lue"></span>'}
+      </button></li>`).join('')}</ul>`).join('');
+  }
+  async function ouvrirNotifs() {
     $('#zoneModale').innerHTML = `
       <div class="voile" id="voile">
-        <div class="modale" role="dialog" aria-modal="true">
-          <div class="modale-entete"><div style="flex:1"><h3>🔔 Notifications</h3></div>
-            <button class="fermer" id="btnFermer" aria-label="Fermer">✕</button></div>
-          <div class="corps">
-            ${notifs.length ? notifs.map(n => `<div class="ligne-dispo ${n.type === 'retard' ? 'indispo' : n.type === 'reservation' ? 'dispo' : 'num'}">${echap(n.texte)}</div>`).join('') : '<p class="vide">Aucune notification — tout est en ordre ! ✅</p>'}
+        <div class="modale modale-notifs" role="dialog" aria-modal="true" aria-labelledby="notifsTitre">
+          <div class="notifs-entete">
+            <div><h3 id="notifsTitre">🔔 Notifications</h3><small id="notifsCompte">Chargement…</small></div>
+            <button class="fermer" id="btnFermer" aria-label="Fermer">✕</button>
           </div>
+          <div class="notifs-outils">
+            <div class="notifs-filtres" role="group" aria-label="Filtrer"><button data-filtre-notifs="toutes">Toutes</button><button data-filtre-notifs="non-lues">Non lues</button></div>
+            <button class="mini-btn" id="notifsToutLire">✓ Tout marquer comme lu</button>
+          </div>
+          <div class="corps notifs-corps" id="notifsCorps"><p class="vide">Chargement…</p></div>
         </div>
       </div>`;
     $('#btnFermer').addEventListener('click', fermerModale);
     $('#voile').addEventListener('click', e => { if (e.target.id === 'voile') fermerModale(); });
-  });
-
-  // ---------- Citations bibliographiques ----------
-  function genererCitations(l) {
-    const a = l.auteur, t = l.titre, an = l.annee, ed = l.editeur || 'Éduca Diffusion';
-    return {
-      'APA': `${a}. (${an}). ${t}. ${ed}.`,
-      'MLA': `${a}. ${t}. ${ed}, ${an}.`,
-      'Chicago': `${a}. ${t}. ${ed}, ${an}.`,
-      'IEEE': `${a}, ${t}. ${ed}, ${an}.`
+    $('#notifsToutLire').onclick = async () => { await marquerLues(notifsCache.filter(n => !n.lu).map(n => n.id), true); dessinerNotifs(); };
+    document.querySelectorAll('[data-filtre-notifs]').forEach(b => b.onclick = () => { filtreNotifs = b.dataset.filtreNotifs; dessinerNotifs(); });
+    $('#notifsCorps').onclick = async e => {
+      const b = e.target.closest('[data-notif]'); if (!b) return;
+      const n = notifsCache.find(x => x.id === b.dataset.notif); if (!n) return;
+      marquerLues([n.id]);
+      const a = n.action || {};
+      if (a.lien) { window.open(a.lien, '_blank', 'noopener'); dessinerNotifs(); return; }
+      if (a.livre) { fermerModale(); return ouvrirLivre(a.livre); }
+      if (a.groupe) { fermerModale(); await afficherVue('collaboration'); return ouvrirGroupe(a.groupe); }
+      if (a.vue) { fermerModale(); return afficherVue(a.vue); }
+      dessinerNotifs();
     };
+    await rafraichirNotifications(); dessinerNotifs();
   }
+  $('#btnNotifs').addEventListener('click', () => { if (!moi) { window.dispatchEvent(new Event('oasis-connexion')); return; } ouvrirNotifs(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) rafraichirNotifications(); });
+
+  // ---------- Citations bibliographiques (1.27.0 : public/citations.js) ----------
   async function ouvrirCitations(id) {
     let l; try { l = await api('/livres/' + id); } catch (err) { return toast(err.message); }
-    const c = genererCitations(l);
-    $('#zoneModale').innerHTML = `
-      <div class="voile" id="voile">
-        <div class="modale" role="dialog" aria-modal="true">
-          <div class="modale-entete"><div style="flex:1"><h3>📑 Citer « ${echap(l.titre)} »</h3></div>
-            <button class="fermer" id="btnFermer" aria-label="Fermer">✕</button></div>
-          <div class="corps">
-            ${Object.entries(c).map(([format, texte]) => `
-              <div style="margin-bottom:14px">
-                <b style="font-size:13px;color:var(--bleu)">${format}</b>
-                <div style="display:flex;gap:8px;align-items:flex-start;margin-top:4px">
-                  <p style="flex:1;background:var(--fond);border-radius:9px;padding:9px 12px;font-size:13.5px">${echap(texte)}</p>
-                  <button class="mini-btn" data-copier="${echap(texte)}">Copier</button>
-                </div>
-              </div>`).join('')}
-          </div>
-        </div>
-      </div>`;
-    $('#btnFermer').addEventListener('click', fermerModale);
-    $('#voile').addEventListener('click', e => { if (e.target.id === 'voile') fermerModale(); });
+    OasisCitations.ouvrir(l, $('#zoneModale'), fermerModale, toast);
   }
+
 
   // ---------- Notes et marque-pages ----------
   async function ouvrirNotes(livreId, titre) {

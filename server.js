@@ -14,6 +14,21 @@ const tarifs=require('./modules/tarifs');
 const essai=require('./modules/essai'),doublons=require('./modules/doublons');
 const dureeLecture=require('./modules/duree-lecture');
 const progressionLecture=require('./modules/progression-lecture');
+const epubMeta=require('./modules/epub-meta');
+/* 1.27.0 : éditeur réel. « Éduca Diffusion » était un éditeur par défaut, pas l'éditeur réel des documents.
+   On le retire et on complète l'éditeur d'origine, le lieu, l'année et la source numérique depuis le fichier. */
+const EDITEUR_FICTIF=/^\s*[ée]duca\s+diffusion\s*$/i;
+function completerEdition(l){const run=async()=>{if(l.metaEdition)return;let change=false;
+  if(EDITEUR_FICTIF.test(l.editeur||'')){l.editeur='';change=true}
+  try{if(l.epub&&fs.existsSync(cheminEpub(l.id))){const mt=epubMeta.metadonnees(await fs.promises.readFile(cheminEpub(l.id)));if(mt){
+    if(!l.editeur&&mt.editeur&&!EDITEUR_FICTIF.test(mt.editeur)){l.editeur=mt.editeur;change=true}
+    if(!l.lieuEdition&&mt.lieu){l.lieuEdition=mt.lieu;change=true}
+    if(!l.sourceNumerique&&mt.sourceNumerique){l.sourceNumerique=mt.sourceNumerique;change=true}
+    if(mt.annee&&(!l.annee||(l.annee>=2025&&mt.annee<l.annee&&!l.anneeVerifiee))){l.annee=mt.annee;change=true}
+    if(mt.auteur&&/^(anonyme|inconnu|auteur inconnu)?$/i.test((l.auteur||'').trim())){l.auteur=mt.auteur;change=true}}}
+  else if(l.pdf&&fs.existsSync(cheminPdf(l.id))&&/^(anonyme|inconnu|auteur inconnu)?$/i.test((l.auteur||'').trim())){const st=await fs.promises.stat(cheminPdf(l.id));if(st.size<60*1024*1024){const pdf=await require('./modules/pdf-lib').PDFDocument.load(await fs.promises.readFile(cheminPdf(l.id)),{ignoreEncryption:true,updateMetadata:false});const au=String(pdf.getAuthor()||'').trim();if(au&&au.length<150&&!/^(user|admin|utilisateur|microsoft|owner|pc|hp|dell)\b/i.test(au)){l.auteur=au;change=true}}}}
+  catch(e){console.warn('Métadonnées d’édition indisponibles :',l.id,e.message)}
+  l.metaEdition=1;if(change)sauverDB()};const result=calculDureeQueue.then(run);calculDureeQueue=result.catch(()=>{});return result}
 const rechercheTexte=require('./modules/recherche-texte');
 const ecoles = require('./modules/ecoles');
 const securite = require('./modules/securite');
@@ -23,8 +38,16 @@ const baseJSON=require('./modules/base-json');
 const PUBLIC = path.join(__dirname, 'public');
 
 // Les règles de fonctionnement sont des paramètres modifiables dans l'espace bibliothécaire
+const FONDATEUR_DEFAUT = {
+  fondateurNom: 'Michael Jacques',
+  fondateurTitre: 'Fondateur d’OASIS et d’EDUCA Technologie',
+  fondateurBio: "Michael Jacques est entrepreneur et spécialiste en technopédagogie. Titulaire d'une maîtrise en éducation, spécialité technopédagogie (TICE), de l'Université du Québec à Chicoutimi (UQAC), il a consacré son mémoire à l'intégration des technologies de l'information et de la communication chez les enseignants du secondaire en Haïti. Fondateur d'EDUCA Technologie, un écosystème de plateformes numériques haïtiennes au service de l'éducation, il a créé OASIS pour que chaque apprenant, enseignant et chercheur d'Haïti ait accès au livre et au savoir, en français comme en créole.",
+  fondateurDomaines: 'Technopédagogie, Intégration des TIC en éducation, Entrepreneuriat éducatif, Développement communautaire',
+  mission: "Rendre le savoir accessible à tous les apprenants d'Haïti grâce à une bibliothèque numérique gratuite, financée par les dons, pensée pour les élèves, les étudiants, les enseignants et les chercheurs.",
+  vision: "Une Haïti où chaque école, chaque commune et chaque famille dispose d'une bibliothèque riche, moderne et accessible depuis un simple téléphone."
+};
 function seedParametres() {
-  return {
+  return { ...FONDATEUR_DEFAUT,
     nom: 'OASIS Bibliothèque Numérique',
     slogan: 'Apprendre aujourd\'hui pour un meilleur demain',
     messageAccueil: 'bienvenue dans votre bibliothèque !',
@@ -72,6 +95,7 @@ function chargerDB() {
     }
     ['progressions', 'notes', 'journal', 'medias', 'progressionsMedias', 'groupes', 'messagesGroupes', 'commentaires', 'invitations'].forEach(k => { if (!db[k]) db[k] = []; });
     db.livres.forEach(l => { if (l.editeur === undefined) l.editeur = ''; if (l.langue === undefined) l.langue = 'Français'; if (l.niveau === undefined) l.niveau = ''; if (l.motsCles === undefined) l.motsCles = ''; if (l.nbTelechargements === undefined) l.nbTelechargements = 0; });
+    Object.entries(FONDATEUR_DEFAUT).forEach(([k, v]) => { if (db.parametres[k] === undefined) db.parametres[k] = v; });
     db.ressources.forEach(r => { if (r.lien === undefined) r.lien = ''; if (r.genre === 'bibliotheque') r.genre = 'base'; });
     if (!db.parametres.identiteBibliothequeNumerique) {
       db.parametres.nom = 'OASIS Bibliothèque Numérique';
@@ -292,7 +316,7 @@ function vueBaseLivre(l, nbExemplaires, nbDisponibles, nbReservations) {
     iaDisponible: require('./modules/ia').disponible(db, l), id: l.id, titre: l.titre, auteur: l.auteur, categorie: l.categorie, type: l.type,
     resume: l.resume, couleur: l.couleur, icone: l.icone, annee: l.annee, isbn: l.isbn,
     note: moyenneNotes(l), nbNotes: l.notes.length, nbLectures: l.nbLectures,
-    edition: l.edition || '', editeur: l.editeur || '', langue: l.langue || 'Français', niveau: l.niveau || '', publicCible: l.publicCible || 'tous', motsCles: l.motsCles || '',
+    edition: l.edition || '', editeur: EDITEUR_FICTIF.test(l.editeur || '') ? '' : (l.editeur || ''), lieuEdition: l.lieuEdition || '', sourceNumerique: l.sourceNumerique || '', langue: l.langue || 'Français', niveau: l.niveau || '', publicCible: l.publicCible || 'tous', motsCles: l.motsCles || '',
     telechargementAutorise: l.telechargementAutorise !== false, epub: !!l.epub, pdf: !!l.pdf, couverture: !!l.couverture, vignette: !!l.vignette, couvertureV: l.couvertureMaj || 1,
     versionNumerique, versionPhysique, hybride: versionNumerique && versionPhysique,
     disponible: versionNumerique || nbDisponibles > 0,
@@ -370,7 +394,7 @@ function libererExemplaire(exemplaireId, livreId) {
     .sort((a, b) => new Date(a.creeLe) - new Date(b.creeLe))[0];
   if (suivant) {
     ex.statut = 'reserve';
-    suivant.statut = 'prete';
+    suivant.statut = 'prete'; suivant.dateMiseDeCote = new Date().toISOString();
     suivant.exemplaireId = ex.id;
     suivant.echeanceRetrait = new Date(Date.now() + db.parametres.retraitReservationJours * 86400000).toISOString();
   } else {
@@ -446,6 +470,8 @@ async function api(req, res, u) {
       ressources: (db.ressources || []).length,
       visiteurs: db.statistiquesPubliques.visiteurs,
       lectures: db.livres.reduce((n, x) => n + (Number(x.nbLectures) || 0), 0),
+      membres: (db.utilisateurs || []).filter(u => u.actif !== false).length, etablissements: (db.ecoles || []).length,
+      categories: new Set(db.livres.map(x => x.categorie).filter(Boolean)).size,
       visiteursDepuis: db.statistiquesPubliques.depuis
     });
   }
@@ -658,31 +684,54 @@ async function api(req, res, u) {
   }
 
   // --- Notifications (calculées) ---
+  // 1.27.0 : notifications réelles — identifiants stables, lien vers l'élément, suivi lu / non lu par compte.
   if (pathname === '/api/notifications' && m === 'GET') {
     if (!exigeAuth()) return;
     nettoyerReservations();
-    const notifs = essai.notification((db.ecoles||[]).find(e=>e.id===utilisateur.ecoleId)||utilisateur);
+    const notifs = [], ajout = n => notifs.push({ icone: '🔔', action: null, ...n });
+    const jour = 86400000, semaine = Date.now() - 7 * jour;
+    essai.notification((db.ecoles||[]).find(e=>e.id===utilisateur.ecoleId)||utilisateur).forEach(n => ajout({ id: 'essai-' + String(n.date).slice(0, 10), type: 'abonnement', icone: '💝', titre: 'Accès à la bibliothèque', texte: n.texte, date: n.date, action: { vue: 'abonnement' } }));
+    const fin = utilisateur.abonnementFin ? new Date(utilisateur.abonnementFin).getTime() : 0;
+    if (fin && fin > Date.now() && fin - Date.now() < 7 * jour) { const j = Math.ceil((fin - Date.now()) / jour); ajout({ id: 'acces-' + utilisateur.abonnementFin, type: 'abonnement', icone: '⏳', titre: 'Votre accès arrive à échéance', texte: `Votre accès complet se termine ${j <= 1 ? 'demain' : 'dans ' + j + ' jours'}. Renouvelez votre don pour continuer à lire sans interruption.`, date: new Date(fin - 7 * jour).toISOString(), action: { vue: 'abonnement' } }); }
+    else if (fin && fin <= Date.now() && fin > semaine) ajout({ id: 'acces-fin-' + utilisateur.abonnementFin, type: 'abonnement', icone: '🔒', titre: 'Votre accès est terminé', texte: 'Faites un nouveau don pour retrouver l’accès complet aux livres et documents.', date: utilisateur.abonnementFin, action: { vue: 'abonnement' } });
     db.emprunts.filter(e => e.utilisateurId === utilisateur.id && e.statut === 'en_cours').forEach(e => {
-      const l = db.livres.find(x => x.id === e.livreId);
+      const l = db.livres.find(x => x.id === e.livreId), titre = l ? l.titre : 'Document';
       const retard = joursRetard(e);
-      const dansJours = Math.ceil((new Date(e.echeance) - Date.now()) / 86400000);
-      if (retard > 0) notifs.push({ type: 'retard', texte: `⚠️ « ${l ? l.titre : ''} » est en retard de ${retard} jour${retard > 1 ? 's' : ''}.`, date: e.echeance });
-      else if (dansJours <= 2) notifs.push({ type: 'echeance', texte: `⏰ « ${l ? l.titre : ''} » est à rendre ${dansJours <= 0 ? "aujourd'hui" : dansJours === 1 ? 'demain' : 'dans 2 jours'}.`, date: e.echeance });
+      const dansJours = Math.ceil((new Date(e.echeance) - Date.now()) / jour);
+      if (retard > 0) ajout({ id: 'retard-' + e.id, type: 'retard', icone: '⚠️', titre: 'Emprunt en retard', texte: `« ${titre} » est en retard de ${retard} jour${retard > 1 ? 's' : ''}. Merci de le rapporter à la bibliothèque.`, date: e.echeance, action: { vue: 'emprunts' } });
+      else if (dansJours <= 2) ajout({ id: 'echeance-' + e.id, type: 'echeance', icone: '⏰', titre: 'Retour bientôt', texte: `« ${titre} » est à rendre ${dansJours <= 0 ? "aujourd'hui" : dansJours === 1 ? 'demain' : 'dans 2 jours'}.`, date: new Date(new Date(e.echeance).getTime() - 2 * jour).toISOString(), action: { vue: 'emprunts' } });
     });
     db.reservations.filter(r => r.utilisateurId === utilisateur.id && r.statut === 'prete').forEach(r => {
       const l = db.livres.find(x => x.id === r.livreId);
-      notifs.push({ type: 'reservation', texte: `📌 « ${l ? l.titre : ''} » est mis de côté pour vous — à retirer avant le ${new Date(r.echeanceRetrait).toLocaleDateString('fr-FR')}.`, date: r.echeanceRetrait });
+      ajout({ id: 'resa-' + r.id, type: 'reservation', icone: '📌', titre: 'Réservation prête', texte: `« ${l ? l.titre : ''} » est mis de côté pour vous — à retirer avant le ${new Date(r.echeanceRetrait).toLocaleDateString('fr-FR')}.`, date: r.dateMiseDeCote || r.echeanceRetrait, action: l ? { livre: l.id } : { vue: 'emprunts' } });
     });
-    const semaine = Date.now() - 7 * 86400000;
     db.invitations.filter(i => i.versId === utilisateur.id && new Date(i.date).getTime() > semaine).forEach(i => {
-      const g = db.groupes.find(x => x.id === i.groupeId);
-      const de = db.utilisateurs.find(u => u.id === i.deId);
-      if (g) notifs.push({ type: 'invitation', texte: `👥 ${de ? de.nom : 'Un membre'} vous a ajouté au ${g.type === 'club' ? 'club de lecture' : "groupe d'étude"} « ${g.nom} ».`, date: i.date });
+      const g = db.groupes.find(x => x.id === i.groupeId), de = db.utilisateurs.find(u => u.id === i.deId);
+      if (g) ajout({ id: 'invit-' + (i.id || i.groupeId + i.date), type: 'invitation', icone: '👥', titre: g.type === 'club' ? 'Club de lecture' : "Groupe d'étude", texte: `${de ? de.nom : 'Un membre'} vous a ajouté au ${g.type === 'club' ? 'club de lecture' : "groupe d'étude"} « ${g.nom} ».`, date: i.date, action: { groupe: g.id } });
     });
-    db.livres.filter(l => new Date(l.creeLe).getTime() > semaine).slice(0, 3).forEach(l => {
-      notifs.push({ type: 'nouveaute', texte: `✨ Nouveau au catalogue : « ${l.titre} » (${l.categorie}).`, date: l.creeLe });
+    db.groupes.filter(g => g.membres.includes(utilisateur.id)).forEach(g => {
+      const recents = db.messagesGroupes.filter(x => x.groupeId === g.id && x.utilisateurId !== utilisateur.id && new Date(x.creeLe).getTime() > semaine);
+      if (!recents.length) return; const dernier = recents[recents.length - 1], auteur = db.utilisateurs.find(u => u.id === dernier.utilisateurId);
+      ajout({ id: 'msg-' + dernier.id, type: 'message', icone: '💬', titre: `${recents.length} message${recents.length > 1 ? 's' : ''} dans « ${g.nom} »`, texte: `${auteur ? auteur.nom : 'Un membre'} : ${dernier.texte.slice(0, 140)}${dernier.texte.length > 140 ? '…' : ''}`, date: dernier.creeLe, action: { groupe: g.id } });
     });
-    return json(res, 200, notifs.sort((a, b) => new Date(b.date) - new Date(a.date)));
+    (db.annonces || []).filter(a => require('./modules/vitrine').enCours(a) && new Date(a.creeLe || a.debut || 0).getTime() > Date.now() - 30 * jour).slice(0, 5).forEach(a => ajout({ id: 'annonce-' + a.id, type: 'annonce', icone: a.icone || '📢', titre: 'Annonce', texte: a.texte, date: a.debut || a.creeLe, action: /^https?:\/\//i.test(a.lien || '') ? { lien: a.lien } : null }));
+    const depuis = Math.max(semaine, new Date(utilisateur.creeLe || 0).getTime() - jour);
+    const nouveaux = db.livres.filter(l => new Date(l.creeLe).getTime() > depuis).sort((a, b) => new Date(b.creeLe) - new Date(a.creeLe));
+    nouveaux.slice(0, 5).forEach(l => ajout({ id: 'nouv-' + l.id, type: 'nouveaute', icone: '✨', titre: 'Nouveau au catalogue', texte: `« ${l.titre} »${l.auteur && !/^anonyme$/i.test(l.auteur) ? ' — ' + l.auteur : ''} (${l.categorie}).`, date: l.creeLe, action: { livre: l.id } }));
+    if (nouveaux.length > 5) ajout({ id: 'nouv-lot-' + nouveaux[5].id, type: 'nouveaute', icone: '📚', titre: `${nouveaux.length} nouveautés cette semaine`, texte: `Et ${nouveaux.length - 5} autres documents ajoutés récemment. Découvrez-les dans Nouveautés.`, date: nouveaux[5].creeLe, action: { vue: 'nouveautes' } });
+    const lues = utilisateur.notifsLues || {}, toutLuAvant = utilisateur.notifsToutLu ? new Date(utilisateur.notifsToutLu).getTime() : 0;
+    notifs.forEach(n => { n.lu = !!lues[n.id] || !!(toutLuAvant && new Date(n.date).getTime() <= toutLuAvant && !['retard', 'abonnement'].includes(n.type)); });
+    notifs.sort((a, b) => (a.lu - b.lu) || new Date(b.date) - new Date(a.date));
+    return json(res, 200, { notifications: notifs, nonLues: notifs.filter(n => !n.lu).length });
+  }
+  if (pathname === '/api/notifications/lues' && m === 'POST') {
+    if (!exigeAuth()) return;
+    const { ids, tous } = await lireCorps(req);
+    utilisateur.notifsLues = utilisateur.notifsLues || {};
+    if (tous) utilisateur.notifsToutLu = maintenant();
+    (Array.isArray(ids) ? ids : []).slice(0, 100).forEach(id => { if (typeof id === 'string' && id.length < 120) utilisateur.notifsLues[id] = maintenant(); });
+    const cles = Object.keys(utilisateur.notifsLues); if (cles.length > 400) cles.sort((a, b) => utilisateur.notifsLues[a] < utilisateur.notifsLues[b] ? -1 : 1).slice(0, cles.length - 400).forEach(k => delete utilisateur.notifsLues[k]);
+    sauverDB(); return json(res, 200, { ok: true });
   }
 
   // --- Recommandations basées sur les intérêts ---
@@ -1122,6 +1171,8 @@ async function api(req, res, u) {
       if (typeof c[k] === 'string') p[k] = c[k].trim().slice(0, 300);
     });
     if (typeof c.aPropos === 'string') p.aPropos = c.aPropos.trim().slice(0, 2000);
+    ['fondateurNom', 'fondateurTitre', 'fondateurDomaines'].forEach(k => { if (typeof c[k] === 'string') p[k] = c[k].trim().slice(0, 300); });
+    ['fondateurBio', 'mission', 'vision'].forEach(k => { if (typeof c[k] === 'string') p[k] = c[k].trim().slice(0, 2000); });
     [].forEach(k => {
       if (typeof c[k] === 'string') p[k] = c[k].trim().slice(0, 300);
     });
@@ -1459,7 +1510,7 @@ async function api(req, res, u) {
       let b; try { b = await lireBinaire(req); } catch(e) { return json(res, 413, {erreur:e.message}); }
       if (!require('./modules/epub-valide')(b)) return json(res,400,{erreur:'Le fichier doit être un EPUB valide (mimetype et META-INF/container.xml).'});
       const empreinte=crypto.createHash('sha256').update(b).digest('hex');if(db.livres.some(x=>x.id!==l.id&&(x.empreinteEpub===empreinte||x.empreintePdf===empreinte)))return json(res,409,{erreur:'Ce fichier existe déjà dans le catalogue.'});l.empreinteEpub=empreinte;
-      fs.mkdirSync(DOSSIER_PDF,{recursive:true}); fs.writeFileSync(cheminEpub(l.id),b);l.epub=true;try{l.nbMotsLecture=dureeLecture.epub(b)}catch(e){console.warn('Estimation EPUB indisponible :',e.message)}recupererCouvertureEpub(l,true);sauverDB();return json(res,201,{ok:true,couverture:!!l.couverture});
+      fs.mkdirSync(DOSSIER_PDF,{recursive:true}); fs.writeFileSync(cheminEpub(l.id),b);l.epub=true;l.metaEdition=0;try{l.nbMotsLecture=dureeLecture.epub(b)}catch(e){console.warn('Estimation EPUB indisponible :',e.message)}recupererCouvertureEpub(l,true);sauverDB();return json(res,201,{ok:true,couverture:!!l.couverture});
     }
     if (m === 'GET') {
       if (!l.epub || !fs.existsSync(cheminEpub(l.id))) return json(res,404,{erreur:'Aucun EPUB associé.'});
@@ -1489,7 +1540,7 @@ async function api(req, res, u) {
       if (db.livres.some(x => x.id !== l.id && (x.empreintePdf === empreinte || x.empreinteEpub === empreinte))) { fs.rmSync(tmp, { force: true }); return json(res, 409, { erreur: 'Ce fichier existe déjà dans le catalogue.' }); }
       if (info.nature === 'epub') {
         if (!require('./modules/epub-valide')(donnees)) { fs.rmSync(tmp, { force: true }); return json(res, 400, { erreur: 'EPUB invalide.' }); }
-        fs.renameSync(tmp, cheminEpub(l.id)); l.epub = true; l.empreinteEpub = empreinte;
+        fs.renameSync(tmp, cheminEpub(l.id)); l.epub = true; l.metaEdition = 0; l.empreinteEpub = empreinte;
         try { l.nbMotsLecture = dureeLecture.epub(donnees); } catch {}
         recupererCouvertureEpub(l, true);
       } else {
@@ -1585,7 +1636,7 @@ async function api(req, res, u) {
   if (seg[1] === 'livres' && seg[2] && !seg[3] && m === 'GET') {
     const l = db.livres.find(x => x.id === seg[2]);
     if (!l) return json(res, 404, { erreur: 'Livre introuvable.' });
-    await calculerDuree(l);
+    await calculerDuree(l); await completerEdition(l);
     return json(res, 200, vueLivre(l, utilisateur));
   }
   if (pathname === '/api/livres' && m === 'POST') {
@@ -1598,7 +1649,7 @@ async function api(req, res, u) {
     { const e = securite.verifierApparence(c); if (e) return json(res, 400, { erreur: e }); }
     const l = { id: uid(), titre: c.titre, auteur: c.auteur, categorie: c.categorie, type: c.type === 'physique' ? 'physique' : 'numerique',
       resume: c.resume || '', couleur: c.couleur || '#1e4fa3', icone: c.icone || '📘', annee: c.annee || new Date().getFullYear(),
-      isbn: c.isbn || '', edition:String(c.edition||'').slice(0,300),editeur: c.editeur || '', langue: c.langue || 'Français', seuilLecture:c.seuilLecture===undefined?70:Number(c.seuilLecture),niveau: c.niveau || '', publicCible: c.publicCible || 'tous', motsCles: c.motsCles || '',
+      isbn: c.isbn || '', edition:String(c.edition||'').slice(0,300),editeur: c.editeur || '', lieuEdition:String(c.lieuEdition||'').slice(0,80), sourceNumerique:String(c.sourceNumerique||'').slice(0,120), langue: c.langue || 'Français', seuilLecture:c.seuilLecture===undefined?70:Number(c.seuilLecture),niveau: c.niveau || '', publicCible: c.publicCible || 'tous', motsCles: c.motsCles || '',
       contenu: c.contenu || null, notes: [], nbLectures: 0, nbTelechargements: 0, creeLe: maintenant() };
     db.livres.push(l); journal('Livre ajouté', utilisateur, l.titre); sauverDB();
     return json(res, 201, vueLivre(l, utilisateur));
@@ -1625,7 +1676,8 @@ async function api(req, res, u) {
     if(doublons.trouver(db.livres,{...db.livres[idx],...c},'livres'))return json(res,409,{erreur:'Ces informations correspondent à un livre déjà présent.'});
     if (['titre','auteur','categorie'].some(k => c[k] !== undefined && (typeof c[k] !== 'string' || !c[k].trim()))) return json(res,400,{erreur:'Titre, auteur et catégorie ne doivent pas être vides.'});
     { const e = securite.verifierApparence(c); if (e) return json(res, 400, { erreur: e }); }
-    ['titre','auteur','categorie','resume','couleur','icone','annee','isbn','contenu','type','editeur','edition','langue','niveau','publicCible','seuilLecture','motsCles'].forEach(k => { if (c[k] !== undefined) db.livres[idx][k] = c[k]; });
+    ['titre','auteur','categorie','resume','couleur','icone','annee','isbn','contenu','type','editeur','edition','lieuEdition','sourceNumerique','langue','niveau','publicCible','seuilLecture','motsCles'].forEach(k => { if (c[k] !== undefined) db.livres[idx][k] = c[k]; });
+    if (c.annee !== undefined) db.livres[idx].anneeVerifiee = true;
     sauverDB();
     return json(res, 200, vueLivre(db.livres[idx], utilisateur));
   }
@@ -1831,6 +1883,8 @@ http.createServer(async (req, res) => {
   console.log('╚══════════════════════════════════════════════════╝');
   console.log(`Portail apprenant : http://localhost:${PORT}`);
   console.log(`Espace bibliothécaire : http://localhost:${PORT}/admin`);
+  // 1.27.0 : éditeurs réels (retrait d'« Éduca Diffusion », lecture des métadonnées EPUB) en arrière-plan.
+  (async () => { let n = 0; for (const l of db.livres) { if (l.metaEdition || !(l.epub || EDITEUR_FICTIF.test(l.editeur || ''))) continue; await completerEdition(l); if (++n % 50 === 0) await new Promise(r => setTimeout(r, 200)); } if (n) console.log('Métadonnées d’édition vérifiées :', n); })().catch(e => console.warn('Métadonnées d’édition :', e.message));
   // 1.26.0 : recalcul des anciennes progressions gonflées par le simple défilement.
   (async () => { let n = 0; for (const p of db.progressions) { if (p.validationTemps) continue; const l = db.livres.find(x => x.id === p.livreId); if (!l) { p.validationTemps = 1; continue; } try { await calculerDuree(l); } catch {} if (progressionLecture.migrer(p, l)) n++; } if (n) { sauverDB(); console.log('Progressions recalculées selon le temps de lecture :', n); } })().catch(e => console.warn('Recalcul des progressions :', e.message));
   if (mdpAdminInitial) console.log(`Base neuve — administrateur : admin@oasis.ht / ${mdpAdminInitial}  (notez-le : il ne sera plus affiché)`);

@@ -40,8 +40,8 @@ window.OasisDon = (() => {
       <div class="champ"><label for="donMot">Un mot pour l’équipe (facultatif)</label><textarea id="donMot" rows="2" maxlength="500" placeholder="Votre message d’encouragement"></textarea></div>
       <label class="don-case"><input type="checkbox" id="donAnonyme"> Donner anonymement — mon nom et mon message ne seront pas affichés publiquement</label>
       <div id="donMessage" role="status" aria-live="polite"></div>
-      <button class="btn btn-orange btn-large" id="donPayer" ${infos.configure ? '' : 'disabled'}>💝 Donner <span id="donResume"></span> avec PLOP PLOP</button>
-      <p class="don-note">Paiement sécurisé MonCash, NatCash ou Kashpaw sur la passerelle PLOP PLOP. Un reçu numéroté est émis dès la confirmation.</p>
+      <button class="btn btn-orange btn-large" id="donPayer" ${infos.configure ? '' : 'disabled'}>💝 Donner <span id="donResume"></span> par MonCash ou NatCash</button>
+      <p class="don-note">Paiement sécurisé par MonCash ou NatCash. Un reçu numéroté est émis dès la confirmation.</p>
       ${infos.configure ? '' : '<p class="erreur">La passerelle doit être configurée par l’administration avant de recevoir des dons.</p>'}
     </form>`;
   }
@@ -107,8 +107,8 @@ window.OasisDon = (() => {
           telephone: $('donTel').value.trim(), message: $('donMot').value.trim(), affectation: $('donAffectation').value, anonyme: $('donAnonyme').checked }) });
         memoriser({ id: d.id, cle: d.cle, montant: d.montant, date: new Date().toISOString() });
         if (fenetre) fenetre.location.href = d.url;
-        else { const a = document.createElement('a'); a.href = d.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Ouvrir le paiement PLOP PLOP'; $('donMessage').replaceChildren(a); }
-        message('Terminez le paiement sur PLOP PLOP. Cette page se met à jour dès la confirmation.', true);
+        else { const a = document.createElement('a'); a.href = d.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Ouvrir le paiement MonCash / NatCash'; $('donMessage').replaceChildren(a); }
+        message('Terminez le paiement MonCash ou NatCash. Cette page se met à jour dès la confirmation.', true);
         suivre(d.id);
       } catch (err) { if (fenetre && !fenetre.closed) fenetre.close(); message(err.message); }
       finally { bouton.disabled = false; }
@@ -131,7 +131,7 @@ window.OasisDon = (() => {
       setTimeout(() => { message(`Merci ! Votre don de ${htg(r.don.montant)} est confirmé. Reçu n° ${r.don.numeroRecu}.`, true); document.getElementById('donMessage')?.scrollIntoView({ block: 'center' }); }, 30);
       return true;
     }
-    if (!silencieux) message('Paiement non encore confirmé. Réessayez après avoir validé sur PLOP PLOP.');
+    if (!silencieux) message('Paiement non encore confirmé. Il sera pris en compte automatiquement dès sa validation.');
     return false;
   }
 
@@ -149,7 +149,7 @@ window.OasisDon = (() => {
       <div class="entete"><div><h1>${E(d.institution)}</h1><small>Reçu de don</small></div><div style="text-align:right"><b>${E(d.numeroRecu)}</b><br><small>${E(dateFr(d.payeLe))}</small></div></div>
       <p>Reçu de</p><p class="montant">${htg(d.montant)}</p>
       <table><tr><td>Donateur</td><td>${E(d.nom)}</td></tr><tr><td>Email</td><td>${E(d.email)}</td></tr>
-      <tr><td>Affectation</td><td>${E(d.affectation)}</td></tr><tr><td>Moyen de paiement</td><td>PLOP PLOP${d.methode ? ' — ' + E(d.methode) : ''}</td></tr>
+      <tr><td>Affectation</td><td>${E(d.affectation)}</td></tr><tr><td>Moyen de paiement</td><td>${d.methode ? E(d.methode) : 'MonCash / NatCash'}</td></tr>
       <tr><td>Référence du don</td><td>${E(d.id)}</td></tr><tr><td>Transaction</td><td>${E(d.transaction || '—')}</td></tr></table>
       <p class="merci">Merci pour votre générosité. Votre soutien aide ${E(d.institution)} à rendre le savoir accessible à tous les apprenants.</p>
       <button onclick="print()" style="margin-top:20px;padding:10px 18px;border-radius:8px;border:0;background:#1e4fa3;color:#fff;font-weight:700">Imprimer / enregistrer en PDF</button>
