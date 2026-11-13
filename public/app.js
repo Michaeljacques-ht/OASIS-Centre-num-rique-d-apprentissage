@@ -173,6 +173,10 @@
         window.OasisVitrine ? OasisVitrine.blocAccueil().catch(() => '') : ''
       ]);
       return `
+        ${moi ? '' : `<section class="accueil-invite" aria-label="Accès à votre compte">
+          <div><b>📚 Accédez à toute la bibliothèque</b><span>Connectez-vous pour lire, emprunter et suivre votre progression.</span></div>
+          <div class="accueil-invite-actions"><button class="btn btn-orange" data-auth="connexion">Se connecter</button><button class="btn accueil-invite-creer" data-auth="inscription">Créer un compte</button></div>
+        </section>`}
         <button class="banniere-accueil" data-vue="bibliotheque" aria-label="Accéder à la bibliothèque">
           <img src="/banniere-oasis.png" alt="OASIS Bibliothèque Numérique — Apprendre aujourd'hui pour un meilleur demain">
         </button>
@@ -1387,7 +1391,13 @@
     else demarrer();
   })();
 
-  window.addEventListener('oasis-connexion',()=>{fermerModale();$('#appli').hidden=true;$('#ecranConnexion').hidden=false;});
+  window.addEventListener('oasis-connexion',e=>{fermerModale();$('#appli').hidden=true;$('#ecranConnexion').hidden=false;
+    // 1.29.0 : sur téléphone, le formulaire est en haut ; on y ramène l'écran et on choisit le bon mode.
+    const veutInscription=e.detail?.inscription===true;if(veutInscription!==modeInscription)$('#lienBascule').click();
+    window.scrollTo(0,0);document.getElementById('ecranConnexion').scrollTop=0;});
+  const retourCatalogue=()=>{if(moi===null||moi===undefined){$('#ecranConnexion').hidden=true;$('#appli').hidden=false;window.scrollTo(0,0);}else location.href='/';};
+  $('#connexionRetour')?.addEventListener('click',retourCatalogue);$('#connexionCatalogue')?.addEventListener('click',retourCatalogue);
+  document.addEventListener('click',e=>{const b=e.target.closest('[data-auth]');if(!b)return;e.preventDefault();window.dispatchEvent(new CustomEvent('oasis-connexion',{detail:{inscription:b.dataset.auth==='inscription'}}));});
   $('#btnConnexionPublic').onclick=()=>window.dispatchEvent(new Event('oasis-connexion'));
   document.addEventListener('click',e=>{if(e.target.closest('[data-abonner]')){fermerModale();afficherVue('abonnement')}});
   // PWA

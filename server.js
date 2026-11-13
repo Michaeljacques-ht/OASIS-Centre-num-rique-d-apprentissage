@@ -14,6 +14,7 @@ const tarifs=require('./modules/tarifs');
 const essai=require('./modules/essai'),doublons=require('./modules/doublons');
 const dureeLecture=require('./modules/duree-lecture');
 const progressionLecture=require('./modules/progression-lecture');
+const titres=require('./modules/titres');
 const epubMeta=require('./modules/epub-meta');
 /* 1.27.0 : éditeur réel. « Éduca Diffusion » était un éditeur par défaut, pas l'éditeur réel des documents.
    On le retire et on complète l'éditeur d'origine, le lieu, l'année et la source numérique depuis le fichier. */
@@ -491,6 +492,23 @@ async function api(req, res, u) {
   const m = req.method;
 
   // Routes administratives explicites avant les routes de contenu.
+  // 1.28.0 : correction des titres du catalogue (proposition, validation, annulation).
+  if(pathname==='/api/titres/corrections'&&m==='GET'){if(!exigeBiblio())return;return json(res,200,titres.analyser(db.livres));}
+  if(pathname==='/api/titres/corrections'&&m==='POST'){if(!exigeBiblio())return;const {corrections}=await lireCorps(req);
+    if(!Array.isArray(corrections)||!corrections.length)return json(res,400,{erreur:'Aucune correction à appliquer.'});
+    if(corrections.length>5000)return json(res,400,{erreur:'Trop de corrections en une fois.'});
+    const lot={id:uid(),date:maintenant(),par:utilisateur.id,changements:[]};
+    for(const c of corrections){const l=db.livres.find(x=>x.id===c?.id);const t=String(c?.titre??'').replace(/\s+/g,' ').trim().slice(0,300);
+      if(!l||!t||t===l.titre)continue;lot.changements.push({id:l.id,avant:l.titre,apres:t});if(l.titreOriginal===undefined)l.titreOriginal=l.titre;l.titre=t;l.majLe=maintenant();}
+    if(!lot.changements.length)return json(res,200,{modifies:0});
+    db.correctionsTitres=(db.correctionsTitres||[]);db.correctionsTitres.unshift(lot);db.correctionsTitres=db.correctionsTitres.slice(0,30);
+    journal('Correction de titres',utilisateur,`${lot.changements.length} titre(s)`);sauverDB();
+    return json(res,200,{modifies:lot.changements.length,lot:lot.id});}
+  if(pathname==='/api/titres/lots'&&m==='GET'){if(!exigeBiblio())return;return json(res,200,(db.correctionsTitres||[]).map(l=>({id:l.id,date:l.date,par:(db.utilisateurs.find(u=>u.id===l.par)||{}).nom||'',nombre:l.changements.length,annule:!!l.annule,exemples:l.changements.slice(0,3)})));}
+  if(pathname==='/api/titres/annuler'&&m==='POST'){if(!exigeBiblio())return;const {lot:idLot}=await lireCorps(req);const lot=(db.correctionsTitres||[]).find(l=>l.id===idLot);
+    if(!lot)return json(res,404,{erreur:'Lot de corrections introuvable.'});if(lot.annule)return json(res,409,{erreur:'Ces corrections ont déjà été annulées.'});
+    let n=0;for(const c of lot.changements){const l=db.livres.find(x=>x.id===c.id);if(l&&l.titre===c.apres){l.titre=c.avant;l.majLe=maintenant();n++;}}
+    lot.annule=maintenant();journal('Annulation de corrections de titres',utilisateur,`${n} titre(s)`);sauverDB();return json(res,200,{restaures:n});}
   if(pathname==='/api/doublons'&&m==='GET'){if(!exigeBiblio())return;return json(res,200,doublons.groupes(db).filter(g=>!utilisateur.adminDelegue||g.type==='livres'));}
   if(pathname==='/api/doublons/fusionner'&&m==='POST'){
     if(!exigeBiblio())return;const {type,conserve,retire}=await lireCorps(req);if(!['livres','ressources','medias'].includes(type))return json(res,400,{erreur:'Type invalide.'});

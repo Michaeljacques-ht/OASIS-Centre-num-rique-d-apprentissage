@@ -7,13 +7,13 @@
   <link rel="icon" href="/icone-192.png">
   <link rel="apple-touch-icon" href="/icone-192.png">
   <title>OASIS Bibliothèque Numérique</title>
-  <link rel="stylesheet" href="/styles.css?v70">
+  <link rel="stylesheet" href="/styles.css?v72">
   <link rel="manifest" href="/manifest.json">
 </head>
 <body>
   <!-- Écran de connexion -->
   <div id="ecranConnexion" class="ecran-connexion" hidden>
-    <section class="presentation-connexion" aria-label="Découvrir OASIS">
+    <section class="presentation-connexion" id="presentationConnexion" aria-label="Découvrir OASIS">
       <a class="identite-oasis" href="#connexion"><img src="/logo.png" alt=""><span>OASIS<small>BIBLIOTHÈQUE NUMÉRIQUE</small></span></a>
       <div class="accroche-oasis"><span class="eyebrow">VOTRE ESPACE DE SAVOIR</span><h1>Un monde de ressources.<br><em>Un avenir à construire.</em></h1><p>Lire, explorer et progresser à votre rythme. Retrouvez vos livres, vos ressources pédagogiques et vos contenus multimédias dans un seul espace.</p></div>
       <img class="visuel-connexion" src="/banniere-oasis.png" alt="La bibliothèque numérique OASIS et ses ressources pour apprenants et enseignants">
@@ -21,6 +21,10 @@
       <p class="signature-oasis">Apprendre aujourd’hui pour un meilleur demain.</p>
     </section>
     <div class="connexion-droite" id="connexion"><div class="boite-connexion">
+      <div class="connexion-mobile-tete">
+        <button type="button" class="connexion-retour" id="connexionRetour" aria-label="Retour au catalogue public">←</button>
+        <span class="connexion-mobile-marque"><img src="/logo.png" alt=""><span><b>OASIS</b><small>Bibliothèque numérique intelligente</small></span></span>
+      </div>
       <div class="marque">
         <span class="eyebrow">BIENVENUE CHEZ OASIS</span>
         <h2 id="titreConnexion">Votre prochaine découverte commence ici.</h2>
@@ -46,7 +50,8 @@
         <span id="txtBascule">Pas encore de compte ?</span>
         <a href="#" id="lienBascule">Créer un compte</a>
       </p>
-      <button class="mini-btn" onclick="location.href='/'">← Catalogue public</button><p class="connexion-note">Votre espace personnel pour lire, apprendre et partager.</p>
+      <button class="mini-btn connexion-catalogue" type="button" id="connexionCatalogue">← Catalogue public</button><p class="connexion-note">Votre espace personnel pour lire, apprendre et partager.</p>
+      <a class="connexion-decouvrir" href="#presentationConnexion">Découvrir OASIS ↓</a>
     </div></div>
   </div>
 
@@ -142,6 +147,6 @@
 <script src="/vitrine.js?v1"></script>
   <script src="/citations.js?v1"></script>
   <script src="/apropos.js?v1"></script>
-  <script src="/app.js?v70"></script>
+  <script src="/app.js?v71"></script>
 </body>
 </html>

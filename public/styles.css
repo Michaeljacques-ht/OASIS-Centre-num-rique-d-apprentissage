@@ -952,3 +952,73 @@ mark.sl-com{border-bottom:2px dotted #7a5a00}
   .fondateur-domaines{justify-content:center}
   .cit-style p{padding-left:0;text-indent:0}
 }
+
+/* ===== 1.28.0 — Correction des titres (espace bibliothécaire) ===== */
+.modale:has(.titres-outil){max-width:980px;width:min(980px,96vw)}
+.titres-entete{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.titres-intro{color:var(--texte);line-height:1.6;margin:6px 0 10px}
+.titres-info{background:var(--bleu-clair,#eaf1fc);border-radius:10px;padding:8px 12px;font-size:13.5px;margin-bottom:10px}
+.titres-barre{display:grid;gap:10px;margin-bottom:8px}
+.titres-filtres{display:flex;flex-wrap:wrap;gap:6px}
+.titres-filtres button{border:1px solid var(--bord);border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:600;color:var(--gris);background:var(--carte,#fff)}
+.titres-filtres button.actif{background:var(--bleu);color:#fff;border-color:var(--bleu)}
+#titresRecherche{width:100%;padding:9px 12px;border:1px solid var(--bord);border-radius:10px}
+.titres-actions-haut{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;margin:6px 0;color:var(--gris);gap:8px;flex-wrap:wrap}
+.titres-liste{display:grid;gap:8px}
+.titre-ligne{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;border:1px solid var(--bord);border-radius:12px;padding:10px 12px;background:var(--carte,#fff)}
+.titre-ligne.decoche{opacity:.55}
+.titre-coche{width:18px;height:18px;margin-top:4px}
+.titre-contenu{display:grid;gap:6px;min-width:0}
+.titre-avant,.titre-apres{display:grid;grid-template-columns:70px 1fr;gap:8px;align-items:center}
+.titre-avant span,.titre-apres span{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--gris)}
+.titre-avant s{color:#9a3412;overflow-wrap:anywhere;font-size:14px}
+.titre-valeur{width:100%;padding:7px 10px;border:1px solid #86efac;background:#f0fdf4;border-radius:8px;font-size:14px;font-weight:600;color:var(--encre)}
+.titre-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--gris)}
+.titre-meta em{font-style:normal;background:#fef3c7;color:#92400e;border-radius:999px;padding:2px 9px;font-weight:600}
+.titres-pagination{display:flex;justify-content:center;align-items:center;gap:12px;margin:12px 0;font-size:13px}
+.titres-pied{position:sticky;bottom:-24px;background:linear-gradient(transparent,var(--carte,#fff) 30%);padding:14px 0 4px;display:flex;justify-content:flex-end}
+.titres-historique{margin-top:14px;border-top:1px solid var(--bord);padding-top:10px}
+.titres-historique summary{cursor:pointer;font-weight:700;color:var(--encre)}
+.titres-lot{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--bord);font-size:13.5px}
+.titres-lot small{display:block;color:var(--gris);margin-top:2px}
+.titres-annule{color:var(--gris);font-style:italic}
+@media (max-width:640px){.titre-avant,.titre-apres{grid-template-columns:1fr}}
+.titres-actions-haut label{display:inline-flex;align-items:center;gap:8px;margin:0;font-weight:600;color:var(--encre)}
+.titres-actions-haut input[type=checkbox]{width:18px;height:18px;margin:0}
+
+/* ===== 1.29.0 — Connexion et accueil sur téléphone : le formulaire d'abord ===== */
+.connexion-mobile-tete,.connexion-decouvrir{display:none}
+.accueil-invite{margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:linear-gradient(120deg,#fff7ed,#ffffff 60%);border:1px solid #fed7aa;border-radius:18px;padding:16px 20px;box-shadow:var(--ombre)}
+.accueil-invite b{display:block;color:var(--encre);font-size:16px}
+.accueil-invite span{color:var(--gris);font-size:13.5px}
+.accueil-invite-actions{display:flex;gap:8px;flex-wrap:wrap}
+.accueil-invite-creer{background:white;border:1.5px solid var(--bleu);color:var(--bleu)}
+@media(max-width:780px){
+  .ecran-connexion{display:flex;flex-direction:column;min-height:100dvh}
+  .connexion-droite{order:-1;padding:max(14px,env(safe-area-inset-top)) 20px 28px;align-items:flex-start;min-height:auto}
+  .boite-connexion{width:100%;max-width:480px;margin:0 auto}
+  .connexion-mobile-tete{display:flex;align-items:center;gap:12px;margin:0 -4px 22px;padding-bottom:14px;border-bottom:1px solid var(--bord)}
+  .connexion-retour{width:42px;height:42px;flex:0 0 42px;border-radius:12px;background:var(--fond);font-size:20px;color:var(--encre);display:grid;place-items:center}
+  .connexion-mobile-marque{display:flex;align-items:center;gap:10px;min-width:0}
+  .connexion-mobile-marque img{width:46px;height:46px;object-fit:contain;border-radius:12px;background:white;box-shadow:0 2px 10px #12285018;padding:3px}
+  .connexion-mobile-marque b{display:block;font-size:20px;letter-spacing:3px;color:var(--bleu-fonce);line-height:1.1}
+  .connexion-mobile-marque small{display:block;font-size:12px;font-weight:700;color:var(--orange-fonce);line-height:1.25}
+  .boite-connexion .marque{margin-bottom:18px}
+  .boite-connexion .eyebrow{margin-bottom:8px}
+  .boite-connexion h2{font-size:24px;letter-spacing:-.5px}
+  .boite-connexion .sous{margin-top:8px;font-size:13.5px;line-height:1.6}
+  .champ{margin-bottom:14px}
+  .bascule-auth{margin:16px 0 10px;font-size:15px}
+  .bascule-auth a{display:inline-block;padding:4px 2px}
+  .connexion-catalogue{display:none}
+  .connexion-note{margin-top:12px}
+  .connexion-decouvrir{display:block;text-align:center;margin-top:14px;font-weight:700;color:var(--bleu);font-size:14px}
+  .presentation-connexion{padding:30px 22px 40px}
+  .presentation-connexion .identite-oasis{display:none}
+  .accroche-oasis{margin-top:0}
+  .accroche-oasis h1{font-size:28px}
+  .atouts-oasis{grid-template-columns:1fr}
+  .accueil-invite{padding:14px 16px;gap:12px}
+  .accueil-invite-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  .accueil-invite-actions .btn{justify-content:center;min-height:46px}
+}

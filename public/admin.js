@@ -104,7 +104,7 @@
       return `
         <div class="section-titre catalogue-entete"><h3>📚 Catalogue <span class="compteur-titre">${livres.length} titres</span></h3>
           <span class="barre-boutons">
-            <button class="btn" id="btnDoublons">Détecter les doublons</button><button class="btn" id="btnCategories">🗂️ Catégories</button>
+            <button class="btn" id="btnTitres">🔤 Corriger les titres</button><button class="btn" id="btnDoublons">Détecter les doublons</button><button class="btn" id="btnCategories">🗂️ Catégories</button>
             ${livres.some(l => l.couverture && !l.vignette) ? `<button class="btn" id="btnAllegerCouv" title="Créer des vignettes légères pour accélérer l'affichage">⚡ Alléger les couvertures (${livres.filter(l => l.couverture && !l.vignette).length})</button>` : ''}
             <button class="btn" id="btnImporterPdf">📚 Importer des PDF</button>
             <button class="btn" id="btnImporterUrl" title="Le serveur télécharge lui-même des PDF ou EPUB libres (Gallica, Wikisource…)">🌐 Importer depuis une adresse</button>
@@ -344,7 +344,7 @@
   }
 
   // Vérifie que le serveur en ligne correspond à cette interface.
-  const VERSION_INTERFACE = '1.27.0';
+  const VERSION_INTERFACE = '1.29.0';
   async function verifierVersionServeur() {
     const bandeau = (html) => { const b = document.createElement('div'); b.className = 'erreur bandeau-version'; b.setAttribute('role', 'alert'); b.innerHTML = html; $('#zoneAdmin').before(b); };
     const liste = (titre, l, aide) => l.length ? `<details><summary><b>${l.length} ${titre}</b> — ${aide}</summary><ul class="diag-liste">${l.slice(0, 200).map(f => `<li><code>${echap(f)}</code></li>`).join('')}${l.length > 200 ? `<li>… et ${l.length - 200} autres</li>` : ''}</ul></details>` : '';
@@ -1235,6 +1235,7 @@
     OasisAdminQuiz.brancher();
     OasisAdminRecherche.brancher();
     OasisAdminIA.brancher();
+    $('#btnTitres')?.addEventListener('click',()=>OasisAdminTitres.ouvrir({api,modale,toast,fermer:fermerModale,apresModification:()=>afficherOnglet('catalogue')}));
     $('#btnDoublons')?.addEventListener('click',async()=>{try{let groupes;try{groupes=await api('/doublons')}catch(e){if(e.statut===404){let version='inconnue';try{version=(await api('/version')).version||version}catch{}throw new Error('La détection des doublons est absente du serveur déployé (version '+version+'). Mettez à jour server.js, package.json et le dossier modules, puis redéployez sur Render. Vos documents doivent être conservés dans data.')}throw e}if(!Array.isArray(groupes))throw new Error('Réponse de détection invalide. Mettez à jour les fichiers du serveur.');modale(`<h3>Doublons du catalogue et des ressources</h3><p>Vérifiez chaque groupe. La fusion conserve le premier document, ses liens et les fichiers ; le second est retiré du catalogue et archivé.</p>${groupes.map(g=>`<section class="panneau"><b>${echap(g.type)}</b>${g.documents.map((d,i)=>`<p>${echap(d.titre)} — ${echap(d.auteur)} ${echap(d.edition)} ${i?`<button class="mini-btn rouge" data-fusion-type="${g.type}" data-conserve="${g.documents[0].id}" data-retire="${d.id}">Fusionner ce doublon</button>`:' · Conservé'}</p>`).join('')}</section>`).join('')||'<p>Aucun doublon détecté.</p>'}`);document.querySelectorAll('[data-fusion-type]').forEach(b=>b.onclick=async()=>{try{await api('/doublons/fusionner',{method:'POST',body:JSON.stringify({type:b.dataset.fusionType,conserve:b.dataset.conserve,retire:b.dataset.retire})});b.closest('p').remove();toast('Doublon fusionné.');afficherOnglet('catalogue')}catch(e){toast(e.message)}})}catch(e){toast(e.message)}});
 
     const recherche = $('#rechercheCatalogue');
