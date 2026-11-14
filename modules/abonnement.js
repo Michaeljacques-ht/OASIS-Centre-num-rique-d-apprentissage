@@ -1,4 +1,4 @@
-const fs=require('fs');const path=require('path');const PP=require('../lib/plopplop');const {PDFDocument,PDFName}=require('./pdf-lib');const locks=new Set();
+const fs=require('fs');const path=require('path');const PP=require('../lib/plopplop');const {PDFDocument,PDFName}=require('./pdf-lib');const locks=new Set();const enCours=new Set();
 const E=require('./ecoles');const formules=require('./formules-ecoles');
 const actif=(db,u)=>!!u&&u.actif!==false&&(u.role==='bibliothecaire'||require('./essai').actif(u)||new Date(u.abonnementFin||0)>new Date()||new Date(u.accesOffertFin||0)>new Date()||E.active((db.ecoles||[]).find(e=>e.id===u.ecoleId)));
 module.exports.actif=actif;
@@ -57,7 +57,18 @@ module.exports.route=async(req,res,c)=>{
  }
  if(s[1]==='livres'&&s[2]&&s[3]==='apercu'&&m==='GET'){
   const l=db.livres.find(l=>l.id===s[2]);if(!l)return send(404,{erreur:'Livre introuvable.'});
-  if(l.pdf){const file=path.join(__dirname,'../data/pdfs',l.id+'.pdf');try{const source=await PDFDocument.load(fs.readFileSync(file));const out=await PDFDocument.create();const indices=Array.from({length:Math.min(5,source.getPageCount())},(_,i)=>i);indices.forEach(i=>source.getPage(i).node.delete(PDFName.of('Annots')));const pages=await out.copyPages(source,indices);pages.forEach(p=>out.addPage(p));const bytes=await out.save();res.writeHead(200,{'Content-Type':'application/pdf','Cache-Control':'no-store','X-Apercu':'5-pages'});res.end(Buffer.from(bytes));return true}catch{return send(422,{erreur:'Aperçu indisponible pour ce PDF. Un abonnement permet d’accéder au document original.'})}}
+  if(l.pdf){const file=path.join(__dirname,'../data/pdfs',l.id+'.pdf');
+   // Audit 1.30.0 : l'aperçu est public ; il est généré une seule fois puis servi depuis un cache disque (pas de recalcul à chaque visite).
+   const envoyerApercu=b=>{res.writeHead(200,{'Content-Type':'application/pdf','Cache-Control':'no-store','X-Apercu':'5-pages','Content-Length':b.length});res.end(b);return true};
+   try{const st=fs.statSync(file);const dossier=path.join(__dirname,'../data/apercus');const cache=path.join(dossier,l.id+'-'+Math.floor(st.mtimeMs)+'.pdf');
+    if(fs.existsSync(cache))return envoyerApercu(fs.readFileSync(cache));
+    if(enCours.has(l.id))return send(503,{erreur:'Aperçu en préparation, réessayez dans quelques secondes.'});
+    if(enCours.size>=2)return send(503,{erreur:'Le serveur prépare d’autres aperçus, réessayez dans un instant.'});
+    enCours.add(l.id);
+    try{const source=await PDFDocument.load(fs.readFileSync(file),{ignoreEncryption:true});const out=await PDFDocument.create();const indices=Array.from({length:Math.min(5,source.getPageCount())},(_,i)=>i);indices.forEach(i=>source.getPage(i).node.delete(PDFName.of('Annots')));const pages=await out.copyPages(source,indices);pages.forEach(p=>out.addPage(p));const bytes=Buffer.from(await out.save());
+     fs.mkdirSync(dossier,{recursive:true});for(const ancien of fs.readdirSync(dossier))if(ancien.startsWith(l.id+'-'))fs.rmSync(path.join(dossier,ancien),{force:true});fs.writeFileSync(cache,bytes);return envoyerApercu(bytes)}
+    finally{enCours.delete(l.id)}}
+   catch{return send(422,{erreur:'Aperçu indisponible pour ce PDF. Un abonnement permet d’accéder au document original.'})}}
   if(l.contenu){const pages=String(l.contenu).match(/[\s\S]{1,2500}/g)||[];return send(200,{titre:l.titre,auteur:l.auteur,contenu:pages.slice(0,5).join('\n\n'),apercu:true,pages:Math.min(5,pages.length)})}
   return send(402,{erreur:'Pour consulter cet EPUB, faites un don d’accès. L’aperçu de cinq pages est disponible pour les PDF et les documents texte.',abonnement:true});
  }

@@ -785,7 +785,7 @@
               <div style="margin-bottom:11px;display:flex;flex-direction:column;align-items:${msg.mien ? 'flex-end' : 'flex-start'}">
                 <small style="color:var(--gris);font-size:11.5px;margin-bottom:2px">${echap(msg.auteur)} · ${new Date(msg.creeLe).toLocaleDateString('fr-FR')} ${new Date(msg.creeLe).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</small>
                 <div style="background:${msg.mien ? 'var(--bleu)' : 'var(--carte)'};color:${msg.mien ? '#fff' : 'var(--encre)'};padding:9px 14px;border-radius:14px;max-width:85%;box-shadow:var(--ombre)">${echap(msg.texte)}</div>
-              </div>`).join('') : '<p class="vide" style="text-align:center">Aucun message — lancez la discussion !</p>'}
+              </div>`).join('') : g.discussionReservee ? '<p class="vide" style="text-align:center">🔒 La discussion est réservée aux membres. Rejoignez le groupe pour la lire.</p>' : '<p class="vide" style="text-align:center">Aucun message — lancez la discussion !</p>'}
           </div>
           ${g.membre ? `
           <div style="display:flex;gap:9px;padding:12px 24px;border-top:1px solid var(--bord)">
@@ -1352,6 +1352,28 @@
     $('#btnMenu').setAttribute('aria-expanded', String(ouvert));
     $('#btnMenu').setAttribute('aria-label', ouvert ? 'Fermer le menu' : 'Ouvrir le menu');
   });
+  // Audit 1.30.0 : changer son mot de passe (les autres appareils sont déconnectés)
+  $('#btnMotDePasse')?.addEventListener('click', () => {
+    if (!moi) { window.dispatchEvent(new Event('oasis-connexion')); return; }
+    $('#zoneModale').innerHTML = `<div class="voile" id="voile"><div class="modale" role="dialog" aria-modal="true" aria-labelledby="mdpTitre" style="max-width:440px">
+      <div class="modale-entete"><h3 id="mdpTitre">🔑 Changer mon mot de passe</h3><button class="fermer" id="btnFermer" aria-label="Fermer">✕</button></div>
+      <form class="corps" id="formMdp">
+        <div class="champ"><label for="mdpActuel">Mot de passe actuel</label><input id="mdpActuel" type="password" autocomplete="current-password" required></div>
+        <div class="champ"><label for="mdpNouveau">Nouveau mot de passe (8 caractères minimum)</label><input id="mdpNouveau" type="password" autocomplete="new-password" minlength="8" maxlength="200" required></div>
+        <div class="champ"><label for="mdpConfirme">Confirmer le nouveau mot de passe</label><input id="mdpConfirme" type="password" autocomplete="new-password" minlength="8" maxlength="200" required></div>
+        <p id="mdpMsg" role="status" aria-live="polite" style="font-size:13.5px;min-height:1em"></p>
+        <button class="btn btn-bleu" type="submit" style="width:100%">Enregistrer</button>
+        <p style="font-size:12.5px;color:var(--gris);margin-top:10px">Vos autres appareils seront déconnectés.</p>
+      </form></div></div>`;
+    $('#btnFermer').onclick = fermerModale; $('#voile').onclick = e => { if (e.target.id === 'voile') fermerModale(); };
+    $('#formMdp').onsubmit = async e => {
+      e.preventDefault(); const msg = $('#mdpMsg');
+      if ($('#mdpNouveau').value !== $('#mdpConfirme').value) { msg.textContent = 'Les deux nouveaux mots de passe ne correspondent pas.'; return; }
+      try { const r = await api('/moi/mot-de-passe', { method: 'POST', body: JSON.stringify({ actuel: $('#mdpActuel').value, nouveau: $('#mdpNouveau').value }) });
+        fermerModale(); toast('Mot de passe modifié ✅' + (r.sessionsFermees ? ` — ${r.sessionsFermees} autre(s) appareil(s) déconnecté(s).` : '')); }
+      catch (err) { msg.textContent = err.message; }
+    };
+  });
   $('#btnDeconnexion').addEventListener('click', async () => {
     try { await api('/deconnexion', { method: 'POST' }); } catch {}
     jeton = ''; moi = null; localStorage.removeItem('oasis_jeton'); localStorage.removeItem('educa_jeton');
@@ -1367,11 +1389,11 @@
     $('#ecranConnexion').hidden = true;
     $('#appli').hidden = false;
     if(!moi){
-      $('#btnConnexionPublic').hidden=false;$('#nomProfil').textContent='Visiteur';$('#avatarProfil').textContent='';$('#avatarProfil').hidden=true;$('#lienAdmin').hidden=true;$('#btnDeconnexion').hidden=true;
+      $('#btnConnexionPublic').hidden=false;$('#nomProfil').textContent='Visiteur';$('#avatarProfil').textContent='';$('#avatarProfil').hidden=true;$('#lienAdmin').hidden=true;$('#btnDeconnexion').hidden=true;$('#btnMotDePasse').hidden=true;
       document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=!['accueil','bibliotheque','categories','nouveautes','recommandes','abonnement','don','partenaires'].includes(b.dataset.vue));
       $('#colonneDroite').hidden=true;$('#btnNotifs').hidden=true;chargerParametres();chargerCategories().then(()=>afficherVue(navigationEcole.vue||'accueil'));return;
     }
-    $('#avatarProfil').hidden=false;$('#btnDeconnexion').hidden=false;$('#btnNotifs').hidden=false;$('#colonneDroite').hidden=false;document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=false);$('#btnConnexionPublic').hidden=true;document.querySelector('.lien-don').hidden=true;
+    $('#avatarProfil').hidden=false;$('#btnDeconnexion').hidden=false;$('#btnMotDePasse').hidden=false;$('#btnNotifs').hidden=false;$('#colonneDroite').hidden=false;document.querySelectorAll('.nav-item[data-vue],.entete [data-vue]').forEach(b=>b.hidden=false);$('#btnConnexionPublic').hidden=true;document.querySelector('.lien-don').hidden=true;
     $('#nomProfil').textContent = moi.nom.split(' ')[0] + ' ' + (moi.nom.split(' ')[1]?.[0] || '') + (moi.nom.split(' ')[1] ? '.' : '');
     $('#avatarProfil').textContent = moi.nom.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
     $('#lienAdmin').hidden = moi.role !== 'bibliothecaire';

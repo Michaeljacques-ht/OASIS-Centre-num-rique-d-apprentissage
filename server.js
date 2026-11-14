@@ -130,7 +130,8 @@ const hashMdp = (mdp, sel) => {
   sel = sel || crypto.randomBytes(8).toString('hex');
   return { sel, hash: crypto.scryptSync(mdp, sel, 32).toString('hex') };
 };
-const verifMdp = (mdp, u) => hashMdp(mdp, u.sel).hash === u.hash;
+// Audit 1.30.0 : comparaison à temps constant (pas d'indice de temps sur le hachage).
+const verifMdp = (mdp, u) => { if (!u?.sel || !u?.hash) return false; const a = Buffer.from(hashMdp(String(mdp), u.sel).hash, 'hex'), b = Buffer.from(String(u.hash), 'hex'); return a.length === b.length && crypto.timingSafeEqual(a, b); };
 function journal(action, utilisateur, detail) {
   db.journal.unshift({ date: maintenant(), utilisateur: utilisateur ? utilisateur.nom : 'Système', action, detail: detail || '' });
   if (db.journal.length > 500) db.journal.length = 500;
@@ -219,8 +220,10 @@ function json(res, code, data) {
 function lireCorps(req) {
   return new Promise((resolve, reject) => {
     let brut = '';
-    req.on('data', c => { brut += c; if (brut.length > 2e6) req.destroy(); });
-    req.on('end', () => { try { resolve(brut ? JSON.parse(brut) : {}); } catch { reject(new Error('JSON invalide')); } });
+    let trop = false;
+    req.on('data', c => { if (trop) return; brut += c; if (brut.length > 2e6) { trop = true; reject(Object.assign(new Error('Requête trop volumineuse.'), { statut: 413 })); req.resume(); } });
+    req.on('end', () => { if (trop) return; try { const v = brut ? JSON.parse(brut) : {}; resolve(v && typeof v === 'object' ? v : {}); } catch { reject(Object.assign(new Error('Requête invalide (JSON).'), { statut: 400 })); } });
+    req.on('error', reject);
   });
 }
 const TAILLE_MAX_PDF = 50 * 1024 * 1024; // 50 Mo
@@ -291,11 +294,20 @@ function recevoirFichier(req, chemin) {
     req.on('error', () => {});
   });
 }
+// Audit 1.30.0 : une session inutilisée pendant 30 jours expire ; dernière activité notée au plus une fois par heure.
+const SESSION_INACTIVE_MAX = 30 * 86400000;
+function sessionValide(jeton) {
+  if (typeof jeton !== 'string' || jeton.length < 16 || !Object.hasOwn(db.sessions, jeton)) return null;
+  db.sessionsVues ||= {};
+  const vue = db.sessionsVues[jeton] ? new Date(db.sessionsVues[jeton]).getTime() : 0, now = Date.now();
+  if (vue && now - vue > SESSION_INACTIVE_MAX) { delete db.sessions[jeton]; delete db.sessionsVues[jeton]; sauverDB(); return null; }
+  if (!vue || now - vue > 3600000) { db.sessionsVues[jeton] = new Date(now).toISOString(); sauverDB(); }
+  return db.sessions[jeton];
+}
+function utilisateurDeJeton(jeton) { const id = sessionValide(jeton); return id ? db.utilisateurs.find(u => u.id === id && u.actif !== false) || null : null; }
+const inscriptionsParIp = new Map();
 function authentifier(req) {
-  const jeton = (req.headers.authorization || '').replace('Bearer ', '');
-  const uidSession = db.sessions[jeton];
-  if (!uidSession) return null;
-  return db.utilisateurs.find(u => u.id === uidSession && u.actif !== false) || null;
+  return utilisateurDeJeton((req.headers.authorization || '').replace('Bearer ', ''));
 }
 
 // ---------- Logique métier ----------
@@ -450,7 +462,7 @@ async function api(req, res, u) {
   if(['livres','ressources','medias'].includes(seg[1])&&seg[2]&&seg[3]==='telechargement'&&req.method==='PUT'){
     if(!utilisateur||utilisateur.role!=='bibliothecaire')return json(res,403,{erreur:'Réservé au bibliothécaire.'});const x=db[seg[1]].find(x=>x.id===seg[2]);if(!x)return json(res,404,{erreur:'Document introuvable.'});const b=await lireCorps(req);if(typeof b.autorise!=='boolean')return json(res,400,{erreur:'Autorisation invalide.'});x.telechargementAutorise=b.autorise;journal('Téléchargement '+(b.autorise?'autorisé':'restreint'),utilisateur,x.titre);sauverDB();return json(res,200,{ok:true,telechargementAutorise:b.autorise});
   }
-  if(req.method==='GET'&&['livres','medias'].includes(seg[1])&&['pdf','epub','fichier'].includes(seg[3])){const x=db[seg[1]].find(x=>x.id===seg[2]);const tokenUser=query.jeton&&db.utilisateurs.find(u=>u.id===db.sessions[query.jeton]);const lecteur=utilisateur||tokenUser;if(x?.telechargementAutorise===false&&query.lecture!=='1'&&lecteur?.role!=='bibliothecaire')return json(res,403,{erreur:'Téléchargement désactivé. Consultez ce document dans le lecteur OASIS.'});}
+  if(req.method==='GET'&&['livres','medias'].includes(seg[1])&&['pdf','epub','fichier'].includes(seg[3])){const x=db[seg[1]].find(x=>x.id===seg[2]);const tokenUser=query.jeton?utilisateurDeJeton(String(query.jeton)):null;const lecteur=utilisateur||tokenUser;if(x?.telechargementAutorise===false&&query.lecture!=='1'&&lecteur?.role!=='bibliothecaire')return json(res,403,{erreur:'Téléchargement désactivé. Consultez ce document dans le lecteur OASIS.'});}
   if(pathname==='/api/abonnement/tarifs'&&req.method==='GET')return json(res,200,tarifs.lire(db));
   if (pathname === '/api/ecoles/formules' && req.method === 'GET') return json(res, 200, {formules:tarifs.formules(db),devisAuDela:3000});
   if (pathname === '/api/statistiques-publiques' && req.method === 'GET') {
@@ -530,6 +542,12 @@ async function api(req, res, u) {
   // --- Auth ---
   if (pathname === '/api/inscription' && m === 'POST') {
     const { nom, email, motDePasse, classe, niveau, niveauDetail, ...infosProfil } = await lireCorps(req);
+    { // Audit 1.30.0 : 10 inscriptions par heure et par adresse IP ; champs bornés
+      const ip = securite.ipDe(req); inscriptionsParIp.forEach((v, k) => { if (Date.now() - v.debut > 3600000) inscriptionsParIp.delete(k); });
+      const c = inscriptionsParIp.get(ip) || { n: 0, debut: Date.now() }; if (c.n >= 10 && !/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(ip)) return json(res, 429, { erreur: 'Trop d’inscriptions depuis cette connexion. Réessayez dans une heure.' });
+      c.n++; inscriptionsParIp.set(ip, c);
+      if (typeof nom === 'string' && nom.trim().length > 100 || typeof email === 'string' && email.length > 254 || typeof motDePasse === 'string' && motDePasse.length > 200 || typeof classe === 'string' && classe.length > 80) return json(res, 400, { erreur: 'Un des champs est trop long.' });
+    }
     if (niveau !== undefined && !['scolaire','universitaire','technique_professionnel'].includes(niveau)) return json(res,400,{erreur:'Choisissez un niveau valide.'});
     if (typeof nom !== 'string' || !nom.trim() || typeof email !== 'string' || !/^\S+@\S+\.\S+$/.test(email.trim()) || typeof motDePasse !== 'string' || motDePasse.length < 8) return json(res, 400, { erreur: 'Nom, email et mot de passe (8 caractères min.) requis.' });
     if (db.utilisateurs.some(x => x.email.toLowerCase() === email.toLowerCase())) return json(res, 409, { erreur: 'Un compte existe déjà avec cet email.' });
@@ -595,9 +613,25 @@ async function api(req, res, u) {
     if (!exigeAuth()) return;
     return json(res, 200, ecoles.publicUser(utilisateur));
   }
+  // Audit 1.30.0 : chaque membre peut changer son mot de passe ; ses autres sessions sont fermées.
+  if (pathname === '/api/moi/mot-de-passe' && m === 'POST') {
+    if (!exigeAuth()) return;
+    const ip = securite.ipDe(req), cle = 'mdp:' + utilisateur.id;
+    const attente = securite.bloque(cle, ip); if (attente) return json(res, 429, { erreur: `Trop d’essais. Réessayez dans ${attente} min.` });
+    const { actuel, nouveau } = await lireCorps(req);
+    if (typeof actuel !== 'string' || !verifMdp(actuel, utilisateur)) { securite.noterEchec(cle, ip); return json(res, 401, { erreur: 'Mot de passe actuel incorrect.' }); }
+    if (typeof nouveau !== 'string' || nouveau.length < 8 || nouveau.length > 200) return json(res, 400, { erreur: 'Le nouveau mot de passe doit contenir entre 8 et 200 caractères.' });
+    if (['oasis123', 'admin123', 'demo123', '12345678', 'password', 'motdepasse'].includes(nouveau.toLowerCase()) || nouveau === actuel) return json(res, 400, { erreur: 'Choisissez un mot de passe nouveau et moins prévisible.' });
+    securite.noterSucces(cle, ip);
+    Object.assign(utilisateur, hashMdp(nouveau));
+    const courant = (req.headers.authorization || '').replace('Bearer ', '');
+    let fermees = 0; for (const [j, id] of Object.entries(db.sessions)) if (id === utilisateur.id && j !== courant) { delete db.sessions[j]; if (db.sessionsVues) delete db.sessionsVues[j]; fermees++; }
+    journal('Mot de passe modifié', utilisateur, fermees ? fermees + ' autre(s) session(s) fermée(s)' : '');
+    sauverDB(); return json(res, 200, { ok: true, sessionsFermees: fermees });
+  }
   if (pathname === '/api/deconnexion' && m === 'POST') {
     const jeton = (req.headers.authorization || '').replace('Bearer ', '');
-    delete db.sessions[jeton]; sauverDB();
+    if (Object.hasOwn(db.sessions, jeton)) delete db.sessions[jeton]; if (db.sessionsVues) delete db.sessionsVues[jeton]; sauverDB();
     return json(res, 200, { ok: true });
   }
 
@@ -915,7 +949,7 @@ async function api(req, res, u) {
   }
   if (seg[1] === 'medias' && seg[2] && seg[3] === 'fichier' && m === 'GET') {
     // Les balises <audio>/<video> ne peuvent pas envoyer d'en-tête : jeton accepté en paramètre
-    const jetonQ = query.jeton && db.sessions[query.jeton] ? db.utilisateurs.find(u => u.id === db.sessions[query.jeton]) : null;
+    const jetonQ = query.jeton ? utilisateurDeJeton(String(query.jeton)) : null;
     if (!utilisateur && !jetonQ) return json(res, 401, { erreur: 'Connexion requise.' });
     const mo = db.medias.find(x => x.id === seg[2]);
     if (!mo || !mo.ext || !fs.existsSync(cheminMedia(mo))) return json(res, 404, { erreur: 'Fichier introuvable.' });
@@ -1002,7 +1036,7 @@ async function api(req, res, u) {
   }
   if (seg[1] === 'medias' && seg[2] && seg[3] === 'fichier' && m === 'GET') {
     // Les balises <audio>/<video> ne peuvent pas envoyer d'en-tête : jeton accepté en paramètre
-    const util = utilisateur || (query.jeton && db.sessions[query.jeton] ? db.utilisateurs.find(u => u.id === db.sessions[query.jeton]) : null);
+    const util = utilisateur || (query.jeton ? utilisateurDeJeton(String(query.jeton)) : null);
     if (!util) return json(res, 401, { erreur: 'Connexion requise.' });
     const x = db.medias.find(v => v.id === seg[2]);
     if (!x || !x.fichier || !fs.existsSync(cheminMedia(x))) return json(res, 404, { erreur: 'Fichier introuvable.' });
@@ -1084,11 +1118,13 @@ async function api(req, res, u) {
     if (!exigeAuth()) return;
     const g = db.groupes.find(x => x.id === seg[2]);
     if (!g) return json(res, 404, { erreur: 'Groupe introuvable.' });
-    const messages = db.messagesGroupes.filter(x => x.groupeId === g.id).slice(-100)
+    // Audit 1.30.0 : seuls les membres (et le bibliothécaire) lisent la discussion d'un groupe.
+    const lecteurAutorise = g.membres.includes(utilisateur.id) || utilisateur.role === 'bibliothecaire';
+    const messages = !lecteurAutorise ? [] : db.messagesGroupes.filter(x => x.groupeId === g.id).slice(-100)
       .map(x => ({ id: x.id, texte: x.texte, creeLe: x.creeLe, mien: x.utilisateurId === utilisateur.id,
         auteur: (db.utilisateurs.find(u => u.id === x.utilisateurId) || {}).nom || '—' }));
     return json(res, 200, { ...vueGroupe(g),
-      membresNoms: g.membres.map(id => (db.utilisateurs.find(u => u.id === id) || {}).nom || '—'), messages });
+      membresNoms: g.membres.map(id => (db.utilisateurs.find(u => u.id === id) || {}).nom || '—'), messages, discussionReservee: !lecteurAutorise });
   }
   if (seg[1] === 'groupes' && seg[2] && seg[3] === 'rejoindre' && m === 'POST') {
     if (!exigeAuth()) return;
@@ -1889,8 +1925,9 @@ http.createServer(async (req, res) => {
     if (req.url.startsWith('/api/')) await api(req, res);
     else statique(req, res);
   } catch (err) {
+    if (err?.statut >= 400 && err.statut < 500) { if (!res.headersSent) json(res, err.statut, { erreur: err.message }); return; }
     console.error(err);
-    json(res, 500, { erreur: 'Erreur interne du serveur.' });
+    if (!res.headersSent) json(res, 500, { erreur: 'Erreur interne du serveur.' });
   }
 }).listen(PORT, () => {
   require('./modules/diagnostic').demarrer();
