@@ -102,7 +102,7 @@ const CSP = [
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://i.ytimg.com",
-  "media-src 'self' blob:",
+  "media-src 'self' blob: https:",   // 1.33.0 : podcasts et livres audio écoutés depuis le site de l'éditeur
   "font-src 'self' data:",
   "connect-src 'self'",            // empêche un script injecté d'envoyer des données vers un autre site
   "worker-src 'self' blob:",

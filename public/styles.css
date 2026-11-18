@@ -1022,3 +1022,44 @@ mark.sl-com{border-bottom:2px dotted #7a5a00}
   .accueil-invite-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
   .accueil-invite-actions .btn{justify-content:center;min-height:46px}
 }
+
+/* ===== 1.31.0 — Collecte automatique ===== */
+.collecte-etat{display:flex;gap:14px;align-items:center}
+.collecte-etat b{display:block;color:var(--encre)}
+.collecte-etat small{color:var(--gris)}
+.collecte-icone{font-size:28px}
+.collecte-vert{border-left:5px solid #16a34a}.collecte-orange{border-left:5px solid #ea580c}.collecte-gris{border-left:5px solid #94a3b8}.collecte-bleu{border-left:5px solid var(--bleu)}
+.collecte-objectif{font-size:15px;color:var(--gris)}.collecte-objectif b{font-size:28px;color:var(--bleu)}
+.collecte-barre{height:14px;border-radius:999px;background:var(--fond);overflow:hidden;margin:8px 0 14px}
+.collecte-barre span{display:block;height:100%;background:linear-gradient(90deg,var(--bleu),var(--orange));border-radius:999px;transition:width .4s}
+.collecte-chiffres{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.collecte-chiffres div{background:var(--fond);border-radius:12px;padding:10px;text-align:center}
+.collecte-chiffres b{display:block;font-size:20px;color:var(--encre)}.collecte-chiffres small{color:var(--gris);font-size:12px}
+.collecte-alerte{margin-top:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:8px 12px;color:#9a3412}
+.collecte-historique{list-style:none;display:grid;gap:6px;max-height:420px;overflow:auto}
+.collecte-historique li{display:flex;gap:10px;align-items:flex-start;padding:6px 8px;border-radius:8px;background:var(--fond);font-size:13.5px}
+.collecte-historique small{display:block;color:var(--gris);font-size:12px}
+#collectePage .champ label:has(input[type=checkbox]){display:flex;align-items:center;gap:8px;font-weight:600;margin:4px 0}
+#collectePage .champ input[type=checkbox]{width:18px;height:18px;margin:0}
+.collecte-sources{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;margin-top:6px}
+.collecte-sources label{display:flex!important;align-items:flex-start!important;gap:8px;background:var(--fond);border-radius:10px;padding:8px 10px;font-weight:400!important}
+.collecte-sources b{display:block;font-size:14px}.collecte-sources small{color:var(--gris);font-size:12px}
+
+/* ===== 1.33.0 — Collecte des médias, vignettes de cartes, livres audio ===== */
+.collecte-actif-medias{display:flex!important;align-items:center;gap:8px;font-weight:700;margin-bottom:12px}
+.collecte-actif-medias input{width:18px;height:18px}
+.collecte-types{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.collecte-type{background:var(--fond);border-radius:14px;padding:12px;display:grid;gap:8px;align-content:start}
+.collecte-type-tete{display:flex;gap:10px;align-items:flex-start}.collecte-type-tete>span{font-size:24px}
+.collecte-type-tete b{display:block}.collecte-type-tete small{color:var(--gris);font-size:12px}
+.collecte-type-chiffres{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12.5px;color:var(--gris)}.collecte-type-chiffres b{color:var(--encre)}
+.collecte-type label{font-size:13px;display:flex;align-items:center;gap:8px}.collecte-type input[type=number]{width:80px;padding:5px 8px;border:1px solid var(--bord);border-radius:8px}
+.collecte-epuise{color:#9a3412;font-size:12px}
+.couverture img.vignette-carte{object-fit:cover;object-position:center;filter:saturate(1.05)}
+.liste-pistes{list-style:none;margin:10px 0 0;max-height:260px;overflow:auto;border:1px solid var(--bord);border-radius:10px;counter-reset:piste}
+.liste-pistes li{counter-increment:piste;border-bottom:1px solid var(--bord)}.liste-pistes li:last-child{border-bottom:0}
+.liste-pistes button{display:flex;justify-content:space-between;gap:10px;width:100%;padding:8px 12px;text-align:left;font-size:13.5px}
+.liste-pistes button::before{content:counter(piste) '.';color:var(--gris);min-width:22px}
+.liste-pistes button span{flex:1}.liste-pistes button small{color:var(--gris)}
+.liste-pistes button.actif{background:var(--bleu-clair,#eaf1fc);font-weight:700;color:var(--bleu)}
+.note-pistes{font-size:12.5px;color:var(--gris);margin-top:8px}

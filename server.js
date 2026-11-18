@@ -498,6 +498,8 @@ async function api(req, res, u) {
   if (await rechercheTexte.route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
   if (await require('./modules/dons').route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
   if (await require('./modules/vitrine').route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
+  if (await collecteMedias().route(req, res, { utilisateur, json, lireCorps, journal })) return;
+  if (await collecte().route(req, res, { utilisateur, json, lireCorps, journal })) return;
   if (await require('./modules/quiz').route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
   const exigeAuth = () => { if (!utilisateur) { json(res, 401, { erreur: 'Connexion requise.' }); return false; } return true; };
   const exigeBiblio = () => { if (!utilisateur || utilisateur.role !== 'bibliothecaire') { json(res, 403, { erreur: 'Réservé au bibliothécaire.' }); return false; } return true; };
@@ -533,10 +535,13 @@ async function api(req, res, u) {
     try{doublons.fusionner(db,type,conserve,retire);journal('Doublon fusionné',utilisateur,b.titre);sauverDB();return json(res,200,{ok:true})}catch(e){return json(res,409,{erreur:e.message})}
   }
   if(seg[1]==='medias'&&seg[2]&&seg[3]==='vignette'){
-    const mo=db.medias.find(x=>x.id===seg[2]);if(!mo||mo.type!=='video')return json(res,404,{erreur:'Vidéo introuvable.'});const file=path.join(DOSSIER_MEDIAS,mo.id+'-vignette.jpg');
-    if(m==='GET'){if(!mo.vignette||!fs.existsSync(file))return json(res,404,{erreur:'Vignette indisponible.'});res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'no-cache'});return fs.createReadStream(file).pipe(res)}
-    if(m==='POST'){if(!exigeBiblio())return;let b;try{b=await lireBinaire(req)}catch(e){return json(res,413,{erreur:e.message})}if(b.length>2*1024*1024||b[0]!==255||b[1]!==216)return json(res,400,{erreur:'Vignette JPEG de 2 Mo maximum requise.'});fs.mkdirSync(DOSSIER_MEDIAS,{recursive:true});fs.writeFileSync(file,b);mo.vignette=true;sauverDB();return json(res,201,{ok:true})}
+    // 1.33.0 : vignettes des vidéos et des cartes (JPEG ou PNG)
+    const mo=db.medias.find(x=>x.id===seg[2]);if(!mo||!['video','carte'].includes(mo.type))return json(res,404,{erreur:'Média introuvable.'});const file=cheminVignetteMedia(mo);
+    if(m==='GET'){if(!mo.vignette||!fs.existsSync(file))return json(res,404,{erreur:'Vignette indisponible.'});res.writeHead(200,{'Content-Type':mo.vignetteMime||'image/jpeg','Cache-Control':'public, max-age=604800'});return fs.createReadStream(file).pipe(res)}
+    if(m==='POST'){if(!exigeBiblio())return;let b;try{b=await lireBinaire(req)}catch(e){return json(res,413,{erreur:e.message})}try{enregistrerVignetteMedia(mo,b)}catch(e){return json(res,e.statut||400,{erreur:e.message})}return json(res,201,{ok:true})}
+    return json(res,405,{erreur:'Méthode non autorisée.'});
   }
+
   if(pathname==='/api/admin-abonnements'&&m==='GET'){if(!exigeBiblio())return;return json(res,200,require('./modules/comptabilite').rapport(db));}
   if(pathname==='/api/admin-abonnements/depenses'&&m==='POST'){if(!exigeBiblio())return;try{const d=require('./modules/comptabilite').depense(await lireCorps(req),uid(),utilisateur.id);db.depensesAbonnement ||= [];db.depensesAbonnement.push(d);journal('Dépense abonnement',utilisateur,d.libelle+' : '+d.montant+' HTG');sauverDB();return json(res,201,d)}catch(e){return json(res,400,{erreur:e.message})}}
   // --- Auth ---
@@ -861,7 +866,7 @@ async function api(req, res, u) {
     id: mo.id, type: mo.type, titre: mo.titre, auteur: mo.auteur, categorie: mo.categorie,
     description: mo.description, langue: mo.langue, annee: mo.annee, lieu: mo.lieu, duree: mo.duree,
     motsCles: mo.motsCles, fichier: !!mo.ext, youtube: mo.youtube || '', mime: mo.mime || '', taille: mo.taille || 0,
-    telechargementAutorise:mo.telechargementAutorise!==false,vignette:!!mo.vignette,nbLectures: mo.nbLectures || 0, creeLe: mo.creeLe,
+    telechargementAutorise:mo.telechargementAutorise!==false,vignette:!!mo.vignette,vignetteV:mo.vignetteV||0,pistes:mo.pistes||[],podcast:!!mo.podcast,livreAudio:!!mo.livreAudio,nbLectures: mo.nbLectures || 0, creeLe: mo.creeLe,
     maPosition: utilisateur ? ((db.progressionsMedias.find(p => p.utilisateurId === utilisateur.id && p.mediaId === mo.id) || {}).secondes || 0) : 0
   });
   if (pathname === '/api/medias' && m === 'GET') {
@@ -924,28 +929,9 @@ async function api(req, res, u) {
     if (!exigeBiblio()) return;
     const mo = db.medias.find(x => x.id === seg[2]);
     if (!mo) return json(res, 404, { erreur: 'Média introuvable.' });
-    const TYPES_IMPORT = {
-      carte: { pdf: ['application/pdf', '.pdf'], png: ['image/png', '.png'], jpeg: ['image/jpeg', '.jpg'] },
-      audio: { mp3: ['audio/mpeg', '.mp3'], ogg: ['audio/ogg', '.ogg'], m4a: ['audio/mp4', '.m4a'], wav: ['audio/wav', '.wav'] },
-      video: { mp4: ['video/mp4', '.mp4'], webm: ['video/webm', '.webm'] }
-    };
-    const types = TYPES_IMPORT[mo.type];
-    if (!types) return json(res, 400, { erreur: 'Type de média non pris en charge.' });
     const { url: adresse } = await lireCorps(req);
-    const importUrl = require('./modules/import-url');
-    try { importUrl.verifierUrl(adresse); } catch (e) { return json(res, 400, { erreur: e.message }); }
-    fs.mkdirSync(DOSSIER_MEDIAS, { recursive: true });
-    const tmp = path.join(DOSSIER_MEDIAS, mo.id + '.import');
-    let info;
-    try { info = await importUrl.telecharger(adresse, tmp, { natures: Object.keys(types) }); }
-    catch (e) { return json(res, 422, { erreur: 'Import impossible : ' + e.message }); }
-    const [mime, ext] = types[info.nature];
-    if (mo.ext && fs.existsSync(cheminMedia(mo))) fs.unlinkSync(cheminMedia(mo));
-    mo.ext = ext; mo.mime = mime; mo.taille = info.taille; mo.vignette = false; mo.sourceUrl = info.urlFinale;
-    fs.renameSync(tmp, cheminMedia(mo));
-    journal('Média importé depuis une adresse web', utilisateur, mo.titre + ' — ' + new URL(info.urlFinale).hostname);
-    sauverDB();
-    return json(res, 201, { ok: true, nature: info.nature, taille: info.taille, mime });
+    try { const r = await importerFichierMedia(mo, adresse, utilisateur); return json(res, 201, r); }
+    catch (e) { return json(res, e.statut || 500, { erreur: e.message }); }
   }
   if (seg[1] === 'medias' && seg[2] && seg[3] === 'fichier' && m === 'GET') {
     // Les balises <audio>/<video> ne peuvent pas envoyer d'en-tête : jeton accepté en paramètre
@@ -1581,31 +1567,8 @@ async function api(req, res, u) {
     const l = db.livres.find(x => x.id === seg[2]);
     if (!l) return json(res, 404, { erreur: 'Livre introuvable.' });
     const { url: adresse } = await lireCorps(req);
-    const importUrl = require('./modules/import-url');
-    try { importUrl.verifierUrl(adresse); } catch (e) { return json(res, 400, { erreur: e.message }); }
-    fs.mkdirSync(DOSSIER_PDF, { recursive: true });
-    const tmp = path.join(DOSSIER_PDF, l.id + '.import');
-    let info;
-    try { info = await importUrl.telecharger(adresse, tmp); }
-    catch (e) { return json(res, 422, { erreur: 'Import impossible : ' + e.message }); }
-    try {
-      const donnees = await fs.promises.readFile(tmp);
-      const empreinte = crypto.createHash('sha256').update(donnees).digest('hex');
-      if (db.livres.some(x => x.id !== l.id && (x.empreintePdf === empreinte || x.empreinteEpub === empreinte))) { fs.rmSync(tmp, { force: true }); return json(res, 409, { erreur: 'Ce fichier existe déjà dans le catalogue.' }); }
-      if (info.nature === 'epub') {
-        if (!require('./modules/epub-valide')(donnees)) { fs.rmSync(tmp, { force: true }); return json(res, 400, { erreur: 'EPUB invalide.' }); }
-        fs.renameSync(tmp, cheminEpub(l.id)); l.epub = true; l.metaEdition = 0; l.empreinteEpub = empreinte;
-        try { l.nbMotsLecture = dureeLecture.epub(donnees); } catch {}
-        recupererCouvertureEpub(l, true);
-      } else {
-        fs.renameSync(tmp, cheminPdf(l.id)); l.pdf = true; l.empreintePdf = empreinte;
-        try { const pdf = await require('./modules/pdf-lib').PDFDocument.load(donnees, { ignoreEncryption: true }); l.nbPagesLecture = pdf.getPageCount(); } catch {}
-      }
-      l.sourceUrl = info.urlFinale;
-      journal('Document importé depuis une adresse web', utilisateur, l.titre + ' — ' + new URL(info.urlFinale).hostname);
-      sauverDB();
-      return json(res, 201, { ok: true, nature: info.nature, taille: info.taille, nomFichier: info.nomFichier, couverture: !!l.couverture });
-    } catch (e) { fs.rmSync(tmp, { force: true }); return json(res, 500, { erreur: 'Import impossible : ' + e.message }); }
+    try { const r = await importerDocumentLivre(l, adresse, utilisateur); return json(res, 201, r); }
+    catch (e) { return json(res, e.statut || 500, { erreur: e.message }); }
   }
   if (seg[1] === 'livres' && seg[2] && seg[3] === 'pdf' && m === 'POST') {
     if (!exigeBiblio()) return;
@@ -1919,6 +1882,96 @@ chargerDB();
 }
 let essaisAjoutes=false;for(const e of db.ecoles||[])essaisAjoutes=essai.initialiser(e)||essaisAjoutes;for(const u of db.utilisateurs)if(u.role==='apprenant'&&!u.ecoleId)essaisAjoutes=essai.initialiser(u)||essaisAjoutes;if(essaisAjoutes)sauverDB();
 const rappelsEssai=()=>require('./modules/notifications-essai').traiter(db,sauverDB).catch(e=>console.error('Rappels essai :',e.message));setTimeout(rappelsEssai,60000).unref();setInterval(rappelsEssai,3600000).unref();
+
+/* 1.31.0 : collecte automatique d'ouvrages du domaine public. */
+function supprimerFichiersLivre(id) { for (const c of [cheminEpub(id), cheminPdf(id), cheminCouv(id), cheminVignette(id)]) { try { if (fs.existsSync(c)) fs.unlinkSync(c); } catch {} } }
+let collecteAuto = null;
+function collecte() {
+  if (!collecteAuto) collecteAuto = require('./modules/collecte').creer({
+    db, sauverDB, uid, maintenant, journal, doublons, dossierDonnees: path.join(__dirname, 'data'),
+    importerDocumentLivre, completerDepuisEpub: l => completerEdition(l),
+    supprimerLivre: l => { const i = db.livres.indexOf(l); if (i >= 0) db.livres.splice(i, 1); supprimerFichiersLivre(l.id); }
+  });
+  return collecteAuto;
+}
+/* 1.33.0 : import d'un fichier de média (carte, audio, vidéo) depuis une adresse web. */
+const TYPES_IMPORT_MEDIAS = {
+  carte: { pdf: ['application/pdf', '.pdf'], png: ['image/png', '.png'], jpeg: ['image/jpeg', '.jpg'] },
+  audio: { mp3: ['audio/mpeg', '.mp3'], ogg: ['audio/ogg', '.ogg'], m4a: ['audio/mp4', '.m4a'], wav: ['audio/wav', '.wav'] },
+  video: { mp4: ['video/mp4', '.mp4'], webm: ['video/webm', '.webm'] }
+};
+async function importerFichierMedia(mo, adresse, utilisateurJournal, options = {}) {
+  const err = (statut, message) => Object.assign(new Error(message), { statut });
+  const types = TYPES_IMPORT_MEDIAS[mo.type];
+  if (!types) throw err(400, 'Type de média non pris en charge.');
+  const importUrl = require('./modules/import-url');
+  try { importUrl.verifierUrl(adresse); } catch (e) { throw err(400, e.message); }
+  fs.mkdirSync(DOSSIER_MEDIAS, { recursive: true });
+  const tmp = path.join(DOSSIER_MEDIAS, mo.id + '.import');
+  let info;
+  try { info = await importUrl.telecharger(adresse, tmp, { natures: Object.keys(types) }); }
+  catch (e) { fs.rmSync(tmp, { force: true }); throw err(422, 'Import impossible : ' + e.message); }
+  const [mime, ext] = types[info.nature];
+  if (mo.ext && fs.existsSync(cheminMedia(mo))) fs.unlinkSync(cheminMedia(mo));
+  mo.ext = ext; mo.mime = mime; mo.taille = info.taille; mo.vignette = false; mo.sourceUrl = info.urlFinale;
+  fs.renameSync(tmp, cheminMedia(mo));
+  if (utilisateurJournal) journal('Média importé depuis une adresse web', utilisateurJournal, mo.titre + ' — ' + new URL(info.urlFinale).hostname);
+  sauverDB();
+  return { ok: true, nature: info.nature, taille: info.taille, mime };
+}
+/* 1.33.0 : vignette d'un média (vidéo ou carte), en JPEG ou PNG. */
+const cheminVignetteMedia = mo => path.join(DOSSIER_MEDIAS, mo.id + '-vignette.jpg');
+function enregistrerVignetteMedia(mo, donnees) {
+  const jpeg = donnees[0] === 0xff && donnees[1] === 0xd8, png = donnees.slice(0, 8).toString('hex') === '89504e470d0a1a0a';
+  if (!jpeg && !png) throw Object.assign(new Error('Vignette JPEG ou PNG attendue.'), { statut: 400 });
+  if (donnees.length > 2 * 1024 * 1024) throw Object.assign(new Error('Vignette trop lourde (2 Mo max).'), { statut: 413 });
+  fs.mkdirSync(DOSSIER_MEDIAS, { recursive: true });
+  fs.writeFileSync(cheminVignetteMedia(mo), donnees);
+  mo.vignette = true; mo.vignetteMime = png ? 'image/png' : 'image/jpeg'; mo.vignetteV = Date.now(); sauverDB();
+}
+async function telechargerVignetteMedia(mo, adresse) {
+  const importUrl = require('./modules/import-url');
+  const tmp = cheminVignetteMedia(mo) + '.tmp';
+  try { await importUrl.telecharger(adresse, tmp, { natures: ['png', 'jpeg'] }); enregistrerVignetteMedia(mo, fs.readFileSync(tmp)); }
+  finally { fs.rmSync(tmp, { force: true }); }
+}
+let collecteMediasAuto = null;
+function collecteMedias() {
+  if (!collecteMediasAuto) collecteMediasAuto = require('./modules/collecte-medias').creer({
+    db, sauverDB, uid, maintenant, importerFichierMedia: (mo, url) => importerFichierMedia(mo, url, null), telechargerVignette: telechargerVignetteMedia
+  });
+  return collecteMediasAuto;
+}
+/* 1.31.0 : import d'un PDF ou d'un EPUB depuis une adresse web (utilisé par l'espace bibliothécaire et la collecte automatique). */
+async function importerDocumentLivre(l, adresse, utilisateurJournal, options = {}) {
+  const importUrl = require('./modules/import-url');
+  const err = (statut, message) => Object.assign(new Error(message), { statut });
+  try { importUrl.verifierUrl(adresse); } catch (e) { throw err(400, e.message); }
+  fs.mkdirSync(DOSSIER_PDF, { recursive: true });
+  const tmp = path.join(DOSSIER_PDF, l.id + '.import');
+  let info;
+  try { info = await importUrl.telecharger(adresse, tmp, options.natures ? { natures: options.natures } : undefined); }
+  catch (e) { throw err(422, 'Import impossible : ' + e.message); }
+  try {
+    if (options.tailleMax && info.taille > options.tailleMax) { fs.rmSync(tmp, { force: true }); throw err(413, 'Fichier trop volumineux pour la collecte automatique.'); }
+    const donnees = await fs.promises.readFile(tmp);
+    const empreinte = crypto.createHash('sha256').update(donnees).digest('hex');
+    if (db.livres.some(x => x.id !== l.id && (x.empreintePdf === empreinte || x.empreinteEpub === empreinte))) { fs.rmSync(tmp, { force: true }); throw err(409, 'Ce fichier existe déjà dans le catalogue.'); }
+    if (info.nature === 'epub') {
+      if (!require('./modules/epub-valide')(donnees)) { fs.rmSync(tmp, { force: true }); throw err(400, 'EPUB invalide.'); }
+      fs.renameSync(tmp, cheminEpub(l.id)); l.epub = true; l.metaEdition = 0; l.empreinteEpub = empreinte;
+      try { l.nbMotsLecture = dureeLecture.epub(donnees); } catch {}
+      recupererCouvertureEpub(l, true);
+    } else {
+      fs.renameSync(tmp, cheminPdf(l.id)); l.pdf = true; l.empreintePdf = empreinte;
+      try { const pdf = await require('./modules/pdf-lib').PDFDocument.load(donnees, { ignoreEncryption: true }); l.nbPagesLecture = pdf.getPageCount(); } catch {}
+    }
+    l.sourceUrl = info.urlFinale;
+    if (!options.sansJournal) journal(options.libelleJournal || 'Document importé depuis une adresse web', utilisateurJournal, l.titre + ' — ' + new URL(info.urlFinale).hostname);
+    sauverDB();
+    return { ok: true, nature: info.nature, taille: info.taille, nomFichier: info.nomFichier, couverture: !!l.couverture };
+  } catch (e) { fs.rmSync(tmp, { force: true }); if (e.statut) throw e; throw err(500, 'Import impossible : ' + e.message); }
+}
 http.createServer(async (req, res) => {
   securite.entetes(req, res);
   try {
@@ -1938,6 +1991,8 @@ http.createServer(async (req, res) => {
   console.log('╚══════════════════════════════════════════════════╝');
   console.log(`Portail apprenant : http://localhost:${PORT}`);
   console.log(`Espace bibliothécaire : http://localhost:${PORT}/admin`);
+  // 1.31.0 : collecte automatique (désactivée en démonstration et pendant les tests)
+  if (process.env.OASIS_COLLECTE !== '0' && process.env.OASIS_DEMO !== '1') { collecte().demarrer(); collecteMedias().demarrer(); }
   // 1.27.0 : éditeurs réels (retrait d'« Éduca Diffusion », lecture des métadonnées EPUB) en arrière-plan.
   (async () => { let n = 0; for (const l of db.livres) { if (l.metaEdition || !(l.epub || EDITEUR_FICTIF.test(l.editeur || ''))) continue; await completerEdition(l); if (++n % 50 === 0) await new Promise(r => setTimeout(r, 200)); } if (n) console.log('Métadonnées d’édition vérifiées :', n); })().catch(e => console.warn('Métadonnées d’édition :', e.message));
   // 1.26.0 : recalcul des anciennes progressions gonflées par le simple défilement.

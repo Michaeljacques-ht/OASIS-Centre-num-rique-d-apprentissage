@@ -45,6 +45,14 @@ let server, base, sortie = '';
     const vu = (await api('/groupes/' + g.id, autre)).data; assert.equal(vu.messages.length, 0); assert.equal(vu.discussionReservee, true);
     assert.equal((await api('/groupes/' + g.id, s1)).data.messages.length, 1);
     assert.equal((await api('/groupes/' + g.id, admin)).data.messages.length, 1);
+    // 1.33.0 : collecte des médias réservée au bibliothécaire
+    assert.equal((await api('/collecte/medias', autre)).code, 403);
+    { const cm = (await api('/collecte/medias', admin)).data; assert.equal(cm.reglages.quotas.cartes, 10); assert.ok(cm.sources.ressourcesRestantes > 50); }
+    // 1.31.0 : réglages de la collecte réservés au bibliothécaire
+    assert.equal((await api('/collecte', autre)).code, 403);
+    const col = (await api('/collecte', admin)).data; assert.equal(col.reglages.objectif, 10000); assert.equal(col.reglages.dateCible, '2026-12-31');
+    const put = await fetch(base + '/api/collecte', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + admin }, body: JSON.stringify({ actif: false, objectif: 12000 }) }).then(r => r.json());
+    assert.equal(put.reglages.actif, false); assert.equal(put.reglages.objectif, 12000);
     console.log('Audit 1.30.0 : corps invalides, champs bornés, changement de mot de passe, jetons, discussion réservée aux membres vérifiés.');
   } catch (e) { console.error(e); console.error(sortie.slice(-1500)); process.exitCode = 1; }
   finally { if (server && server.exitCode === null) { const f = new Promise(r => server.once('exit', r)); server.kill(); await f; } fs.rmSync(temp, { recursive: true, force: true, maxRetries: 5 }); }

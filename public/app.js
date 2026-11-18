@@ -318,8 +318,8 @@
         <p style="color:var(--gris);font-size:13px;margin-bottom:14px">${SOUS[t]}</p>
         ${medias.length ? `<div class="grille-livres">${medias.map(x => `
           <button class="carte-livre" data-media="${x.id}">
-            <div class="couverture ${x.type==='video'?'couverture-video':''}" ${x.type==='video'&&x.fichier&&!x.vignette?`data-vignette-video="${x.id}" data-video-titre="${echap(x.titre)}"`:''} style="background:linear-gradient(150deg, var(--bleu), #10243e)">${x.type==='video'&&x.vignette?`<img src="/api/medias/${x.id}/vignette" alt="Vignette de ${echap(x.titre)}" loading="lazy">`:x.youtube?`<img src="https://i.ytimg.com/vi/${encodeURIComponent(x.youtube)}/hqdefault.jpg" alt="Vignette de ${echap(x.titre)}" loading="lazy" referrerpolicy="no-referrer">`:''}
-              <span class="badge-type">${x.fichier ? ICO[x.type] + ' ' + (x.duree || 'Disponible') : x.youtube ? '▶ YouTube' + (x.duree ? ' · ' + echap(x.duree) : '') : '⏳ Bientôt'}</span>
+            <div class="couverture ${x.type==='video'?'couverture-video':''}" ${x.type==='video'&&x.fichier&&!x.vignette?`data-vignette-video="${x.id}" data-video-titre="${echap(x.titre)}"`:''}${x.type==='carte'&&x.fichier&&!x.vignette?`data-vignette-carte="${x.id}" data-carte-mime="${echap(x.mime)}" data-carte-titre="${echap(x.titre)}"`:''} style="background:linear-gradient(150deg, var(--bleu), #10243e)">${(x.type==='video'||x.type==='carte')&&x.vignette?`<img src="/api/medias/${x.id}/vignette?v=${x.vignetteV||1}" alt="${x.type==='carte'?'Aperçu de la carte':'Vignette de'} ${echap(x.titre)}" loading="lazy" class="${x.type==='carte'?'vignette-carte':''}">`:x.youtube?`<img src="https://i.ytimg.com/vi/${encodeURIComponent(x.youtube)}/hqdefault.jpg" alt="Vignette de ${echap(x.titre)}" loading="lazy" referrerpolicy="no-referrer">`:''}
+              <span class="badge-type">${x.fichier ? ICO[x.type] + ' ' + (x.duree || 'Disponible') : x.youtube ? '▶ YouTube' + (x.duree ? ' · ' + echap(x.duree) : '') : x.pistes?.length ? (x.podcast ? '🎙️ Podcast' : '🎧 Livre audio') + (x.pistes.length > 1 ? ' · ' + x.pistes.length + ' parties' : x.duree ? ' · ' + echap(x.duree) : '') : '⏳ Bientôt'}</span>
               <div class="titre-couv">${echap(x.titre)}</div>
               <div class="icone-couv">${ICO[x.type]}</div>
             </div>
@@ -418,7 +418,7 @@
     $('#btnMenu').setAttribute('aria-expanded', 'false');
     const zone = $('#zonePrincipale');
     zone.innerHTML = '<p class="vide">Chargement…</p>';
-    try { zone.innerHTML = await (vues[nom] || vues.accueil)(param);window.OasisVignetteVideo?.afficher(zone,jeton,moi?.role==='bibliothecaire'); }
+    try { zone.innerHTML = await (vues[nom] || vues.accueil)(param);window.OasisVignetteVideo?.afficher(zone,jeton,moi?.role==='bibliothecaire');window.OasisVignetteCarte?.afficher(zone,jeton,moi?.role==='bibliothecaire'); }
     catch (err) { zone.innerHTML = `<div class="erreur">${echap(err.message)}</div>`; }
   }
 
@@ -934,12 +934,13 @@
     const x = cacheMedias.find(v => v.id === id);
     if (!x) return;
     if (!x.fichier && x.youtube) return ouvrirYoutube(x);
-    if (!x.fichier) return toast('Le fichier de ce média n\'est pas encore disponible.');
-    const src = `/api/medias/${x.id}/fichier?lecture=1&jeton=${jeton}`;
+    const pistes = !x.fichier && x.pistes?.length ? x.pistes : null;
+    if (!x.fichier && !pistes) return toast('Le fichier de ce média n\'est pas encore disponible.');
+    const src = pistes ? pistes[0].url : `/api/medias/${x.id}/fichier?lecture=1&jeton=${jeton}`;
     if (x.type === 'carte') return ouvrirCarte(x, src);
     const balise = x.type === 'video'
       ? `<video id="lecteurMedia" controls preload="metadata" src="${src}" style="width:100%;border-radius:12px;background:#000;max-height:60vh"></video>`
-      : `<audio id="lecteurMedia" controls preload="metadata" src="${src}" style="width:100%"></audio>`;
+      : `<audio id="lecteurMedia" controls preload="metadata" src="${echap(src)}" style="width:100%"></audio>${pistes && pistes.length > 1 ? `<ol class="liste-pistes" id="listePistes">${pistes.map((p, i) => `<li><button data-piste="${i}" class="${i === 0 ? 'actif' : ''}"><span>${echap(p.titre)}</span><small>${echap(p.duree || '')}</small></button></li>`).join('')}</ol>` : ''}${pistes ? `<p class="note-pistes">${x.podcast ? '🎙️ Écoute en ligne depuis le site de l’éditeur du podcast.' : '🎧 Livre audio du domaine public, écoute en ligne (LibriVox / Internet Archive).'}</p>` : ''}`;
     $('#zoneModale').innerHTML = `
       <div class="voile" id="voile">
         <div class="modale lecteur" style="max-width:760px" role="dialog" aria-modal="true">
@@ -960,12 +961,19 @@
                 <select id="selMinuteur" style="border:1px solid var(--bord);border-radius:7px;padding:4px 8px">
                   <option value="0">Désactivé</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">60 min</option>
                 </select></label>
-              ${x.telechargementAutorise!==false?`<a class="mini-btn" href="${src.replace('lecture=1','telechargement=1')}" download="${echap(x.titre)}${x.ext}">⬇ Télécharger</a>`:'<span>🔒 Consultation uniquement</span>'}
+              ${pistes ? '' : x.telechargementAutorise!==false?`<a class="mini-btn" href="${src.replace('lecture=1','telechargement=1')}" download="${echap(x.titre)}${x.ext}">⬇ Télécharger</a>`:'<span>🔒 Consultation uniquement</span>'}
             </div>
           </div>
         </div>
       </div>`;
     const lecteur = $('#lecteurMedia');
+    // 1.33.0 : livres audio en plusieurs parties (passage automatique à la suivante)
+    if (pistes && pistes.length > 1) {
+      let courante = 0;
+      const jouer = (i, auto) => { courante = i; lecteur.src = pistes[i].url; document.querySelectorAll('#listePistes [data-piste]').forEach(b => b.classList.toggle('actif', +b.dataset.piste === i)); if (auto) lecteur.play().catch(() => {}); };
+      $('#listePistes').addEventListener('click', e => { const b = e.target.closest('[data-piste]'); if (b) jouer(+b.dataset.piste, true); });
+      lecteur.addEventListener('ended', () => { if (courante + 1 < pistes.length) jouer(courante + 1, true); });
+    }
     // Reprise de l'écoute / du visionnage
     if (x.maPosition > 3) lecteur.addEventListener('loadedmetadata', () => { lecteur.currentTime = x.maPosition; }, { once: true });
     // Sauvegarde de la position toutes les 10 s

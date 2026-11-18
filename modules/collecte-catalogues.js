@@ -1,0 +1,181 @@
+'use strict';
+/* OASIS 1.33.0 — Listes de sources pour la collecte automatique des médias et des ressources.
+   Chaque liste peut être enrichie ici (ou depuis l'espace bibliothécaire pour les chaînes et les podcasts). */
+
+/* Chaînes YouTube éducatives francophones (flux RSS publics, intégration sans téléchargement). */
+const CHAINES_YOUTUBE = [
+  ['Le Précepteur', 'UCvRgiAmogg7a_BgQ_Ftm6fA', 'Philosophie'],
+  ['ABC Penser', 'UCb3rAMl__-6igDZf5K4JRRg', 'Philosophie'],
+  ['Monsieur Phi', 'UCqA8H22FwgBVcF3GJpp0MQw', 'Philosophie'],
+  ['Parole de philosophe', 'UComEsa6ycb1PSluRWtFVEpg', 'Philosophie'],
+  ['Philoxime', 'UCdKTlsmvczkdvGjiLinQwmw', 'Philosophie'],
+  ["C'est pas sorcier", 'UCENv8pH4LkzvuSV_qHIcslg', 'Sciences'],
+  ['e-penser', 'UCcziTK2NKeWtWQ6kB5tmQ8Q', 'Sciences'],
+  ['ScienceEtonnante', 'UCaNlbnghtwlsGF-KzAFThqA', 'Sciences'],
+  ['DirtyBiology', 'UCtqICqGbPSbTN09K1_7VZ3Q', 'Biologie'],
+  ['Science de comptoir', 'UCE_LWXcsdp7cWbo4DR4ZA-A', 'Sciences'],
+  ['Tout Simplement – Kurzgesagt', 'UCzMHLUJ8xTqDq6xsk0N5IdQ', 'Sciences'],
+  ['Micmaths (Mickaël Launay)', 'UC4PasDd25MXqlXBogBw9CAg', 'Mathématiques'],
+  ['Le Réveilleur', 'UC1EacOJoqsKaYxaDomTCTEQ', 'Environnement'],
+  ['Nota Bene', 'UCP46_MXP_WG_auH88FnfS1A', 'Histoire'],
+  ['Histony', 'UCt8ctlakIflnSG0ebFps7cw', 'Histoire'],
+  ['Passé sauvage', 'UCLhOJJbPciPdocXTaAk2SdA', 'Histoire'],
+  ['Collège de France', 'UCzZiy3EANVAx7h2XYqXsVbw', 'Culture générale'],
+  ['Linguisticae', 'UCofQxJWd4qkqc7ZgaLkZfcw', 'Linguistique'],
+  ['Hygiène Mentale (esprit critique)', 'UCMFcMhePnH4onVHt2-ItPZw', 'Culture générale'],
+  ['Fouloscopie', 'UCLXDNUOO3EQ80VmD9nQBHPg', 'Sciences sociales'],
+  ['Stupid Economics', 'UCyJDHgrsUKuWLe05GvC2lng', 'Économie'],
+  ['Les Bons Profs', 'UCL7FXdd8TW0hxNHmzlPlAQQ', 'Pédagogie'],
+  ['Réseau Canopé', 'UCww2Dlet6IoU2_eXmVL0RJQ', 'Pédagogie'],
+  ['Balade Mentale', 'UCS_7tplUgzJG4DhA16re5Yg', 'Culture générale'],
+  ['Haïti Inter', 'UCICRxhT4S6GXFI9nwuy9Xgg', 'Histoire'],
+  ['AyiboPost', 'UCW7THngeYo9HnextHMpR0-w', 'Sciences sociales'],
+  ['Le Monde Afrique', 'UC0fR9GA17-pWRzHtL_SwZnQ', 'Géopolitique']
+];
+
+/* Podcasts éducatifs (flux RSS publics ; écoute en continu depuis le site de l'éditeur, rien n'est copié). */
+const PODCASTS = [
+  ["Le Cours de l'histoire (France Culture)", 'https://radiofrance-podcast.net/podcast09/podcast_c951e8a9-6121-4400-a3ef-5f9c958d36c3.xml', 'Histoire'],
+  ["Face à l'histoire (France Culture)", 'https://radiofrance-podcast.net/podcast09/podcast_277f5490-3243-410b-ac05-ad8ecea5b5be.xml', 'Histoire'],
+  ['La Méthode scientifique (France Culture)', 'https://radiofrance-podcast.net/podcast09/podcast_423b51d8-3f44-4b9a-b906-e0d14bdf0516.xml', 'Sciences'],
+  ['Sciences chrono (France Culture)', 'https://radiofrance-podcast.net/podcast09/podcast_117ba5cb-7234-4a65-b5a6-c5995d5fa9d6.xml', 'Sciences'],
+  ["Entendez-vous l'éco ? (France Culture)", 'https://radiofrance-podcast.net/podcast09/podcast_3477bc42-e4cd-4f62-b850-7ec999ba810e.xml', 'Économie'],
+  ['Être et savoir (France Culture)', 'https://radiofrance-podcast.net/podcast09/podcast_1b064acd-c5f7-4d13-8e9e-cd443fa998dd.xml', 'Pédagogie'],
+  ['Une vie, une œuvre (France Culture)', 'https://radiofrance-podcast.net/podcast09/podcast_ea05ed5f-6d44-44a6-be78-632fa1d1679d.xml', 'Littérature'],
+  ['La Terre au carré (France Inter)', 'https://radiofrance-podcast.net/podcast09/podcast_5e238698-941a-4afc-8883-dbecfda89821.xml', 'Environnement'],
+  ['Le Temps du débat (France Culture)', 'https://radiofrance-podcast.net/podcast09/podcast_4a343ac1-9c42-448a-b1be-301794c7b2ba.xml', 'Sciences sociales'],
+  ["Les p'tits bateaux (France Inter, pour les enfants)", 'https://radiofrance-podcast.net/podcast09/podcast_3d680a63-ec3d-11e1-a7b7-782bcb76618d.xml', 'Sciences']
+];
+
+/* Catégories Wikimedia Commons de cartes (domaine public ou licences libres). */
+const CATEGORIES_CARTES = [
+  ['Maps of Haiti', 'Géographie', 'Haïti'], ['Old maps of Haiti', 'Histoire', 'Haïti'], ['Old maps of Hispaniola', 'Histoire', 'Hispaniola'],
+  ['Maps of Port-au-Prince', 'Géographie', 'Port-au-Prince'], ['Maps of the Caribbean', 'Géographie', 'Caraïbe'], ['Old maps of the Caribbean', 'Histoire', 'Caraïbe'],
+  ['Old maps of the Antilles', 'Histoire', 'Antilles'], ['Maps of the Dominican Republic', 'Géographie', 'République dominicaine'],
+  ['Maps of Africa', 'Géographie', 'Afrique'], ['Old maps of Africa', 'Histoire', 'Afrique'], ['Maps of the Americas', 'Géographie', 'Amériques'],
+  ['Old maps of the Americas', 'Histoire', 'Amériques'], ['Old maps of the world', 'Histoire', 'Monde'], ['Maps of the world', 'Géographie', 'Monde'],
+  ['Maps of France', 'Géographie', 'France'], ['Historical maps of Europe', 'Histoire', 'Europe'], ['Geological maps', 'Sciences', ''],
+  ['Climate maps', 'Environnement', ''], ['Maps of the Atlantic slave trade', 'Histoire', 'Atlantique'], ['Maps of the history of Africa', 'Histoire', 'Afrique']
+];
+
+/* Ressources documentaires de référence (liens), ajoutées progressivement si elles ne sont pas déjà dans OASIS.
+   [genre, titre, lien, description, catégorie] */
+const RESSOURCES = [
+  // Encyclopédies
+  ['encyclopedie', 'Wikipédia en français', 'https://fr.wikipedia.org', 'Encyclopédie libre et collaborative, la plus consultée au monde en français.', 'Culture générale'],
+  ['encyclopedie', 'Wikipedya an kreyòl ayisyen', 'https://ht.wikipedia.org', 'Ansiklopedi lib la an kreyòl ayisyen.', 'Créole'],
+  ['encyclopedie', 'Vikidia', 'https://fr.vikidia.org', 'Encyclopédie libre pour les 8-13 ans, écrite pour les élèves.', 'Culture générale'],
+  ['encyclopedie', 'Wikimini', 'https://fr.wikimini.org', 'Encyclopédie collaborative écrite par et pour les enfants.', 'Culture générale'],
+  ['encyclopedie', 'Encyclopédie Larousse en ligne', 'https://www.larousse.fr/encyclopedie', 'Articles encyclopédiques de référence des éditions Larousse.', 'Culture générale'],
+  ['encyclopedie', 'Encyclopædia Universalis (accès partiel)', 'https://www.universalis.fr', 'Encyclopédie de référence en français ; une partie des articles est en libre accès.', 'Culture générale'],
+  ['encyclopedie', 'Stanford Encyclopedia of Philosophy', 'https://plato.stanford.edu', 'Encyclopédie de philosophie de référence, rédigée par des spécialistes (en anglais).', 'Philosophie'],
+  ['encyclopedie', "L'Encyclopédie de Diderot et d'Alembert (ENCCRE)", 'https://enccre.academie-sciences.fr/encyclopedie/', "Édition numérique collaborative et critique de l'Encyclopédie (1751-1772).", 'Histoire'],
+  ['encyclopedie', "L'Encyclopédie canadienne", 'https://www.thecanadianencyclopedia.ca/fr', 'Encyclopédie de référence sur le Canada, en français.', 'Culture générale'],
+  ['encyclopedie', 'Encyclopédie de l’Agora', 'https://agora.qc.ca', 'Encyclopédie francophone de culture générale et de philosophie.', 'Culture générale'],
+  ['encyclopedie', 'Imago Mundi', 'https://www.cosmovisions.com', 'Encyclopédie en ligne de culture générale (histoire, sciences, arts).', 'Culture générale'],
+  // Dictionnaires
+  ['dictionnaire', 'Dictionnaire de l’Académie française', 'https://www.dictionnaire-academie.fr', 'Le dictionnaire officiel de l’Académie française, 9e édition.', 'Français'],
+  ['dictionnaire', 'CNRTL — Trésor de la langue française', 'https://www.cnrtl.fr/definition/', 'Définitions, étymologie, synonymes et antonymes (CNRS).', 'Français'],
+  ['dictionnaire', 'Wiktionnaire', 'https://fr.wiktionary.org', 'Dictionnaire libre multilingue, avec prononciation et traductions.', 'Français'],
+  ['dictionnaire', 'Dictionnaire Larousse en ligne', 'https://www.larousse.fr/dictionnaires/francais', 'Dictionnaire de français, conjugaison et dictionnaires bilingues.', 'Français'],
+  ['dictionnaire', 'Usito', 'https://usito.usherbrooke.ca', 'Dictionnaire du français en usage, Université de Sherbrooke.', 'Français'],
+  ['dictionnaire', 'TERMIUM Plus', 'https://www.btb.termiumplus.gc.ca', 'Banque de terminologie bilingue et multilingue du gouvernement du Canada.', 'Linguistique'],
+  ['dictionnaire', 'Grand dictionnaire terminologique (OQLF)', 'https://vitrinelinguistique.oqlf.gouv.qc.ca', 'Terminologie et conseils de langue de l’Office québécois de la langue française.', 'Linguistique'],
+  ['dictionnaire', 'WordReference', 'https://www.wordreference.com/fr/', 'Dictionnaires bilingues et forums de traduction.', 'Linguistique'],
+  // Bases de données scientifiques
+  ['base', 'HAL — archive ouverte', 'https://hal.science', 'Archive ouverte de la recherche française : articles, thèses et ouvrages en libre accès.', 'Sciences'],
+  ['base', 'Persée', 'https://www.persee.fr', 'Revues scientifiques francophones numérisées en libre accès (sciences humaines et sociales).', 'Sciences sociales'],
+  ['base', 'Érudit', 'https://www.erudit.org', 'Revues savantes francophones, en grande partie en libre accès.', 'Sciences sociales'],
+  ['base', 'OpenEdition', 'https://www.openedition.org', 'Livres, revues et carnets de recherche en sciences humaines et sociales.', 'Sciences sociales'],
+  ['base', 'Cairn.info (accès partiel)', 'https://www.cairn.info', 'Revues et ouvrages de sciences humaines en français ; nombreux articles en libre accès.', 'Sciences sociales'],
+  ['base', 'Isidore', 'https://isidore.science', 'Moteur de recherche des données de la recherche en sciences humaines et sociales.', 'Sciences sociales'],
+  ['base', 'theses.fr', 'https://theses.fr', 'Thèses de doctorat soutenues ou en préparation en France.', 'Sciences'],
+  ['base', 'Google Scholar', 'https://scholar.google.com', 'Moteur de recherche de littérature scientifique.', 'Sciences'],
+  ['base', 'BASE — Bielefeld Academic Search Engine', 'https://www.base-search.net', 'Plus de 300 millions de documents scientifiques en libre accès.', 'Sciences'],
+  ['base', 'CORE', 'https://core.ac.uk', 'Agrégateur mondial d’articles scientifiques en libre accès.', 'Sciences'],
+  ['base', 'DOAJ — Directory of Open Access Journals', 'https://doaj.org', 'Répertoire des revues scientifiques en libre accès évaluées par les pairs.', 'Sciences'],
+  ['base', 'DOAB — Directory of Open Access Books', 'https://www.doabooks.org', 'Répertoire de livres universitaires en libre accès.', 'Sciences'],
+  ['base', 'ERIC — base de données en éducation', 'https://eric.ed.gov', 'Base de données de référence sur la recherche en éducation (en anglais).', 'Pédagogie'],
+  ['base', 'PubMed', 'https://pubmed.ncbi.nlm.nih.gov', 'Base de données de la littérature biomédicale.', 'Médecine'],
+  ['base', 'SciELO', 'https://scielo.org', 'Bibliothèque scientifique électronique en libre accès (Amérique latine, Caraïbes).', 'Sciences'],
+  ['base', 'AJOL — African Journals Online', 'https://www.ajol.info', 'Revues scientifiques publiées en Afrique.', 'Sciences'],
+  ['base', 'arXiv', 'https://arxiv.org', 'Prépublications en physique, mathématiques, informatique et biologie quantitative.', 'Sciences'],
+  ['base', 'Semantic Scholar', 'https://www.semanticscholar.org', 'Moteur de recherche scientifique assisté par l’intelligence artificielle.', 'Sciences'],
+  ['base', 'UNESDOC — bibliothèque numérique de l’UNESCO', 'https://unesdoc.unesco.org', 'Publications et documents de l’UNESCO, notamment sur l’éducation.', 'Pédagogie'],
+  ['base', 'Open Knowledge Repository (Banque mondiale)', 'https://openknowledge.worldbank.org', 'Rapports et études de la Banque mondiale en libre accès.', 'Économie'],
+  ['base', 'Digital Library of the Caribbean (dLOC)', 'https://dloc.com', 'Bibliothèque numérique de la Caraïbe : journaux, archives et livres, dont de nombreux documents haïtiens.', 'Histoire'],
+  ['base', 'Gallica (BnF)', 'https://gallica.bnf.fr', 'Bibliothèque numérique de la Bibliothèque nationale de France.', 'Histoire'],
+  ['base', 'Europeana', 'https://www.europeana.eu/fr', 'Patrimoine culturel numérisé des bibliothèques et musées européens.', 'Histoire'],
+  ['base', 'Manioc', 'https://www.manioc.org', 'Bibliothèque numérique Caraïbe, Amazonie, plateau des Guyanes.', 'Histoire'],
+  // Ressources spécialisées
+  ['specialise', 'Lumni', 'https://www.lumni.fr', 'Vidéos, jeux et cours de l’audiovisuel public pour toutes les classes.', 'Pédagogie'],
+  ['specialise', 'Khan Academy en français', 'https://fr.khanacademy.org', 'Cours et exercices gratuits en mathématiques, sciences et économie.', 'Mathématiques'],
+  ['specialise', 'Géoconfluences (ENS de Lyon)', 'https://geoconfluences.ens-lyon.fr', 'Ressources de géographie pour enseigner, avec glossaire et dossiers.', 'Géographie'],
+  ['specialise', "L'Histoire par l'image", 'https://histoire-image.org', 'L’histoire de France et du monde expliquée à partir d’œuvres d’art.', 'Histoire'],
+  ['specialise', 'Île en île', 'https://ile-en-ile.org', 'Littératures francophones des îles, dont de nombreux écrivains haïtiens.', 'Littérature'],
+  ['specialise', 'Potomitan', 'https://www.potomitan.info', 'Site de promotion des cultures et langues créoles.', 'Créole'],
+  ['specialise', 'Bibmath', 'https://www.bibmath.net', 'Cours, exercices et histoire des mathématiques.', 'Mathématiques'],
+  ['specialise', 'PubChem', 'https://pubchem.ncbi.nlm.nih.gov', 'Base de données des molécules et propriétés chimiques.', 'Chimie'],
+  ['specialise', 'TV5MONDE — Apprendre le français', 'https://apprendre.tv5monde.com/fr', 'Exercices de français à partir de vidéos, du niveau A1 au C1.', 'Français'],
+  ['specialise', 'FUN MOOC', 'https://www.fun-mooc.fr', 'Cours en ligne gratuits des universités francophones.', 'Pédagogie'],
+  ['specialise', 'OpenClassrooms', 'https://openclassrooms.com/fr', 'Cours en ligne en informatique, numérique et compétences professionnelles.', 'Informatique'],
+  ['specialise', 'Wikiversité', 'https://fr.wikiversity.org', 'Cours et leçons libres du primaire à l’université.', 'Pédagogie'],
+  ['specialise', 'IHSI — Institut haïtien de statistique et d’informatique', 'https://ihsi.gouv.ht', 'Statistiques officielles d’Haïti : population, économie, enquêtes.', 'Économie'],
+  // Laboratoires virtuels
+  ['laboratoire', 'PhET — simulations interactives', 'https://phet.colorado.edu/fr/', 'Simulations gratuites en physique, chimie, biologie et mathématiques (Université du Colorado).', 'Sciences'],
+  ['laboratoire', 'ChemCollective — laboratoire virtuel de chimie', 'https://chemcollective.org/vlabs', 'Expériences de chimie virtuelles et exercices (Carnegie Mellon).', 'Chimie'],
+  ['laboratoire', 'GeoGebra — activités et simulations', 'https://www.geogebra.org/materials', 'Des milliers de simulations de mathématiques et de physique.', 'Mathématiques'],
+  ['laboratoire', 'Stellarium Web', 'https://stellarium-web.org', 'Planétarium dans le navigateur pour observer le ciel.', 'Sciences'],
+  ['laboratoire', 'Falstad — simulateur de circuits', 'https://www.falstad.com/circuit/', 'Simulation de circuits électriques et électroniques.', 'Électricité'],
+  ['laboratoire', 'MolView', 'https://molview.org', 'Visualisation de molécules en 3D.', 'Chimie'],
+  ['laboratoire', 'Virtual Labs (IIT)', 'https://www.vlab.co.in', 'Laboratoires virtuels d’ingénierie et de sciences.', 'Sciences'],
+  ['laboratoire', 'Olabs', 'https://www.olabs.edu.in', 'Expériences de physique, chimie et biologie en ligne.', 'Sciences'],
+  ['laboratoire', 'Algodoo', 'https://www.algodoo.com', 'Bac à sable de physique en 2D pour expérimenter.', 'Physique'],
+  ['laboratoire', 'Google Earth', 'https://earth.google.com/web/', 'Explorer la Terre en 3D pour la géographie et les sciences.', 'Géographie'],
+  // Outils technopédagogiques — enseignants
+  ['outil-enseignant', 'La Digitale (Digipad, Digistorm…)', 'https://ladigitale.dev', 'Outils numériques libres et gratuits pour la classe.', 'Technologie éducative'],
+  ['outil-enseignant', 'H5P', 'https://h5p.org', 'Créer des contenus interactifs (quiz, vidéos interactives, présentations).', 'Technologie éducative'],
+  ['outil-enseignant', 'Moodle', 'https://moodle.org', 'Plateforme libre de cours en ligne.', 'Technologie éducative'],
+  ['outil-enseignant', 'Google Classroom', 'https://classroom.google.com', 'Classe virtuelle : devoirs, annonces et suivi des élèves.', 'Technologie éducative'],
+  ['outil-enseignant', 'Genially', 'https://genially.com/fr/', 'Créer des présentations, jeux et infographies interactifs.', 'Technologie éducative'],
+  ['outil-enseignant', 'Canva pour l’éducation', 'https://www.canva.com/fr_fr/education/', 'Conception graphique gratuite pour enseignants et élèves.', 'Technologie éducative'],
+  ['outil-enseignant', 'Kahoot!', 'https://kahoot.com', 'Quiz ludiques en direct pour la classe.', 'Technologie éducative'],
+  ['outil-enseignant', 'Wooclap', 'https://www.wooclap.com/fr/', 'Questions interactives et sondages en classe.', 'Technologie éducative'],
+  ['outil-enseignant', 'LearningApps', 'https://learningapps.org', 'Créer de petits exercices interactifs.', 'Technologie éducative'],
+  ['outil-enseignant', 'Padlet', 'https://padlet.com', 'Murs collaboratifs pour partager idées et documents.', 'Technologie éducative'],
+  ['outil-enseignant', 'Edpuzzle', 'https://edpuzzle.com', 'Rendre une vidéo interactive avec des questions.', 'Technologie éducative'],
+  ['outil-enseignant', 'Mentimeter', 'https://www.mentimeter.com/fr-FR', 'Présentations interactives et sondages.', 'Technologie éducative'],
+  ['outil-enseignant', 'Wordwall', 'https://wordwall.net/fr', 'Activités ludiques à imprimer ou en ligne.', 'Technologie éducative'],
+  ['outil-enseignant', 'Plickers', 'https://get.plickers.com', 'Évaluation rapide en classe sans appareil pour les élèves.', 'Technologie éducative'],
+  ['outil-enseignant', 'Book Creator', 'https://bookcreator.com', 'Créer des livres numériques avec les élèves.', 'Technologie éducative'],
+  ['outil-enseignant', 'Framasoft', 'https://framasoft.org', 'Services libres en ligne (sondages, documents, cartes mentales).', 'Technologie éducative'],
+  // Outils technopédagogiques — apprenants
+  ['outil-apprenant', 'GeoGebra Calculatrice', 'https://www.geogebra.org/calculator', 'Calculatrice graphique en ligne gratuite.', 'Mathématiques'],
+  ['outil-apprenant', 'Desmos', 'https://www.desmos.com/calculator?lang=fr', 'Calculatrice graphique simple et puissante.', 'Mathématiques'],
+  ['outil-apprenant', 'Anki', 'https://apps.ankiweb.net', 'Cartes mémoire à répétition espacée pour réviser efficacement.', 'Pédagogie'],
+  ['outil-apprenant', 'Quizlet', 'https://quizlet.com/fr-fr', 'Cartes de révision et jeux d’apprentissage.', 'Pédagogie'],
+  ['outil-apprenant', 'Duolingo', 'https://www.duolingo.com', 'Apprendre les langues gratuitement, petit à petit.', 'Linguistique'],
+  ['outil-apprenant', 'Scribens', 'https://www.scribens.fr', 'Correcteur d’orthographe et de grammaire en français.', 'Français'],
+  ['outil-apprenant', 'BonPatron', 'https://bonpatron.com', 'Correcteur de français pour apprenants.', 'Français'],
+  ['outil-apprenant', 'Zotero', 'https://www.zotero.org', 'Gérer ses références et citer ses sources dans un travail.', 'Pédagogie'],
+  ['outil-apprenant', 'Scratch', 'https://scratch.mit.edu', 'Apprendre à programmer en créant des histoires et des jeux.', 'Informatique'],
+  ['outil-apprenant', 'Coggle', 'https://coggle.it', 'Cartes mentales collaboratives.', 'Pédagogie'],
+  ['outil-apprenant', 'Codecademy', 'https://www.codecademy.com', 'Apprendre à coder en ligne.', 'Informatique'],
+  // Documents officiels et sites institutionnels
+  ['officiel', 'Ministère de l’Éducation nationale et de la Formation professionnelle (MENFP)', 'https://menfp.gouv.ht', 'Site officiel du MENFP : programmes, calendriers, examens officiels, communiqués.', 'Pédagogie'],
+  ['officiel', 'Primature de la République d’Haïti', 'https://primature.gouv.ht', 'Communiqués, arrêtés et documents officiels du gouvernement.', 'Sciences politiques'],
+  ['officiel', 'Ministère de la Santé publique et de la Population (MSPP)', 'https://mspp.gouv.ht', 'Documents, rapports et directives sanitaires officiels.', 'Médecine'],
+  ['officiel', 'Ministère de l’Économie et des Finances (MEF)', 'https://www.mef.gouv.ht', 'Budget, lois de finances et rapports économiques.', 'Économie'],
+  ['officiel', 'Banque de la République d’Haïti (BRH)', 'https://www.brh.ht', 'Taux de change, rapports et circulaires de la banque centrale.', 'Économie'],
+  ['officiel', 'Nations Unies — documents officiels', 'https://documents.un.org', 'Recherche dans les documents officiels de l’ONU.', 'Relations internationales'],
+  ['officiel', 'OMS — bibliothèque IRIS', 'https://iris.who.int', 'Publications officielles de l’Organisation mondiale de la santé.', 'Médecine'],
+  ['officiel', 'UNICEF Haïti', 'https://www.unicef.org/haiti/', 'Rapports et données sur les enfants en Haïti.', 'Sciences sociales'],
+  ['officiel', 'Légifrance', 'https://www.legifrance.gouv.fr', 'Textes de loi et jurisprudence français (référence de droit comparé).', 'Droit'],
+  // Documents et services administratifs
+  ['administratif', 'Direction générale des impôts (DGI)', 'https://dgi.gouv.ht', 'Formulaires, démarches fiscales et NIF en Haïti.', 'Finance'],
+  ['administratif', 'Office national d’identification (ONI)', 'https://oni.gouv.ht', 'Carte d’identification nationale : informations et démarches.', 'Culture générale'],
+  ['administratif', 'Office national d’assurance vieillesse (ONA)', 'https://ona.gouv.ht', 'Assurance vieillesse : démarches et formulaires.', 'Finance'],
+  ['administratif', 'Service-public.fr (modèle de démarches)', 'https://www.service-public.fr', 'Fiches pratiques sur les démarches administratives (référence française).', 'Droit']
+];
+
+module.exports = { CHAINES_YOUTUBE, PODCASTS, CATEGORIES_CARTES, RESSOURCES };
