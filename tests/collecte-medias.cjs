@@ -95,5 +95,13 @@ const commons = { query: { pages: {
   const [code, etat] = rep.pop(); assert.equal(code, 200); assert.equal(etat.reglages.quotas.videos, 30); assert.equal(etat.reglages.quotas.cartes, 10); assert.equal(etat.compte.cartes, 1);
   [a, b, o] = fauxReq('POST', '/api/collecte/medias/lancer', { u: { role: 'bibliothecaire' }, b: { type: 'inconnu' } }); await col.route(a, b, o); assert.equal(rep.pop()[0], 400);
   assert.equal(await col.route({ method: 'GET', url: '/api/collecte' }, {}, { json }), false);
+  // 1.33.1 : les flux lus restent en mémoire, la base reste légère ; la collecte attend si le serveur est occupé
+  assert.equal(db.collecteMedias.curseurs.videos.cache, undefined); assert.equal(db.collecteMedias.curseurs.podcasts.cache, undefined);
+  assert.ok(JSON.stringify(db.collecteMedias).length < 20000, 'état de collecte trop lourd');
+  const dbAncien = { medias: [], ressources: [], categories: [], parametres: {}, collecteMedias: { curseurs: { podcasts: { i: 2, cache: { x: { t: 1, items: new Array(500).fill({ description: 'x'.repeat(2000) }) } } } } } };
+  const col3 = M.creer({ ...ctx, db: dbAncien, occupe: () => true });
+  col3.etat(); assert.equal(dbAncien.collecteMedias.curseurs.podcasts.cache, undefined, 'ancien cache purgé'); assert.equal(dbAncien.collecteMedias.curseurs.podcasts.i, 2);
+  assert.deepEqual(await col3.passage(), { reporte: true });
+  assert.equal((await col3.passage({ force: 'ressources' })).ressources, 3, 'un lancement manuel passe toujours');
   console.log('collecte-medias : OK');
 })().catch(e => { console.error(e); process.exit(1); });

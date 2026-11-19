@@ -80,5 +80,16 @@ assert.equal(C.nomAuteur({ name: 'Hugo, Victor' }), 'Victor Hugo');
     fetch: async () => ({ ok: true, json: async () => structuredClone(reponses.hal) }), importerDocumentLivre: async l => { l.pdf = true; l.nbPagesLecture = 4; return { ok: true }; } });
   Object.assign(col3.reglages().sources, { gutenberg: false, wikisource: false, ecampus: false, zenodo: false, hal: true, oapen: false }); col3.reglages().espaceMinMo = 1;
   const r4 = await col3.passage({ force: 1 }); assert.equal(db3.livres.length, 0, JSON.stringify(r4) + JSON.stringify(col3.etat().historique.slice(0,2)) + JSON.stringify(col3.etat().deja)); assert.equal(col3.etat().deja['hal:hal-1'], 'trop court', JSON.stringify(col3.etat()));
+  // 1.33.1 : files d'attente allégées dans la base, purge des anciennes files, report quand le serveur est occupé
+  {
+    const hal = Array.from({ length: 100 }, (_, i) => ({ halId_s: 'hal-' + i, title_s: ['Titre ' + i], abstract_s: ['r'.repeat(5000)], keyword_s: new Array(40).fill('mot'), licence_s: 'CC BY', fileMain_s: 'https://hal.science/f' + i + '.pdf', authFullName_s: ['A B'] }));
+    const dbH = { livres: [], parametres: {}, collecte: { curseurs: { hal: { start: 100, file: hal.slice(0, 50), fini: false } } } };
+    const colH = C.creer({ ...ctx, db: dbH, fetch: async () => ({ ok: true, json: async () => ({ response: { docs: hal } }) }) });
+    colH.etat();
+    assert.ok(JSON.stringify(dbH.collecte.curseurs.hal).length < 60000, 'ancienne file allégée');
+    assert.equal(dbH.collecte.curseurs.hal.file[0].abstract_s[0].length, 800);
+    const colO = C.creer({ ...ctx, db: { livres: [], parametres: {} }, occupe: () => true });
+    assert.deepEqual(await colO.passage(), { reporte: true });
+  }
   console.log('Collecte 1.31.0 : planification jusqu’au 31 décembre, domaine public uniquement, doublons, échecs sans fiche vide, reprise et suspension vérifiés.');
 })().catch(e => { console.error(e); process.exitCode = 1; });

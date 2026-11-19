@@ -111,15 +111,27 @@ function chargerDB() {
   }
 }
 let ecritureEnAttente = false, minuteurSauvegarde=null;
+/* 1.33.1 : santé du serveur — retards de la boucle d'événements, mémoire, coût des sauvegardes, activité des lecteurs. */
+const { performance, monitorEventLoopDelay } = require('node:perf_hooks');
+const DELAI_SAUVEGARDE = Math.max(1000, parseInt(process.env.OASIS_DELAI_SAUVEGARDE || '10000', 10) || 10000);
+const sante = { depuis: new Date().toISOString(), sauvegardes: 0, derniereSauvegardeMs: 0, sauvegardeMaxMs: 0, tailleBaseOctets: 0, requetes: [], lents: [] };
+const boucle = monitorEventLoopDelay({ resolution: 20 }); boucle.enable();
+let boucleFenetre = { p99: 0, max: 0, moyenne: 0, quand: Date.now() };
+setInterval(() => { boucleFenetre = { p99: Math.round(boucle.percentile(99) / 1e6), max: Math.round(boucle.max / 1e6), moyenne: Math.round(boucle.mean / 1e6), quand: Date.now() }; boucle.reset(); }, 60000).unref();
+const requetesUtilisateurs = () => { const t = Date.now() - 60000; while (sante.requetes.length && sante.requetes[0] < t) sante.requetes.shift(); return sante.requetes.length; };
+/** La collecte automatique attend quand des lecteurs utilisent le serveur ou quand l'autre collecte travaille. */
+const serveurOccupe = (moi) => requetesUtilisateurs() > 40 || boucleFenetre.p99 > 500 || (moi !== 'livres' && !!collecteAuto?.enCours?.()) || (moi !== 'medias' && !!collecteMediasAuto?.enCours?.());
 function flushDB(){
   if(!ecritureEnAttente||!db)return;
   if(minuteurSauvegarde){clearTimeout(minuteurSauvegarde);minuteurSauvegarde=null}
-  baseJSON.sauver(DB_PATH,db);ecritureEnAttente=false;
+  const t0=performance.now();baseJSON.sauver(DB_PATH,db);ecritureEnAttente=false;
+  sante.sauvegardes++;sante.derniereSauvegardeMs=Math.round(performance.now()-t0);sante.sauvegardeMaxMs=Math.max(sante.sauvegardeMaxMs,sante.derniereSauvegardeMs);
+  try{sante.tailleBaseOctets=fs.statSync(DB_PATH).size}catch{}
 }
 function sauverDB() {
   ecritureEnAttente=true;
   if(minuteurSauvegarde)return;
-  minuteurSauvegarde=setTimeout(()=>{minuteurSauvegarde=null;try{flushDB()}catch(err){console.error('SAUVEGARDE ÉCHOUÉE (données en mémoire conservées) :',err);}},2000);  // regroupe les modifications : une écriture toutes les 2 s au plus
+  minuteurSauvegarde=setTimeout(()=>{minuteurSauvegarde=null;try{flushDB()}catch(err){console.error('SAUVEGARDE ÉCHOUÉE (données en mémoire conservées) :',err);}},DELAI_SAUVEGARDE);  // 1.33.1 : regroupe les modifications (une écriture toutes les 10 s au plus ; tout est écrit à l'arrêt du serveur)
 }
 process.on('SIGTERM',()=>{try{flushDB();process.exitCode=0}catch(err){console.error('Sauvegarde avant arrêt impossible :',err);process.exitCode=1}process.exit(process.exitCode)});
 process.on('SIGINT',()=>{try{flushDB();process.exit(0)}catch(err){console.error(err);process.exit(1)}});
@@ -363,7 +375,7 @@ function vueLivre(l, utilisateur) {
   return personnaliser(vueBaseLivre(l, ex.length, ex.filter(e => e.statut === 'disponible').length, nbResas), contextePersonnel(utilisateur));
 }
 let versionCatalogue = 0, cacheCatalogue = null;
-const DUREE_CACHE_CATALOGUE = 30000;
+const DUREE_CACHE_CATALOGUE = 10 * 60000; // 1.33.1 : le catalogue n'est recalculé qu'après une modification (ou toutes les 10 min)
 const invaliderCatalogue = () => { versionCatalogue++; };
 function catalogue() {
   if (cacheCatalogue && cacheCatalogue.version === versionCatalogue && Date.now() - cacheCatalogue.quand < DUREE_CACHE_CATALOGUE) return cacheCatalogue;
@@ -457,6 +469,16 @@ async function api(req, res, u) {
   if(req.method!=='GET'&&/^\/api\/(livres|doublons)/.test(pathname))rechercheTexte.planifier(db);
   if(req.method!=='GET'&&!/\/(progression|temps-lecture|notes|surlignages)(\/|$)|^\/api\/(connexion|deconnexion|statistiques|commentaires|groupes|messages|ia|recherche|quiz|dons)/.test(pathname))invaliderCatalogue();
   if (require('./modules/diagnostic').route(req, res, {utilisateur, json})) return;
+  if (pathname === '/api/sante' && req.method === 'GET') {
+    if (utilisateur?.role !== 'bibliothecaire') return json(res, 403, { erreur: 'Réservé au bibliothécaire.' });
+    const mem = process.memoryUsage(), h = require('node:v8').getHeapStatistics();
+    return json(res, 200, { version: require('./package.json').version, depuis: sante.depuis, demarreIlYa: Math.round(process.uptime()),
+      memoire: { totaleMo: Math.round(mem.rss / 1048576), tasMo: Math.round(mem.heapUsed / 1048576), limiteTasMo: Math.round(h.heap_size_limit / 1048576) },
+      boucle: { ...boucleFenetre, enDirect: { p99: Math.round(boucle.percentile(99) / 1e6), max: Math.round(boucle.max / 1e6) } },
+      base: { tailleMo: +(((() => { try { return fs.statSync(DB_PATH).size; } catch { return sante.tailleBaseOctets; } })()) / 1048576).toFixed(2), sauvegardes: sante.sauvegardes, derniereMs: sante.derniereSauvegardeMs, maxMs: sante.sauvegardeMaxMs, delaiRegroupementS: DELAI_SAUVEGARDE / 1000,
+        parties: Object.entries(db).map(([k, v]) => [k, JSON.stringify(v ?? null).length]).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, n]) => ({ partie: k, ko: Math.round(n / 1024) })) },
+      requetesDerniereMinute: requetesUtilisateurs(), collecteEnAttente: serveurOccupe(''), requetesLentes: sante.lents.slice(0, 15) });
+  }
   if(!comptes.autorise(utilisateur,pathname,req.method))return json(res,403,{erreur:'Cette tâche ne vous a pas été déléguée.'});
   if(await comptes.route(req,res,{db,utilisateur,json,lireCorps,sauverDB,uid,hashMdp}))return;
   if(['livres','ressources','medias'].includes(seg[1])&&seg[2]&&seg[3]==='telechargement'&&req.method==='PUT'){
@@ -1878,7 +1900,7 @@ chargerDB();
   const mdpChange = securite.appliquerMdpAdmin(db, hashMdp, verifMdp);
   const corrections = securite.nettoyerApparence(db);
   if (corrections) console.warn(`Sécurité : ${corrections} icône(s), couleur(s) ou lien(s) dangereux remplacés.`);
-  if (mdpChange || corrections) sauverDB();
+  if (mdpChange || corrections) { sauverDB(); flushDB(); } // correctifs de sécurité écrits tout de suite
 }
 let essaisAjoutes=false;for(const e of db.ecoles||[])essaisAjoutes=essai.initialiser(e)||essaisAjoutes;for(const u of db.utilisateurs)if(u.role==='apprenant'&&!u.ecoleId)essaisAjoutes=essai.initialiser(u)||essaisAjoutes;if(essaisAjoutes)sauverDB();
 const rappelsEssai=()=>require('./modules/notifications-essai').traiter(db,sauverDB).catch(e=>console.error('Rappels essai :',e.message));setTimeout(rappelsEssai,60000).unref();setInterval(rappelsEssai,3600000).unref();
@@ -1888,7 +1910,7 @@ function supprimerFichiersLivre(id) { for (const c of [cheminEpub(id), cheminPdf
 let collecteAuto = null;
 function collecte() {
   if (!collecteAuto) collecteAuto = require('./modules/collecte').creer({
-    db, sauverDB, uid, maintenant, journal, doublons, dossierDonnees: path.join(__dirname, 'data'),
+    db, sauverDB: () => { invaliderCatalogue(); sauverDB(); }, uid, maintenant, journal, doublons, dossierDonnees: path.join(__dirname, 'data'), occupe: () => serveurOccupe('livres'),
     importerDocumentLivre, completerDepuisEpub: l => completerEdition(l),
     supprimerLivre: l => { const i = db.livres.indexOf(l); if (i >= 0) db.livres.splice(i, 1); supprimerFichiersLivre(l.id); }
   });
@@ -1938,7 +1960,7 @@ async function telechargerVignetteMedia(mo, adresse) {
 let collecteMediasAuto = null;
 function collecteMedias() {
   if (!collecteMediasAuto) collecteMediasAuto = require('./modules/collecte-medias').creer({
-    db, sauverDB, uid, maintenant, importerFichierMedia: (mo, url) => importerFichierMedia(mo, url, null), telechargerVignette: telechargerVignetteMedia
+    db, sauverDB, uid, maintenant, occupe: () => serveurOccupe('medias'), importerFichierMedia: (mo, url) => importerFichierMedia(mo, url, null), telechargerVignette: telechargerVignetteMedia
   });
   return collecteMediasAuto;
 }
@@ -1974,6 +1996,9 @@ async function importerDocumentLivre(l, adresse, utilisateurJournal, options = {
 }
 http.createServer(async (req, res) => {
   securite.entetes(req, res);
+  if (req.url.startsWith('/api/') && !/^\/api\/(version|collecte|sante)/.test(req.url)) { sante.requetes.push(Date.now()); if (sante.requetes.length > 5000) sante.requetes.splice(0, 1000); }
+  const debutRequete = performance.now();
+  res.once('finish', () => { const ms = performance.now() - debutRequete; if (ms > 1500 && req.url.startsWith('/api/')) { sante.lents.unshift({ date: new Date().toISOString(), ms: Math.round(ms), adresse: req.method + ' ' + req.url.split('?')[0].replace(/[0-9a-f]{16}/g, ':id') }); sante.lents.length = Math.min(sante.lents.length, 30); } });
   try {
     if (req.url.startsWith('/api/')) await api(req, res);
     else statique(req, res);

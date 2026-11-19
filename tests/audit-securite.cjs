@@ -46,6 +46,8 @@ let server, base, sortie = '';
     assert.equal((await api('/groupes/' + g.id, s1)).data.messages.length, 1);
     assert.equal((await api('/groupes/' + g.id, admin)).data.messages.length, 1);
     // 1.33.0 : collecte des médias réservée au bibliothécaire
+    assert.equal((await api('/sante', autre)).code, 403);
+    { const sa = (await api('/sante', admin)).data; assert.ok(sa.memoire.tasMo > 0 && sa.base.delaiRegroupementS >= 1 && Array.isArray(sa.base.parties)); }
     assert.equal((await api('/collecte/medias', autre)).code, 403);
     { const cm = (await api('/collecte/medias', admin)).data; assert.equal(cm.reglages.quotas.cartes, 10); assert.ok(cm.sources.ressourcesRestantes > 50); }
     // 1.31.0 : réglages de la collecte réservés au bibliothécaire

@@ -31,22 +31,31 @@ function creer(ctx) {
     finally { clearTimeout(t); }
   };
   const reglages = () => { db.parametres.collecteMedias = { actif: true, ...(db.parametres.collecteMedias || {}), quotas: { ...QUOTAS, ...(db.parametres.collecteMedias?.quotas || {}) } }; return db.parametres.collecteMedias; };
-  const etat = () => { const e = db.collecteMedias ||= {}; e.curseurs ||= {}; e.deja ||= {}; e.historique ||= []; e.aujourdhui ||= {}; e.totaux ||= {}; return e; };
+  const etat = () => {
+    const e = db.collecteMedias ||= {}; e.curseurs ||= {}; e.deja ||= {}; e.historique ||= []; e.aujourdhui ||= {}; e.totaux ||= {};
+    // 1.33.1 : les flux lus (vidéos, podcasts) restent en mémoire ; ils ne sont plus recopiés dans la base à chaque enregistrement.
+    for (const k of ['videos', 'podcasts']) if (e.curseurs[k]?.cache) delete e.curseurs[k].cache;
+    if (e.curseurs.livresAudio?.file?.length && !e.curseurs.livresAudio.allege) { e.curseurs.livresAudio.file = e.curseurs.livresAudio.file.map(allegerLivre); e.curseurs.livresAudio.allege = 1; }
+    return e;
+  };
+  const caches = { videos: {}, podcasts: {} };
+  const allegerLivre = b => ({ id: b.id, title: b.title, language: b.language, authors: (b.authors || []).map(a => ({ first_name: a.first_name, last_name: a.last_name })), genres: (b.genres || []).map(g => ({ name: g.name })),
+    description: String(b.description || '').slice(0, 900), totaltime: b.totaltime, copyright_year: b.copyright_year, sections: (b.sections || []).map(x => ({ section_number: x.section_number, title: x.title, listen_url: x.listen_url, playtime: x.playtime })) });
   const noter = (e, l) => { e.historique.unshift({ date: ctx.maintenant(), ...l }); e.historique = e.historique.slice(0, 200); };
   const nouveauMedia = (champs) => ({ id: ctx.uid(), titre: '', auteur: '', categorie: '', description: '', langue: 'Français', annee: new Date().getFullYear(), lieu: '', duree: '', motsCles: '', ext: '', mime: '', taille: 0, youtube: '', nbLectures: 0, creeLe: ctx.maintenant(), collecteAuto: true, ...champs });
 
   /* ---------- Vidéos YouTube ---------- */
   async function video(e) {
-    const c = e.curseurs.videos ||= { i: 0, cache: {} };
+    const c = e.curseurs.videos ||= { i: 0 };
     const ids = new Set(db.medias.map(m => m.youtube).filter(Boolean));
     for (let n = 0; n < CHAINES_YOUTUBE.length; n++) {
       const [nom, chaine, categorie] = CHAINES_YOUTUBE[c.i++ % CHAINES_YOUTUBE.length];
-      const cache = c.cache[chaine];
+      const cache = caches.videos[chaine];
       let entrees = cache && Date.now() - cache.t < 6 * 3600000 ? cache.entrees : null;
       if (!entrees) {
         let xml; try { xml = await req(`https://www.youtube.com/feeds/videos.xml?channel_id=${chaine}`, 'text'); } catch { continue; }
         entrees = xml.split('<entry>').slice(1).map(x => ({ id: balise(x, 'yt:videoId'), titre: balise(x, 'title'), lien: attribut(x, 'link', 'href'), date: balise(x, 'published'), description: balise(x, 'media:description') }));
-        c.cache[chaine] = { t: Date.now(), entrees };
+        caches.videos[chaine] = { t: Date.now(), entrees: entrees.map(x => ({ ...x, description: x.description.slice(0, 700) })) };
       }
       const v = entrees.find(x => /^[\w-]{11}$/.test(x.id) && !ids.has(x.id) && !e.deja['yt:' + x.id] && !/\/shorts\//.test(x.lien) && !/#shorts?\b/i.test(x.titre + ' ' + x.description));
       if (!v) continue;
@@ -60,16 +69,16 @@ function creer(ctx) {
 
   /* ---------- Podcasts ---------- */
   async function podcast(e) {
-    const c = e.curseurs.podcasts ||= { i: 0, cache: {} };
+    const c = e.curseurs.podcasts ||= { i: 0 };
     const urls = new Set(db.medias.flatMap(m => (m.pistes || []).map(p => p.url)));
     for (let n = 0; n < PODCASTS.length; n++) {
       const [nom, flux, categorie] = PODCASTS[c.i++ % PODCASTS.length];
-      const cache = c.cache[flux];
+      const cache = caches.podcasts[flux];
       let items = cache && Date.now() - cache.t < 12 * 3600000 ? cache.items : null;
       if (!items) {
         let xml; try { xml = await req(flux, 'text'); } catch { continue; }
         items = xml.split('<item>').slice(1).map(x => ({ titre: balise(x, 'title'), url: https(attribut(x, 'enclosure', 'url')), type: attribut(x, 'enclosure', 'type'), duree: balise(x, 'itunes:duration'), date: balise(x, 'pubDate'), description: balise(x, 'description') || balise(x, 'itunes:summary') })).filter(x => x.url && /audio|mpeg|mp3|m4a/i.test(x.type + x.url));
-        c.cache[flux] = { t: Date.now(), items };
+        items = items.slice(0, 60).map(x => ({ ...x, description: x.description.slice(0, 700) })); caches.podcasts[flux] = { t: Date.now(), items };
       }
       const ep = items.find(x => !urls.has(x.url) && !e.deja['pod:' + x.url]);
       if (!ep) continue;
@@ -104,7 +113,7 @@ function creer(ctx) {
       const d = await req(`https://librivox.org/api/feed/audiobooks/?format=json&extended=1&limit=50&offset=${c.offset}`);
       const livres = d.books || [];
       c.offset += 50; if (livres.length < 50) c.fini = true;
-      c.file = livres.filter(b => /french|français/i.test(b.language || ''));
+      c.file = livres.filter(b => /french|français/i.test(b.language || '') && !e.deja['librivox:' + b.id]).map(allegerLivre);
     }
     return null;
   }
@@ -167,6 +176,7 @@ function creer(ctx) {
     if (enCours) return { occupe: true };
     const r = reglages(), e = etat();
     if (!r.actif && !force) return { inactif: true };
+    if (!force && ctx.occupe?.()) return { reporte: true }; // 1.33.1 : on laisse la place aux lecteurs
     const jour = new Date().toISOString().slice(0, 10);
     if (e.jour !== jour) { e.jour = jour; e.aujourdhui = {}; }
     const debut = new Date(); debut.setHours(0, 0, 0, 0);
@@ -181,6 +191,7 @@ function creer(ctx) {
           let res; try { res = await f(e); } catch (err) { noter(e, { statut: 'erreur', type, message: err.message }); break; }
           if (!res) { e.epuises = { ...(e.epuises || {}), [type]: ctx.maintenant() }; break; }
           if (res.ok) { faits++; e.aujourdhui[type] = (e.aujourdhui[type] || 0) + 1; e.totaux[type] = (e.totaux[type] || 0) + 1; noter(e, { statut: 'ok', type, titre: res.titre, source: res.source }); ctx.sauverDB(); }
+          if (!force && ctx.occupe?.()) break;
           await new Promise(ok => setTimeout(ok, ctx.pause ?? 2000));
         }
         bilan[type] = faits;
@@ -226,7 +237,7 @@ function creer(ctx) {
     return false;
   }
 
-  return { demarrer, passage, route, etatPublic, reglages, etat };
+  return { enCours: () => enCours, demarrer, passage, route, etatPublic, reglages, etat };
 }
 
 module.exports = { creer, QUOTAS, licenceOk, duree, cleUrl };

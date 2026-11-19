@@ -103,7 +103,22 @@ function creer(ctx) {
     finally { clearTimeout(t); }
   };
   const reglages = () => { db.parametres.collecte = { ...PAR_DEFAUT, ...(db.parametres.collecte || {}), sources: { ...PAR_DEFAUT.sources, ...(db.parametres.collecte?.sources || {}) } }; return db.parametres.collecte; };
-  const etat = () => { db.collecte ||= { curseurs: {}, deja: {}, historique: [], jour: '', faitsAujourdhui: 0, total: 0, echecs: 0 }; db.collecte.deja ||= {}; db.collecte.curseurs ||= {}; db.collecte.historique ||= []; return db.collecte; };
+  const etat = () => {
+    db.collecte ||= { curseurs: {}, deja: {}, historique: [], jour: '', faitsAujourdhui: 0, total: 0, echecs: 0 }; db.collecte.deja ||= {}; db.collecte.curseurs ||= {}; db.collecte.historique ||= [];
+    if (!db.collecte.allege) { for (const [k, c] of Object.entries(db.collecte.curseurs)) if (Array.isArray(c?.file) && ALLEGER[k]) c.file = c.file.map(ALLEGER[k]); db.collecte.allege = 1; } // 1.33.1 : purge des files trop lourdes
+    return db.collecte;
+  };
+  // 1.33.1 : les files d'attente sont enregistrées dans la base ; on n'y garde que les champs utilisés (résumés tronqués).
+  const court = (x, n = 800) => typeof x === 'string' ? x.slice(0, n) : Array.isArray(x) ? x.slice(0, 1).map(y => court(y, n)) : x;
+  const ALLEGER = {
+    gutenberg: b => ({ id: b.id, title: b.title, authors: (b.authors || []).map(a => ({ name: a.name, death_year: a.death_year })), subjects: (b.subjects || []).slice(0, 12), bookshelves: (b.bookshelves || []).slice(0, 8), summaries: court(b.summaries), copyright: b.copyright, languages: b.languages }),
+    zenodo: h => { const m = h.metadata || {}; return { id: h.id, files: (h.files || []).map(f => ({ key: f.key || f.filename, size: f.size, links: { self: f.links?.self, content: f.links?.content } })),
+      metadata: { title: m.title, creators: (m.creators || []).map(x => ({ name: x.name || x.person_or_org?.name })), keywords: (m.keywords || []).slice(0, 12), subjects: (m.subjects || []).slice(0, 8).map(x => ({ term: x.term || x.subject })),
+        description: court(m.description, 1500), publication_date: m.publication_date, imprint: m.imprint ? { publisher: m.imprint.publisher, isbn: m.imprint.isbn } : undefined, publisher: m.publisher, license: m.license ? { id: m.license.id } : undefined, rights: (m.rights || []).map(x => ({ id: x.id, title: { en: x.title?.en } })) } }; },
+    hal: d => ({ ...d, abstract_s: court(d.abstract_s), keyword_s: (d.keyword_s || []).slice(0, 12), domain_s: (d.domain_s || []).slice(0, 6), authFullName_s: (d.authFullName_s || []).slice(0, 6) }),
+    oapen: it => ({ handle: it.handle, uuid: it.uuid, name: it.name, metadata: (it.metadata || []).filter(x => /^(dc\.(title|rights|language|contributor\.(author|editor)|subject\.(other|classification)|date\.issued|publisher)|dc\.description\.abstract|publisher\.name|oapen\.identifier\.isbn)/.test(x.key)).map(x => ({ key: x.key, value: x.key === 'dc.description.abstract' ? String(x.value).slice(0, 800) : x.value })),
+      bitstreams: (it.bitstreams || []).filter(b => /pdf|epub/i.test(b.mimeType || b.name || '') && b.bundleName !== 'THUMBNAIL' && b.bundleName !== 'TEXT').map(b => ({ name: b.name, mimeType: b.mimeType, bundleName: b.bundleName, retrieveLink: b.retrieveLink })) })
+  };
   const noter = (e, ligne) => { e.historique.unshift({ date: ctx.maintenant(), ...ligne }); e.historique = e.historique.slice(0, 300); };
 
   function espaceLibreMo() {
@@ -131,7 +146,7 @@ function creer(ctx) {
       }
       if (c.fini) return null;
       const d = await fetchJson(`https://gutendex.com/books/?languages=fr&mime_type=application%2Fepub&page=${c.page}`);
-      c.file = (d.results || []).filter(b => (b.languages || []).includes('fr'));
+      c.file = (d.results || []).filter(b => (b.languages || []).includes('fr') && !e.deja['gutenberg:' + b.id]).map(ALLEGER.gutenberg);
       c.page++; if (!d.next) c.fini = true;
     }
   }
@@ -214,7 +229,7 @@ function creer(ctx) {
       if (c.fini) return null;
       const q = encodeURIComponent('resource_type.subtype:book AND language:fra AND access_right:open');
       const d = await fetchJson(`https://zenodo.org/api/records?q=${q}&size=50&page=${c.page}&sort=mostviewed`);
-      c.file = d.hits?.hits || []; c.page++; if (c.file.length < 50 || c.page > 200) c.fini = true;
+      const hits = d.hits?.hits || []; c.file = hits.filter(h => !e.deja['zenodo:' + h.id]).map(ALLEGER.zenodo); c.page++; if (hits.length < 50 || c.page > 200) c.fini = true;
     }
   }
 
@@ -234,7 +249,7 @@ function creer(ctx) {
       if (c.fini) return null;
       const fl = 'halId_s,title_s,authFullName_s,producedDateY_i,fileMain_s,licence_s,abstract_s,publisher_s,isbn_s,keyword_s,domain_s';
       const d = await fetchJson(`https://api.archives-ouvertes.fr/search/?q=*:*&fq=docType_s:OUV&fq=language_s:fr&fq=submitType_s:file&fl=${fl}&rows=100&start=${c.start}&sort=producedDateY_i%20desc&wt=json`);
-      c.file = d.response?.docs || []; c.start += 100; if (c.file.length < 100) c.fini = true;
+      const docs = d.response?.docs || []; c.file = docs.filter(x => !e.deja['hal:' + x.halId_s]).map(ALLEGER.hal); c.start += 100; if (docs.length < 100) c.fini = true;
     }
   }
 
@@ -258,7 +273,7 @@ function creer(ctx) {
       }
       if (c.fini) return null;
       const d = await fetchJson(`https://library.oapen.org/rest/search?query=${encodeURIComponent('dc.language.iso:fre')}&expand=metadata,bitstreams&limit=25&offset=${c.offset}`);
-      c.file = Array.isArray(d) ? d : []; c.offset += 25; if (c.file.length < 25) c.fini = true;
+      const items = Array.isArray(d) ? d : []; c.file = items.filter(it => !e.deja['oapen:' + (it.handle || it.uuid)]).map(ALLEGER.oapen); c.offset += 25; if (items.length < 25) c.fini = true;
     }
   }
 
@@ -317,6 +332,7 @@ function creer(ctx) {
     if (enCours) return { occupe: true };
     const r = reglages(), e = etat();
     if (!r.actif && !force) return { inactif: true };
+    if (!force && ctx.occupe?.()) return { reporte: true }; // 1.33.1 : serveur sollicité par les lecteurs, on repasse plus tard
     const aujourdHui = new Date().toISOString().slice(0, 10);
     if (e.jour !== aujourdHui) { e.jour = aujourdHui; e.faitsAujourdhui = 0; }
     const libre = espaceLibreMo();
@@ -333,6 +349,7 @@ function creer(ctx) {
         if (res.epuise) { e.epuise = true; break; }
         if (res.attente) break;
         if (res.ok) faits++;
+        if (!force && ctx.occupe?.()) break;
         await new Promise(ok => setTimeout(ok, ctx.pause ?? 4000)); // politesse envers les sites sources
       }
     } finally { enCours = false; e.dernierPassage = dernierPassage; ctx.sauverDB(); }
@@ -384,7 +401,7 @@ function creer(ctx) {
     return false;
   }
 
-  return { demarrer, passage, route, etatPublic, importerUn, reglages, etat };
+  return { enCours: () => enCours, demarrer, passage, route, etatPublic, importerUn, reglages, etat };
 }
 
 module.exports = { creer, plan, categorieGutenberg, categorieTexte, licenceLibre, nomAuteur, PAR_DEFAUT, CATEGORIES_WIKISOURCE };

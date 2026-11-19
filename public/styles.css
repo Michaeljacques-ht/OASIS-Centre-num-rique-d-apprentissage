@@ -1063,3 +1063,8 @@ mark.sl-com{border-bottom:2px dotted #7a5a00}
 .liste-pistes button span{flex:1}.liste-pistes button small{color:var(--gris)}
 .liste-pistes button.actif{background:var(--bleu-clair,#eaf1fc);font-weight:700;color:var(--bleu)}
 .note-pistes{font-size:12.5px;color:var(--gris);margin-top:8px}
+/* 1.33.1 — santé du serveur */
+.sante{margin-bottom:14px;border-left:5px solid #16a34a}.sante-orange{border-left-color:#ea580c}.sante-rouge{border-left-color:#dc2626}
+.sante-tete{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px}.sante-tete small{color:var(--gris)}
+.sante-chiffres{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px 14px;font-size:13px;color:var(--gris)}.sante-chiffres b{color:var(--encre)}
+.sante details{margin-top:8px;font-size:13px}.sante-lentes{margin:6px 0 0 18px}

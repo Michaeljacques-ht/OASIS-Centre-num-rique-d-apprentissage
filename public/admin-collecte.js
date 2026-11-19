@@ -12,10 +12,11 @@ window.OasisAdminCollecte = (() => {
     api = a;
     const d = await api('/collecte').catch(e => ({ erreur: e.statut === 404 ? 'La collecte automatique est absente du serveur déployé : mettez à jour server.js et le dossier modules, puis redéployez.' : e.message }));
     if (d.erreur) return `<div class="section-titre"><h3>🤖 Collecte automatique</h3></div><p class="vide">${E(d.erreur)}</p>`;
-    clearInterval(minuteur); minuteur = setInterval(() => { if (document.getElementById('collectePage')) { rafraichir(); rafraichirMedias(); } else clearInterval(minuteur); }, 30000);
+    clearInterval(minuteur); minuteur = setInterval(() => { if (document.getElementById('collectePage')) { rafraichir(); rafraichirMedias(); rafraichirSante(); } else clearInterval(minuteur); }, 30000);
     setTimeout(() => { brancher(); brancherMedias(); }, 0);
     const dm = await api('/collecte/medias').catch(() => null);
-    return `<div id="collectePage">${contenu(d)}</div><div id="collecteMediasPage">${dm ? contenuMedias(dm) : ''}</div>`;
+    const ds = await api('/sante').catch(() => null);
+    return `<div id="santePage">${ds ? contenuSante(ds) : ''}</div><div id="collectePage">${contenu(d)}</div><div id="collecteMediasPage">${dm ? contenuMedias(dm) : ''}</div>`;
   }
 
   function contenu(d) {
@@ -53,6 +54,20 @@ window.OasisAdminCollecte = (() => {
       </div>`;
   }
 
+  function contenuSante(d) {
+    const p99 = Math.max(d.boucle.p99, d.boucle.enDirect?.p99 || 0);
+    const etat = p99 > 1000 || d.memoire.tasMo > d.memoire.limiteTasMo * 0.8 ? ['rouge', 'Serveur surchargé'] : p99 > 300 ? ['orange', 'Serveur ralenti'] : ['vert', 'Serveur fluide'];
+    const duree = s => s > 86400 ? Math.floor(s / 86400) + ' j' : s > 3600 ? Math.floor(s / 3600) + ' h' : Math.round(s / 60) + ' min';
+    return `<div class="panneau sante sante-${etat[0]}"><div class="sante-tete"><b>🩺 ${etat[1]}</b><small>version ${E(d.version)} · démarré il y a ${duree(d.demarreIlYa)}</small></div>
+      <div class="sante-chiffres">
+        <span><b>${p99} ms</b> attente maximale habituelle (dernière minute)</span>
+        <span><b>${d.memoire.tasMo} / ${d.memoire.limiteTasMo} Mo</b> mémoire utilisée</span>
+        <span><b>${d.base.tailleMo} Mo</b> base de données · écriture ${d.base.derniereMs} ms</span>
+        <span><b>${d.requetesDerniereMinute}</b> requêtes de lecteurs / min${d.collecteEnAttente ? ' · la collecte attend un moment plus calme' : ''}</span>
+      </div>
+      ${d.requetesLentes.length ? `<details><summary>Requêtes lentes récentes (${d.requetesLentes.length})</summary><ul class="sante-lentes">${d.requetesLentes.map(x => `<li><code>${E(x.adresse)}</code> ${(x.ms / 1000).toFixed(1)} s · ${new Date(x.date).toLocaleTimeString('fr-FR')}</li>`).join('')}</ul></details>` : ''}
+    </div>`;
+  }
   const ICONES = { videos: '🎬', podcasts: '🎙️', livresAudio: '🎧', cartes: '🗺️', ressources: '🔎' };
   const DETAILS = { videos: 'Nouvelles vidéos de chaînes éducatives (YouTube intégré)', podcasts: 'Émissions éducatives (France Culture, France Inter…)', livresAudio: 'LibriVox, domaine public, en français', cartes: 'Wikimedia Commons, domaine public ou licence libre, avec vignette', ressources: 'Encyclopédies, dictionnaires, bases scientifiques, labos virtuels, outils, sites officiels et administratifs' };
   function contenuMedias(d) {
@@ -75,6 +90,7 @@ window.OasisAdminCollecte = (() => {
         ${d.historique.length ? `<ul class="collecte-historique">${d.historique.map(h => `<li class="collecte-${h.statut}"><span>${h.statut === 'ok' ? ICONES[h.type] || '✅' : '⚠️'}</span><div><b>${E(h.titre || h.message)}</b><small>${new Date(h.date).toLocaleString('fr-FR')} · ${E(d.noms[h.type] || '')}${h.source ? ' · ' + E(h.source) : ''}${h.statut !== 'ok' && h.message && h.titre ? ' · ' + E(h.message) : ''}</small></div></li>`).join('')}</ul>` : '<p class="vide">Aucun ajout pour le moment.</p>'}
       </div>`;
   }
+  async function rafraichirSante() { try { const d = await api('/sante'); const z = document.getElementById('santePage'); if (z) z.innerHTML = contenuSante(d); } catch {} }
   async function rafraichirMedias() { try { const d = await api('/collecte/medias'); const z = document.getElementById('collecteMediasPage'); if (z) { z.innerHTML = contenuMedias(d); brancherMedias(); } } catch {} }
   function brancherMedias() {
     const msg = t => { const m = document.getElementById('colMedMsg'); if (m) m.textContent = t; };

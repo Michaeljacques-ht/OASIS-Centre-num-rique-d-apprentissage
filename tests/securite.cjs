@@ -110,7 +110,7 @@ const ecrireDB = db => fs.writeFileSync(path.join(temp, 'data', 'db.json'), JSON
     assert.equal(refus.code, 403);
     assert.match(refus.data.erreur, /OASIS_ADMIN_MDP/);
     assert.match(sortie, /1 icône\(s\), couleur\(s\) ou lien\(s\) dangereux remplacés/);
-    await new Promise(r => setTimeout(r, 2500));   // les écritures sont regroupées toutes les 2 s
+    await new Promise(r => setTimeout(r, 500));    // correctifs de sécurité écrits dès le démarrage
     assert.equal(lireDB().livres[0].icone, '📘');
     await arreter();
 
