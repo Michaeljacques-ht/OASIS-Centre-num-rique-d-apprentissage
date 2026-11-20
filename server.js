@@ -523,6 +523,7 @@ async function api(req, res, u) {
   if (await collecteMedias().route(req, res, { utilisateur, json, lireCorps, journal })) return;
   if (await collecte().route(req, res, { utilisateur, json, lireCorps, journal })) return;
   if (await require('./modules/quiz').route(req, res, {db, utilisateur, json, lireCorps, sauverDB, uid, journal})) return;
+  if (pathname.startsWith('/api/diffusions') && await diffusions().route(req, res, { utilisateur, json, lireCorps })) return;
   const exigeAuth = () => { if (!utilisateur) { json(res, 401, { erreur: 'Connexion requise.' }); return false; } return true; };
   const exigeBiblio = () => { if (!utilisateur || utilisateur.role !== 'bibliothecaire') { json(res, 403, { erreur: 'Réservé au bibliothécaire.' }); return false; } return true; };
   const m = req.method;
@@ -798,6 +799,7 @@ async function api(req, res, u) {
     const nouveaux = db.livres.filter(l => new Date(l.creeLe).getTime() > depuis).sort((a, b) => new Date(b.creeLe) - new Date(a.creeLe));
     nouveaux.slice(0, 5).forEach(l => ajout({ id: 'nouv-' + l.id, type: 'nouveaute', icone: '✨', titre: 'Nouveau au catalogue', texte: `« ${l.titre} »${l.auteur && !/^anonyme$/i.test(l.auteur) ? ' — ' + l.auteur : ''} (${l.categorie}).`, date: l.creeLe, action: { livre: l.id } }));
     if (nouveaux.length > 5) ajout({ id: 'nouv-lot-' + nouveaux[5].id, type: 'nouveaute', icone: '📚', titre: `${nouveaux.length} nouveautés cette semaine`, texte: `Et ${nouveaux.length - 5} autres documents ajoutés récemment. Découvrez-les dans Nouveautés.`, date: nouveaux[5].creeLe, action: { vue: 'nouveautes' } });
+    diffusions().notifications().forEach(ajout); // 1.34.0 : conférences et vidéos en direct / en différé
     const lues = utilisateur.notifsLues || {}, toutLuAvant = utilisateur.notifsToutLu ? new Date(utilisateur.notifsToutLu).getTime() : 0;
     notifs.forEach(n => { n.lu = !!lues[n.id] || !!(toutLuAvant && new Date(n.date).getTime() <= toutLuAvant && !['retard', 'abonnement'].includes(n.type)); });
     notifs.sort((a, b) => (a.lu - b.lu) || new Date(b.date) - new Date(a.date));
@@ -1907,6 +1909,12 @@ const rappelsEssai=()=>require('./modules/notifications-essai').traiter(db,sauve
 
 /* 1.31.0 : collecte automatique d'ouvrages du domaine public. */
 function supprimerFichiersLivre(id) { for (const c of [cheminEpub(id), cheminPdf(id), cheminCouv(id), cheminVignette(id)]) { try { if (fs.existsSync(c)) fs.unlinkSync(c); } catch {} } }
+/* 1.34.0 : diffusions en direct et en différé (conférences, vidéos), annoncées à tous les membres */
+let diffusionsModule = null;
+function diffusions() {
+  if (!diffusionsModule) diffusionsModule = require('./modules/diffusions').creer({ db, sauverDB, uid, maintenant, journal: (action, detail) => journal(action, { nom: 'OASIS (diffusions)' }, detail) });
+  return diffusionsModule;
+}
 let collecteAuto = null;
 function collecte() {
   if (!collecteAuto) collecteAuto = require('./modules/collecte').creer({
@@ -2018,6 +2026,7 @@ http.createServer(async (req, res) => {
   console.log(`Espace bibliothécaire : http://localhost:${PORT}/admin`);
   // 1.31.0 : collecte automatique (désactivée en démonstration et pendant les tests)
   if (process.env.OASIS_COLLECTE !== '0' && process.env.OASIS_DEMO !== '1') { collecte().demarrer(); collecteMedias().demarrer(); }
+  if (process.env.OASIS_DEMO !== '1' || process.env.OASIS_DIFFUSIONS === '1') diffusions().demarrer(); // emails d'annonce des diffusions
   // 1.27.0 : éditeurs réels (retrait d'« Éduca Diffusion », lecture des métadonnées EPUB) en arrière-plan.
   (async () => { let n = 0; for (const l of db.livres) { if (l.metaEdition || !(l.epub || EDITEUR_FICTIF.test(l.editeur || ''))) continue; await completerEdition(l); if (++n % 50 === 0) await new Promise(r => setTimeout(r, 200)); } if (n) console.log('Métadonnées d’édition vérifiées :', n); })().catch(e => console.warn('Métadonnées d’édition :', e.message));
   // 1.26.0 : recalcul des anciennes progressions gonflées par le simple défilement.

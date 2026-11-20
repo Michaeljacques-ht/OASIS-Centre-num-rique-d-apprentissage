@@ -106,7 +106,7 @@ const CSP = [
   "font-src 'self' data:",
   "connect-src 'self'",            // empêche un script injecté d'envoyer des données vers un autre site
   "worker-src 'self' blob:",
-  "frame-src 'self' blob: https://www.youtube-nocookie.com",
+  "frame-src 'self' blob: https://www.youtube-nocookie.com https://www.facebook.com",  // 1.34.0 : directs Facebook
   "object-src 'none'",
   "base-uri 'self'",
   "frame-ancestors 'self'"

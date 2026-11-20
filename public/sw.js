@@ -1,6 +1,6 @@
 /* OASIS Bibliothèque Numérique — Service Worker (PWA) */
 importScripts('/partage-stockage.js');
-const CACHE = 'oasis-v81';
+const CACHE = 'oasis-v82';
 self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(cles => Promise.all(cles.map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -24,4 +24,15 @@ self.addEventListener('fetch', e => {
       return rep;
     }).catch(() => caches.match(e.request))
   );
+});
+
+// 1.34.0 : un clic sur une alerte « En direct » ouvre la diffusion dans OASIS
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(fenetres => {
+    const f = fenetres.find(c => new URL(c.url).origin === self.location.origin);
+    if (f) { f.focus(); return f.navigate(url); }
+    return self.clients.openWindow(url);
+  }));
 });

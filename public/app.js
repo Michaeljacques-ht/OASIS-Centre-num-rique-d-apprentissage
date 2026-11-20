@@ -162,6 +162,7 @@
     apropos: () => OasisAPropos.render(api, parametres),
     don: () => window.OasisDon ? OasisDon.render(api, moi) : moduleAbsent('don.js'),
     quiz: () => window.OasisQuiz ? OasisQuiz.render(api, moi) : moduleAbsent('quiz.js'),
+    diffusions: id => window.OasisDirect ? OasisDirect.render(api, moi, id) : moduleAbsent('diffusions.js'),
     espace: async () => `<h2>Mon espace</h2><p>Bienvenue ${echap(moi?.nom || "")}. Retrouvez vos lectures dans la bibliothèque et gérez votre don d’accès ci-dessous.</p><button class="btn btn-bleu" data-vue="bibliotheque">Explorer la bibliothèque</button> <button class="mini-btn" data-sg-reactiver>Réactiver les suggestions personnalisées</button>` + await OasisAbonnement.render(api, moi),
     async accueil() {
       const [nouveautes, cats, compteurs, suggestions, continuer, partenaires] = await Promise.all([
@@ -410,7 +411,7 @@
   };
 
   async function afficherVue(nom, param) {
-    window.OasisQuiz?.quitter();
+    window.OasisQuiz?.quitter(); window.OasisDirect?.quitter();
     if(!moi&&!['accueil','bibliotheque','categorie','categories','nouveautes','recommandes','abonnement','don','partenaires','apropos'].includes(nom)){window.dispatchEvent(new Event('oasis-connexion'));return;}
     vueActive = nom; listesPaginees = {};
     document.querySelectorAll('.nav-item[data-vue]').forEach(b => b.classList.toggle('actif', b.dataset.vue === nom));
@@ -1211,6 +1212,7 @@
       badge.hidden = nb === 0; badge.textContent = nb > 99 ? '99+' : nb;
       $('#btnNotifs').setAttribute('aria-label', nb ? `Notifications, ${nb} non lue${nb > 1 ? 's' : ''}` : 'Notifications');
       $('#btnNotifs').classList.toggle('a-nouveau', nb > 0);
+      window.OasisDirect?.suivre(notifsCache, id => afficherVue('diffusions', id));
       return notifsCache;
     } catch { return notifsCache; }
   }
@@ -1273,6 +1275,7 @@
       if (a.lien) { window.open(a.lien, '_blank', 'noopener'); dessinerNotifs(); return; }
       if (a.livre) { fermerModale(); return ouvrirLivre(a.livre); }
       if (a.groupe) { fermerModale(); await afficherVue('collaboration'); return ouvrirGroupe(a.groupe); }
+      if (a.diffusion) { fermerModale(); return afficherVue('diffusions', a.diffusion); }
       if (a.vue) { fermerModale(); return afficherVue(a.vue); }
       dessinerNotifs();
     };
@@ -1411,8 +1414,10 @@
     majSalutation();
     rafraichirNotifications();
     setInterval(rafraichirNotifications, 120000);
+    const diffusionLien = new URLSearchParams(location.search).get('diffusion');
+    if (diffusionLien) history.replaceState(null, '', location.pathname);
     const livrePartage = new URLSearchParams(location.search).get('livre');
-    chargerCategories().then(() => { afficherVue(navigationEcole.vue || localStorage.getItem('oasis_apres_auth')|| (new URLSearchParams(location.search).has('espace')?'espace':'accueil'));localStorage.removeItem('oasis_apres_auth'); if (livrePartage) ouvrirLivre(livrePartage); });
+    chargerCategories().then(() => { if (diffusionLien) afficherVue('diffusions', diffusionLien); else afficherVue(navigationEcole.vue || localStorage.getItem('oasis_apres_auth')|| (new URLSearchParams(location.search).has('espace')?'espace':'accueil'));localStorage.removeItem('oasis_apres_auth'); if (livrePartage) ouvrirLivre(livrePartage); });
     rafraichirPanneaux();
   }
   (async () => {

@@ -208,6 +208,7 @@
     abonnementsComptabilite:()=>OasisAdminAbonnements.ouvrir(api),
     dons:()=>OasisAdminDons.ouvrir(api),
     collecte:()=>OasisAdminCollecte.page(api),
+    diffusions:()=>window.OasisAdminDirect ? OasisAdminDirect.page(api) : '<div class="erreur">Fichier admin-diffusions.js manquant : redéployez le projet complet.</div>',
     annonces:()=>OasisAdminVitrine.annonces(api),
     partenaires:()=>OasisAdminVitrine.partenaires(api),
     quizLecture:()=>OasisAdminQuiz.ouvrir(api),
@@ -345,7 +346,7 @@
   }
 
   // Vérifie que le serveur en ligne correspond à cette interface.
-  const VERSION_INTERFACE = '1.33.1';
+  const VERSION_INTERFACE = '1.34.0';
   async function verifierVersionServeur() {
     const bandeau = (html) => { const b = document.createElement('div'); b.className = 'erreur bandeau-version'; b.setAttribute('role', 'alert'); b.innerHTML = html; $('#zoneAdmin').before(b); };
     const liste = (titre, l, aide) => l.length ? `<details><summary><b>${l.length} ${titre}</b> — ${aide}</summary><ul class="diag-liste">${l.slice(0, 200).map(f => `<li><code>${echap(f)}</code></li>`).join('')}${l.length > 200 ? `<li>… et ${l.length - 200} autres</li>` : ''}</ul></details>` : '';

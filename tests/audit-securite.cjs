@@ -45,6 +45,11 @@ let server, base, sortie = '';
     const vu = (await api('/groupes/' + g.id, autre)).data; assert.equal(vu.messages.length, 0); assert.equal(vu.discussionReservee, true);
     assert.equal((await api('/groupes/' + g.id, s1)).data.messages.length, 1);
     assert.equal((await api('/groupes/' + g.id, admin)).data.messages.length, 1);
+    // 1.34.0 : diffusions — programmation réservée au bibliothécaire, secret hors des paramètres publics
+    assert.equal((await api('/diffusions', autre, { titre: 'x' })).code, 403);
+    { const r = await api('/diffusions', admin, { titre: 'Essai', debut: new Date(Date.now() + 86400000).toISOString(), sourceType: 'youtube', sourceValeur: 'dQw4w9WgXcQ', emailAnnonce: false, emailDirect: false }); assert.equal(r.code, 201);
+      assert.equal((await api('/diffusions', autre)).data.diffusions.length, 1); const n = (await api('/notifications', autre)).data.notifications; assert.ok(n.some(x => x.action?.diffusion === r.data.id));
+      assert.equal((await api('/diffusions/x/presence', autre, {})).code, 404); const p = (await api('/parametres', autre)).data; assert.ok(!JSON.stringify(p).includes('secret')); }
     // 1.33.0 : collecte des médias réservée au bibliothécaire
     assert.equal((await api('/sante', autre)).code, 403);
     { const sa = (await api('/sante', admin)).data; assert.ok(sa.memoire.tasMo > 0 && sa.base.delaiRegroupementS >= 1 && Array.isArray(sa.base.parties)); }
