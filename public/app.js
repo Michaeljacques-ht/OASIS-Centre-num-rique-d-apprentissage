@@ -178,9 +178,9 @@
           <div><b>📚 Accédez à toute la bibliothèque</b><span>Connectez-vous pour lire, emprunter et suivre votre progression.</span></div>
           <div class="accueil-invite-actions"><button class="btn btn-orange" data-auth="connexion">Se connecter</button><button class="btn accueil-invite-creer" data-auth="inscription">Créer un compte</button></div>
         </section>`}
-        <button class="banniere-accueil" data-vue="bibliotheque" aria-label="Accéder à la bibliothèque">
+        ${moi ? '' : `<button class="banniere-accueil" data-vue="bibliotheque" aria-label="Accéder à la bibliothèque">
           <img src="/banniere-oasis.png" alt="OASIS Bibliothèque Numérique — Apprendre aujourd'hui pour un meilleur demain">
-        </button>
+        </button>`}
         ${compteurs ? `<section class="stats-accueil" aria-label="La bibliothèque en chiffres">
           <div class="stats-accueil-titre"><strong>La bibliothèque en chiffres</strong><small>Une collection à découvrir</small></div>
           <div class="stats-accueil-grille">${[

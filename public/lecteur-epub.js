@@ -273,6 +273,26 @@ window.OasisEpub = (() => {
         let total = 0; for (const entry of Object.values(zip.files)) { total += entry._data?.uncompressedSize || 0; if (total > 80 * 1024 * 1024) throw Error('Ce document est trop volumineux pour le lecteur en ligne.'); }
         const read = async path => { const f = zip.file(path); if (!f) throw Error('Fichier EPUB incomplet : ' + path); if ((f._data?.uncompressedSize || 0) > 10 * 1024 * 1024) throw Error('Chapitre trop volumineux.'); return f.async('string'); };
         const xml = s => new DOMParser().parseFromString(s, 'application/xml');
+        /* 1.34.1 : les chapitres EPUB sont du XHTML. Lus comme du HTML, les balises vides « <div …/> » ou « <span …/> »
+           (fréquentes dans les livres de Wikisource) ne se ferment jamais et enferment tout le texte suivant dans
+           un bloc minuscule (une syllabe par ligne). On lit donc d'abord en XHTML, puis on convertit en HTML. */
+        const VIDES = /^(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/i;
+        const fermerVides = s => s.replace(/<([a-zA-Z][\w:.-]*)((?:\s+[^\s<>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'<>]+))?)*)\s*\/>/g, (t, nom, attrs) => VIDES.test(nom) ? t : `<${nom}${attrs}></${nom}>`);
+        const lireChapitre = s => {
+          const x = new DOMParser().parseFromString(s, 'application/xhtml+xml');
+          const racine = x.documentElement;
+          if (!x.querySelector('parsererror') && racine && /html$/i.test(racine.localName)) {
+            const h = document.implementation.createHTMLDocument('');
+            const tete = [...racine.children].find(e => /^head$/i.test(e.localName)), corps = [...racine.children].find(e => /^body$/i.test(e.localName));
+            if (corps) {
+              if (tete) for (const n of [...tete.childNodes]) h.head.appendChild(h.importNode(n, true));
+              for (const n of [...corps.childNodes]) h.body.appendChild(h.importNode(n, true));
+              for (const a of [...corps.attributes]) if (!/^on/i.test(a.name)) h.body.setAttribute(a.name, a.value);
+              return h;
+            }
+          }
+          return new DOMParser().parseFromString(fermerVides(s), 'text/html'); // XHTML mal formé : lecture HTML après fermeture des balises vides
+        };
         const container = xml(await read('META-INF/container.xml'));
         const opfPath = container.getElementsByTagNameNS('*', 'rootfile')[0]?.getAttribute('full-path'); if (!opfPath) throw Error('Structure EPUB invalide.');
         const opf = xml(await read(opfPath)), items = new Map([...opf.getElementsByTagNameNS('*', 'item')].map(x => [x.getAttribute('id'), x]));
@@ -286,7 +306,7 @@ window.OasisEpub = (() => {
           const nav = [...items.values()].find(x => /\bnav\b/.test(x.getAttribute('properties') || ''));
           if (nav) {
             const navPath = resolve(opfPath, nav.getAttribute('href'));
-            const nd = new DOMParser().parseFromString(await read(navPath), 'text/html');
+            const nd = lireChapitre(await read(navPath));
             const toc = [...nd.querySelectorAll('nav')].find(n => /toc/.test(n.getAttribute('epub:type') || n.getAttribute('type') || n.id || '')) || nd.querySelector('nav');
             toc?.querySelectorAll('a[href]').forEach(a => { const p = resolve(navPath, a.getAttribute('href')), t = a.textContent.replace(/\s+/g, ' ').trim(); if (t && !titresParFichier.has(p)) titresParFichier.set(p, t); });
           }
@@ -312,7 +332,7 @@ window.OasisEpub = (() => {
 
         const textesChapitre = async i => {
           if (cacheTextes.has(i)) return cacheTextes.get(i);
-          const d = new DOMParser().parseFromString(await read(chapters[i]), 'text/html');
+          const d = lireChapitre(await read(chapters[i]));
           const t = (d.body?.textContent || '').replace(/\s+/g, ' ');
           cacheTextes.set(i, t); return t;
         };
@@ -322,7 +342,7 @@ window.OasisEpub = (() => {
           const task = ++serial, current = index; assistance?.changed(); statut('Chargement…');
           const path = chapters[current];
           try {
-            const doc = new DOMParser().parseFromString(await read(path), 'text/html');
+            const doc = lireChapitre(await read(path));
             doc.querySelectorAll('script,iframe,object,embed,form,input,button,meta,base,audio,video').forEach(n => n.remove());
             const css = [];
             for (const link of [...doc.querySelectorAll('link')]) {
